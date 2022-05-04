@@ -1,15 +1,15 @@
 classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
-    %NSOLTFINALROTATION2DLAYERTESTCASE 
+    %LSUNFINALROTATION2DLAYERTESTCASE 
     %
     %   コンポーネント別に入力(nComponents):
-    %      nChs x nRows x nCols x nSamples
+    %      nDecs x nRows x nCols x nSamples
     %
     %   コンポーネント別に出力(nComponents):
     %      nDecs x nRows x nCols x nSamples
     %
-    % Requirements: MATLAB R2020b
+    % Requirements: MATLAB R2022a
     %
-    % Copyright (c) 2020-20212, Shogo MURAMATSU
+    % Copyright (c) 2022, Shogo MURAMATSU
     %
     % All rights reserved.
     %
@@ -21,8 +21,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/ 
     
     properties (TestParameter)
-        nchs = { [2 2], [3 3], [4 4] };
-        stride = { [1 1], [1 2], [2 2] };
+        stride = { [2 2] };
         mus = { -1, 1 };
         datatype = { 'single', 'double' };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
@@ -33,10 +32,9 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',[3 3],...
-                'DecimationFactor',[2 2]);
+                'Stride',[2 2]);
             fprintf("\n --- Check layer for 2-D images ---\n");
-            checkLayer(layer,[6 8 8],...
+            checkLayer(layer,[4 8 8],...
                 'ObservationDimension',4,...                
                 'CheckCodegenCompatibility',true)
         end
@@ -44,21 +42,21 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
     
     methods (Test)
         
-        function testConstructor(testCase, nchs, stride)
+        function testConstructor(testCase, stride)
             
             % Expected values
             expctdName = 'V0~';
-            expctdDescription = "NSOLT final rotation " ...
+            expctdDescription = "LSUN final rotation " ...
                 + "(ps,pa) = (" ...
-                + nchs(1) + "," + nchs(2) + "), "  ...
+                + ceil(prod(stride)/2) + "," ...
+                + floor(prod(stride)/2) + "), " ...               
                 + "(mv,mh) = (" ...
                 + stride(1) + "," + stride(2) + ")";
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'Name',expctdName);
             
             % Actual values
@@ -69,9 +67,9 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-
+        %{
         function testPredictGrayscale(testCase, ...
-                nchs, stride, nrows, ncols, datatype)
+                stride, nrows, ncols, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -81,12 +79,12 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             nSamples = 8;
             nDecs = prod(stride);
             % nChs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,sum(nchs),nSamples,datatype);
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);
+            %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
             % Expected values        
             % nDecs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             W0T = eye(ps,datatype);
             U0T = eye(pa,datatype);
             Y = X; %permute(X,[3 1 2 4]);
@@ -100,8 +98,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'Name','V0~');
             
             % Actual values
@@ -115,7 +112,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testPredictGrayscaleWithRandomAngles(testCase, ...
-                nchs, stride, nrows, ncols, datatype)
+                stride, nrows, ncols, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -127,15 +124,15 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(nchs);
+            nChsTotal = sum(stride);
             % nChs x nRows x nCols x nSamples
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
             angles = randn((nChsTotal-2)*nChsTotal/4,1);
             
             % Expected values
             % nDecs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             W0T = transpose(genW.step(angles(1:length(angles)/2),1));
             U0T = transpose(genU.step(angles(length(angles)/2+1:end),1));
             Y = X; %permute(X,[3 1 2 4]);
@@ -149,8 +146,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'Name','V0~');
             
             % Actual values
@@ -166,7 +162,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         
         %{
         function testPredictGrayscaleWithDlarrayAngles(testCase, ...
-                nchs, stride, nrows, ncols, datatype)
+                stride, nrows, ncols, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -178,15 +174,15 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(nchs);
+            nChsTotal = sum(stride);
             % nChs x nRows x nCols x nSamples
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
             angles = randn((nChsTotal-2)*nChsTotal/4,1);
             
             % Expected values
             % nDecs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             W0T = transpose(genW.step(angles(1:length(angles)/2),1));
             U0T = transpose(genU.step(angles(length(angles)/2+1:end),1));
             Y = X; %permute(X,[3 1 2 4]);
@@ -200,8 +196,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'Name','V0~');
             
             % Actual values
@@ -218,7 +213,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         %}
         
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
-                nchs, stride, nrows, ncols, mus, datatype)
+                stride, nrows, ncols, mus, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -230,16 +225,16 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(nchs);
+            nChsTotal = sum(stride);
             % nChs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,sum(nchs),nSamples,datatype);
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);
+            %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
             angles = randn((nChsTotal-2)*nChsTotal/4,1);
             
             % Expected values
             % nDecs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             anglesNoDc = angles;
             anglesNoDc(1:ps-1,1)=zeros(ps-1,1);
             musW = mus*ones(ps,1);
@@ -258,8 +253,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'NoDcLeakage',true,...
                 'Name','V0~');
             
@@ -276,7 +270,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testBackwardGrayscale(testCase, ...
-                nchs, stride, nrows, ncols, datatype)
+                stride, nrows, ncols, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -290,22 +284,22 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(nchs);
+            nChsTotal = sum(stride);
             nAnglesH = (nChsTotal-2)*nChsTotal/8;
             anglesW = zeros(nAnglesH,1,datatype);            
             anglesU = zeros(nAnglesH,1,datatype);  
             mus_ = 1;
             
             % nDecs x nRows x nCols x nSamples            
-            %X = randn(nrows,ncols,sum(nchs),nSamples,datatype); 
+            %X = randn(nrows,ncols,sum(stride),nSamples,datatype); 
             %dLdZ = randn(nrows,ncols,nDecs,nSamples,datatype);            
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);            
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);            
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);
             
             % Expected values
             % nChs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             
             % dLdX = dZdX x dLdZ
             W0 = genW.step(anglesW,mus_,0);
@@ -350,8 +344,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'Name','V0~');
             layer.Mus = mus_;
             %expctdZ = layer.predict(X);
@@ -370,7 +363,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testBackwardGayscaleWithRandomAngles(testCase, ...
-                nchs, stride, nrows, ncols, datatype)
+                stride, nrows, ncols, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -384,22 +377,22 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(nchs);
+            nChsTotal = sum(stride);
             nAnglesH = (nChsTotal-2)*nChsTotal/8;
             anglesW = randn(nAnglesH,1,datatype);
             anglesU = randn(nAnglesH,1,datatype);
             mus_ = 1;
             
             % nDecs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,sum(nchs),nSamples,datatype);
+            %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
             %dLdZ = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);            
             
             % Expected values
             % nChs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             
             % dLdX = dZdX x dLdZ
             W0 = genW.step(anglesW,mus_,0);
@@ -443,8 +436,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'Name','V0~');
             layer.Mus = mus_;
             layer.Angles = [anglesW; anglesU];
@@ -464,7 +456,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testBackwardWithRandomAnglesNoDcLeackage(testCase, ...
-                nchs, stride, nrows, ncols, mus, datatype)
+                stride, nrows, ncols, mus, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -478,21 +470,21 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(nchs);
+            nChsTotal = sum(stride);
             nAnglesH = (nChsTotal-2)*nChsTotal/8;
             anglesW = randn(nAnglesH,1,datatype);
             anglesU = randn(nAnglesH,1,datatype);
             
             % nDecs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,sum(nchs),nSamples,datatype);
+            %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
             %dLdZ = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(sum(nchs),nrows,ncols,nSamples,datatype);
+            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);            
             
             % Expected values
             % nChs x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = stride(1);
+            pa = stride(2);
             
             % dLdX = dZdX x dLdZ
             anglesW_NoDc = anglesW;
@@ -541,8 +533,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',nchs,...
-                'DecimationFactor',stride,...
+                'NumberOfChannels',stride,...
                 'NoDcLeakage',true,...
                 'Name','V0~');
             layer.Mus = mus;
@@ -560,7 +551,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyThat(actualdLdW,...
                 IsEqualTo(expctddLdW,'Within',tolObj));
         end
-
+        %}
     end
 
 end

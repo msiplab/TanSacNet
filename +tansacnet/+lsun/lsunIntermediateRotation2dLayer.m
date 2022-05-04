@@ -1,9 +1,9 @@
 classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
-    %NSOLTINTERMEDIATEROTATION2DLAYER
+    %LSUNINTERMEDIATEROTATION2DLAYER
     %
-    % Requirements: MATLAB R2020b
+    % Requirements: MATLAB R2022a
     %
-    % Copyright (c) 2020-2021, Shogo MURAMATSU
+    % Copyright (c) 2022, Shogo MURAMATSU
     %
     % All rights reserved.
     %
@@ -16,7 +16,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
     
     properties
         % (Optional) Layer properties.
-        NumberOfChannels
+        Stride
         Mode
     end
     
@@ -29,6 +29,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
     end
     
     properties (Access = private)
+        PrivateNumberOfChannels
         PrivateAngles
         PrivateMus
         isUpdateRequested
@@ -43,7 +44,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             % (Optional) Create a myLayer.
             % This function must have the same name as the class.
             p = inputParser;
-            addParameter(p,'NumberOfChannels',[])
+            addParameter(p,'Stride',[])
             addParameter(p,'Angles',[])
             addParameter(p,'Mus',[])
             addParameter(p,'Mode','Synthesis')
@@ -51,19 +52,20 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
-            layer.NumberOfChannels = p.Results.NumberOfChannels;
+            layer.Stride = p.Results.Stride;
+            layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Name = p.Results.Name;
             layer.Mode = p.Results.Mode;
             layer.Angles = p.Results.Angles;
             layer.Mus = p.Results.Mus;
             layer.Description = layer.Mode ...
-                + " NSOLT intermediate rotation " ...
+                + " LSUN intermediate rotation " ...
                 + "(ps,pa) = (" ...
-                + layer.NumberOfChannels(1) + "," ...
-                + layer.NumberOfChannels(2) + ")";
+                + layer.PrivateNumberOfChannels(1) + "," ...
+                + layer.PrivateNumberOfChannels(2) + ")";
             layer.Type = '';
             
-            nChsTotal = sum(layer.NumberOfChannels);
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
             nAngles = (nChsTotal-2)*nChsTotal/8;
             if length(layer.PrivateAngles)~=nAngles
                 error('Invalid # of angles')
@@ -87,8 +89,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             % Layer forward function for prediction goes here.
             nrows = size(X,2);
             ncols = size(X,3);            
-            ps = layer.NumberOfChannels(1);
-            pa = layer.NumberOfChannels(2);
+            ps = layer.PrivateNumberOfChannels(1);
+            pa = layer.PrivateNumberOfChannels(2);
             nSamples = size(X,4);
             %
             if layer.isUpdateRequested
@@ -130,8 +132,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             % Layer backward function goes here.            
             nrows = size(dLdZ,2);
             ncols = size(dLdZ,3);
-            ps = layer.NumberOfChannels(1);
-            pa = layer.NumberOfChannels(2);            
+            ps = layer.PrivateNumberOfChannels(1);
+            pa = layer.PrivateNumberOfChannels(2);            
             nSamples = size(dLdZ,4);
             %
             if layer.isUpdateRequested
@@ -202,7 +204,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
         end
         
         function layer = set.Angles(layer,angles)
-            nChsTotal = sum(layer.NumberOfChannels);
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
             nAngles = (nChsTotal-2)*nChsTotal/8;
             if isempty(angles)
                 angles = zeros(nAngles,1);
@@ -216,7 +218,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
         end
         
         function layer = set.Mus(layer,mus)
-            pa = layer.NumberOfChannels(2);
+            pa = layer.PrivateNumberOfChannels(2);
             if isempty(mus)
                 mus = ones(pa,1);   
             elseif isscalar(mus)

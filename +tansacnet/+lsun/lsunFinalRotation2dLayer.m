@@ -1,5 +1,5 @@
 classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
-    %NSOLTFINALROTATION2DLAYER
+    %LSUNFINALROTATION2DLAYER
     %
     %   コンポーネント別に入力(nComponents):
     %      nChs x nRows x nCols x nSamples
@@ -8,9 +8,9 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
     %      nDecs x nRows x nCols x nSamples
     %
     %
-    % Requirements: MATLAB R2020b
+    % Requirements: MATLAB R2022a
     %
-    % Copyright (c) 2020-2021, Shogo MURAMATSU
+    % Copyright (c) 2022, Shogo MURAMATSU
     %
     % All rights reserved.
     %
@@ -23,8 +23,7 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
     
     properties
         % (Optional) Layer properties.
-        NumberOfChannels
-        DecimationFactor
+        Stride
     end
     
     properties (Dependent)
@@ -40,6 +39,7 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
     end
     
     properties (Access = private)
+        PrivateNumberOfChannels
         PrivateNoDcLeakage
         PrivateAngles
         PrivateMus
@@ -56,31 +56,30 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             % (Optional) Create a myLayer.
             % This function must have the same name as the class.
             p = inputParser;
-            addParameter(p,'NumberOfChannels',[])
-            addParameter(p,'DecimationFactor',[])
+            addParameter(p,'Stride',[])
             addParameter(p,'Mus',[]);
             addParameter(p,'Angles',[]);
             addParameter(p,'Name','')
             addParameter(p,'NoDcLeakage',false);
             parse(p,varargin{:})
-            
+
             % Layer constructor function goes here.
-            layer.NumberOfChannels = p.Results.NumberOfChannels;
-            layer.DecimationFactor = p.Results.DecimationFactor;
+            layer.Stride = p.Results.Stride;
+            layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Mus = p.Results.Mus;
             layer.Angles = p.Results.Angles;
             layer.NoDcLeakage = p.Results.NoDcLeakage;
             layer.Name = p.Results.Name;
-            layer.Description = "NSOLT final rotation " ...
+            layer.Description = "LSUN final rotation " ...
                 + "(ps,pa) = (" ...
-                + layer.NumberOfChannels(1) + "," ...
-                + layer.NumberOfChannels(2) + "), "  ...
+                + layer.PrivateNumberOfChannels(1) + "," ...
+                + layer.PrivateNumberOfChannels(2) + "), "  ...
                 + "(mv,mh) = (" ...
-                + layer.DecimationFactor(1) + "," ...
-                + layer.DecimationFactor(2) + ")";
+                + layer.Stride(1) + "," ...
+                + layer.Stride(2) + ")";
             layer.Type = '';
             
-            nChsTotal = sum(layer.NumberOfChannels);            
+            nChsTotal = sum(layer.PrivateNumberOfChannels);            
             nAngles = (nChsTotal-2)*nChsTotal/4;
             if length(layer.PrivateAngles)~=nAngles
                 error('Invalid # of angles')
@@ -102,10 +101,10 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             % Layer forward function for prediction goes here.
             nrows = size(X,2);
             ncols = size(X,3);            
-            ps = layer.NumberOfChannels(1);
-            pa = layer.NumberOfChannels(2);
+            ps = layer.PrivateNumberOfChannels(1);
+            pa = layer.PrivateNumberOfChannels(2);
             nSamples = size(X,4);
-            stride = layer.DecimationFactor;
+            stride = layer.Stride;
             nDecs = prod(stride);      
             %
             if layer.isUpdateRequested
@@ -144,9 +143,9 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             nrows = size(dLdZ,2);
             ncols = size(dLdZ,3);            
             nSamples = size(dLdZ,4);
-            nDecs = prod(layer.DecimationFactor);
-            ps = layer.NumberOfChannels(1);
-            pa = layer.NumberOfChannels(2);
+            nDecs = prod(layer.Stride);
+            ps = layer.PrivateNumberOfChannels(1);
+            pa = layer.PrivateNumberOfChannels(2);
             %{
             if isempty(layer.Mus)
                 layer.Mus = ones(ps+pa,1);
@@ -241,7 +240,7 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
         end                
         
         function layer = set.Angles(layer,angles)
-            nChsTotal = sum(layer.NumberOfChannels);
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
             nAngles = (nChsTotal-2)*nChsTotal/4;
             if isempty(angles)
                 angles = zeros(nAngles,1);
@@ -255,8 +254,8 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
         end
         
         function layer = set.Mus(layer,mus)
-            ps = layer.NumberOfChannels(1);
-            pa = layer.NumberOfChannels(2);
+            ps = layer.PrivateNumberOfChannels(1);
+            pa = layer.PrivateNumberOfChannels(2);
             %
             if isempty(mus)
                 mus = ones(ps+pa,1);
@@ -271,7 +270,7 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
         
         function layer = updateParameters(layer)
             %import tansacnet.lsun.get_fcn_orthmtxgen
-            ps = layer.NumberOfChannels(1);
+            ps = layer.PrivateNumberOfChannels(1);
             %
             if layer.NoDcLeakage
                 layer.PrivateMus(1) = 1;           
