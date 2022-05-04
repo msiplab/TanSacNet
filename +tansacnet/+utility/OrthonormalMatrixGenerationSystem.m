@@ -61,7 +61,7 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
         
         function setupImpl(obj,angles,~,~)
             if isempty(obj.NumberOfDimensions)
-                obj.NumberOfDimensions = (1+sqrt(1+8*length(angles)))/2;
+                obj.NumberOfDimensions = (1+sqrt(1+8*size(angles,1)))/2;
             end
             if strcmp(obj.PartialDifference,'sequential')
                 obj.nextangle = uint32(0);            
@@ -113,29 +113,39 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
         
         function matrix = stepNormal_(obj,angles,mus,pdAng)
             nDim_ = obj.NumberOfDimensions;
-            matrix = eye(nDim_);
-            iAng = 1;
-            for iTop=1:nDim_-1
-                vt = matrix(iTop,:);
-                for iBtm=iTop+1:nDim_
-                    angle = angles(iAng);
-                    if iAng == pdAng
-                        angle = angle + pi/2;
-                    end
-                    vb = matrix(iBtm,:);
-                    [vt,vb] = obj.rot_(vt,vb,angle);
-                    if iAng == pdAng
-                        matrix = 0*matrix;
-                    end
-                    matrix(iBtm,:) = vb;
-                    %
-                    iAng = iAng + 1;
-                end
-                matrix(iTop,:) = vt;
+            nMatrices_ = size(angles,2);
+            matrix = repmat(eye(nDim_),[1 1 nMatrices_]);
+            if isrow(mus)
+                mus = mus.';
             end
-            matrix = diag(mus)*matrix;
+            for iMtx = 1:nMatrices_
+                iAng = 1;
+                for iTop=1:nDim_-1
+                    vt = matrix(iTop,:,iMtx);
+                    for iBtm=iTop+1:nDim_
+                        angle = angles(iAng,iMtx);
+                        if iAng == pdAng
+                            angle = angle + pi/2;
+                        end
+                        vb = matrix(iBtm,:,iMtx);
+                        [vt,vb] = obj.rot_(vt,vb,angle);
+                        if iAng == pdAng
+                            matrix(:,:,iMtx) = 0*matrix(:,:,iMtx);
+                        end
+                        matrix(iBtm,:,iMtx) = vb;
+                        %
+                        iAng = iAng + 1;
+                    end
+                    matrix(iTop,:,iMtx) = vt;
+                end
+                if iscolumn(mus)
+                    matrix(:,:,iMtx) = mus.*matrix(:,:,iMtx);
+                else
+                    matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);
+                end
+            end
         end
-        
+
         function matrix = stepSequential_(obj,angles,mus,pdAng)
             % Check pdAng
             if pdAng ~= obj.nextangle

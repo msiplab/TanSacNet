@@ -21,7 +21,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/ 
     
     properties (TestParameter)
-        stride = { [2 2] };
+        stride = { [2 2], [4 4] };
         mus = { -1, 1 };
         datatype = { 'single', 'double' };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
@@ -67,7 +67,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-        %{
+
         function testPredictGrayscale(testCase, ...
                 stride, nrows, ncols, datatype)
             
@@ -78,13 +78,14 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
+            nChsTotal = nDecs;
             % nChs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
-            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
+            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
             % Expected values        
             % nDecs x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             W0T = eye(ps,datatype);
             U0T = eye(pa,datatype);
             Y = X; %permute(X,[3 1 2 4]);
@@ -98,7 +99,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','V0~');
             
             % Actual values
@@ -110,7 +111,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
+        %{
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 stride, nrows, ncols, datatype)
             
@@ -146,7 +147,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','V0~');
             
             % Actual values
@@ -196,7 +197,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','V0~');
             
             % Actual values
@@ -253,7 +254,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'NoDcLeakage',true,...
                 'Name','V0~');
             
@@ -344,7 +345,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','V0~');
             layer.Mus = mus_;
             %expctdZ = layer.predict(X);
@@ -436,7 +437,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','V0~');
             layer.Mus = mus_;
             layer.Angles = [anglesW; anglesU];
@@ -533,7 +534,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'NoDcLeakage',true,...
                 'Name','V0~');
             layer.Mus = mus;

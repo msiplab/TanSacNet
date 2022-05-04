@@ -21,7 +21,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties (TestParameter)
-        stride = { [2 2] };
+        stride = { [2 2], [4 4] };
         mus = { -1, 1 };
         datatype = { 'single', 'double' };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
@@ -66,7 +66,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-        %{
+  
         function testPredictGrayscale(testCase, ...
                 stride, nrows, ncols, datatype)
             
@@ -77,15 +77,15 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(stride);
+            nChsTotal = nDecs;
             % nDecs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
             
             % Expected values
             % nChs x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             W0 = eye(ps,datatype);
             U0 = eye(pa,datatype);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
@@ -108,7 +108,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','V0');
             
             % Actual values
@@ -120,7 +120,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
+        %{
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 stride, nrows, ncols, datatype)
             

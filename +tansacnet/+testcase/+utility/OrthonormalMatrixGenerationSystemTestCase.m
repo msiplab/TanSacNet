@@ -14,6 +14,11 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
     %
     % http://msiplab.eng.niigata-u.ac.jp/    
     %
+
+    properties (TestParameter)
+        nblks = { 1, 2, 4 };
+    end
+
     properties
         omgs
     end
@@ -64,6 +69,29 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             % Evaluation
             testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
         end
+
+        % Test for default construction
+        function testConstructorWithAnglesMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                cos(pi/4) -sin(pi/4) ;
+                sin(pi/4)  cos(pi/4) ];
+            coefExpctd(:,:,2) = [
+                cos(pi/6) -sin(pi/6) ;
+                sin(pi/6)  cos(pi/6) ];
+
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+            
+            % Actual values
+            angles = [pi/4 pi/6];
+            coefActual = step(testCase.omgs,angles,1);
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
+        end 
         
         % Test for default construction
         function testConstructorWithAnglesAndMus(testCase)
@@ -79,6 +107,31 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             
             % Actual values
             coefActual = step(testCase.omgs,pi/4,[ 1 -1 ]);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
+            
+        end
+
+        function testConstructorWithAnglesAndMusMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                cos(pi/4) -sin(pi/4) ;
+                -sin(pi/4) -cos(pi/4) ];
+            coefExpctd(:,:,2) = [
+                -cos(pi/6) sin(pi/6) ;
+                sin(pi/6) cos(pi/6) ];
+
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+            
+            % Actual values
+            angles = [pi/4 pi/6];
+            mus = [  1 -1 ;
+                    -1  1 ];
+            coefActual = step(testCase.omgs,angles,mus);            
             
             % Evaluation
             testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
@@ -116,6 +169,67 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end
 
         % Test for set angle
+        function testSetAnglesMultiple(testCase)
+
+            % Expected values
+            coefExpctd(:,:,1) = [
+                1 0 ;
+                0 1 ];
+            coefExpctd(:,:,2) = [
+                1 0;
+                0 1 ];            
+
+            % Instantiation of target class
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+
+            % Actual values
+            angles = [0 0];
+            coefActual = step(testCase.omgs,angles,1);
+
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
+
+            % Expected values
+            coefExpctd(:,:,1) = [
+                cos(pi/4) -sin(pi/4) ;
+                sin(pi/4)  cos(pi/4) ];
+            coefExpctd(:,:,2) = [
+                cos(pi/6) -sin(pi/6) ;
+                sin(pi/6)  cos(pi/6) ];
+
+
+            % Actual values
+            angles = [pi/4 pi/6];
+            coefActual = step(testCase.omgs,angles,1);
+
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
+        end
+
+        % Test for set angle
+        function test2x2Multiple(testCase,nblks)
+
+            % Expected values
+            normExpctd = ones(1,2,nblks);
+
+            % Instantiation of target class
+            angs = 2*pi*rand(1,nblks);
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+
+            % Actual values
+            matrices = step(testCase.omgs,angs,1);
+            normActual = vecnorm(matrices,2,1);
+
+            % Evaluation
+            message = ...
+                sprintf('normActual=%g differs from 1',normActual);
+            testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
+
+        end
+
+        % Test for set angle
         function test4x4(testCase)
             
             % Expected values
@@ -137,6 +251,29 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end
 
         % Test for set angle
+        function test4x4Multiple(testCase,nblks)
+
+            % Expected values
+            normExpctd = ones(1,4,nblks);
+
+            % Instantiation of target class
+            angs = 2*pi*rand(6,nblks);
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+
+            % Actual values
+            matrices = step(testCase.omgs,angs,1);
+            normActual = vecnorm(matrices,2,1);
+
+            % Evaluation
+            message = ...
+                sprintf('normActual=%g differs from 1',normActual);
+            testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
+
+        end
+
+
+        % Test for set angle
         function test8x8(testCase)
             
             % Expected values
@@ -155,7 +292,28 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
                 sprintf('normActual=%g differs from 1',normActual);
             testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
         end
-        
+
+        % Test for set angle
+        function test8x8Multiple(testCase,nblks)
+
+            % Expected values
+            normExpctd = ones(1,8,nblks);
+
+            % Instantiation of target class
+            ang = 2*pi*rand(28,nblks);
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+
+            % Actual values
+            matrices = step(testCase.omgs,ang,1);
+            normActual = vecnorm(matrices,2,1);
+
+            % Evaluation
+            message = ...
+                sprintf('normActual=%g differs from 1',normActual);
+            testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
+        end
+
         % Test for set angle
         function test4x4red(testCase)
             
@@ -179,6 +337,8 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
         end
         
+% TODO test for multiple blocks
+
         % Test for set angle
         function test8x8red(testCase)
             

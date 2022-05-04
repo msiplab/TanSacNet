@@ -21,7 +21,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties (TestParameter)
-        stride = { [2 2] };
+        stride = { [2 2], [4 4] };
         datatype = { 'single', 'double' };
         mus = { -1, 1 };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
@@ -67,7 +67,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualMode,expctdMode);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-        %{
+        
         function testPredictGrayscale(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -77,15 +77,15 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(stride);
+            nChsTotal = prod(stride);
             % nChsTotal x nRows x nCols xnSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
             X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
             
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             UnT = mus*eye(pa,datatype);
             Y = X; %permute(X,[3 1 2 4]);
             Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
@@ -96,7 +96,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','Vn~');
             
             % Actual values
@@ -110,6 +110,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
+        %{
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -121,16 +122,16 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(stride);
+            nChsTotal = prod(stride);
             % nChsTotal x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
             X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/8,1);
+            angles = randn((nChsTotal-2)*nChsTotal/8,nSamples);
             
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             UnT = transpose(genU.step(angles,mus));
             Y = X; %permute(X,[3 1 2 4]);
             Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
@@ -141,7 +142,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','Vn~');
             
             % Actual values
@@ -156,6 +157,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
+        %{
         function testPredictGrayscaleAnalysisMode(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -190,7 +192,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','Vn',...
                 'Mode','Analysis');
             
@@ -260,7 +262,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','Vn~');
             layer.Mus = mus;
             
@@ -328,7 +330,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','Vn~');
             layer.Mus = mus;
             layer.Angles = angles;            
@@ -397,7 +399,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
                 'Name','Vn',...
                 'Mode','Analysis');
             layer.Mus = mus;
