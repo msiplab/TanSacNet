@@ -85,7 +85,14 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
             end
             
             if isempty(angles)
-                matrix = diag(mus);
+                if isvector(mus) % Single case
+                    matrix = diag(mus); 
+                else % Multiple case
+                    matrix = zeros(size(mus,1),size(mus,1),size(mus,2));
+                    for idx = 1:size(mus,2)
+                        matrix(:,:,idx) = diag(mus(:,idx));
+                    end
+                end
             elseif strcmp(obj.PartialDifference,'sequential')
                 % Sequential mode
                 matrix = obj.stepSequential_(angles,mus,pdAng);

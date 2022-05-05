@@ -113,6 +113,50 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             
         end
 
+        % Test for default construction
+        function testConstructorWithMus(testCase)
+            
+            % Expected values
+            coefExpctd = [
+                1 0 ;
+                0 -1 ];
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+            
+            % Actual values
+            coefActual = step(testCase.omgs,[],[ 1 -1 ]);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
+            
+        end
+
+        function testConstructorWithMusMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                1 0 ;
+                0 -1 ];
+            coefExpctd(:,:,2) = [
+                -1 0 ;
+                0 1 ];
+
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+            
+            % Actual values
+            mus = [  1 -1 ;
+                    -1  1 ];
+            coefActual = step(testCase.omgs,[],mus);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'RelTol',1e-10);
+            
+        end
+
         function testConstructorWithAnglesAndMusMultiple(testCase)
             
             % Expected values
@@ -336,8 +380,29 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
                 sprintf('ltActual=%g differs from 1',ltActual);
             testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
         end
-        
-% TODO test for multiple blocks
+
+        % Test for set angle
+        function test4x4redMultiple(testCase,nblks)
+            
+            % Expected values
+            ltExpctd = ones(1,1,nblks);
+            
+            % Instantiation of target class
+            angs = 2*pi*rand(6,nblks);
+            nSize = 4;
+            angs(1:nSize-1,:) = zeros(nSize-1,nblks);
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+            
+            % Actual values
+            matrix = step(testCase.omgs,angs,1);
+            ltActual = matrix(1,1,:);
+            
+            % Evaluation
+            message = ...
+                sprintf('ltActual=%g differs from 1',ltActual);
+            testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
+        end
 
         % Test for set angle
         function test8x8red(testCase)
@@ -363,6 +428,29 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end
         
         % Test for set angle
+        function test8x8redMultiple(testCase,nblks)
+            
+            % Expected values
+            ltExpctd = ones(1,1,nblks);
+            
+            % Instantiation of target class
+            angs = 2*pi*rand(28,nblks);
+            nSize = 8;
+            angs(1:nSize-1,:) = zeros(nSize-1,nblks);
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem();
+            
+            % Actual values
+            matrix = step(testCase.omgs,angs,1);
+            ltActual = matrix(1,1,:);
+            
+            % Evaluation
+            message = ...
+                sprintf('ltActual=%g differs from 1',ltActual);
+            testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
+        end
+
+        % Test for set angle
         function testPartialDifference(testCase)
             
             % Expected values
@@ -377,6 +465,29 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             
             % Actual values
             coefActual = step(testCase.omgs,0,1,1);
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+        end
+
+        % Test for set angle
+        function testPartialDifferenceMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                0 -1 ;
+                1  0 ];
+            coefExpctd(:,:,2) = [
+                0 -1 ;
+                1  0 ];
+            
+            % Instantiation of target class
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            coefActual = step(testCase.omgs,[0 0],1,1);
             
             % Evaluation
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
@@ -402,6 +513,30 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
         end
 
+        % Test for set angle
+        function testPartialDifferenceAngsMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                cos(pi/4+pi/2) -sin(pi/4+pi/2) ;
+                sin(pi/4+pi/2)  cos(pi/4+pi/2) ];
+            coefExpctd(:,:,2) = [
+                cos(pi/6+pi/2) -sin(pi/6+pi/2) ;
+                sin(pi/6+pi/2)  cos(pi/6+pi/2) ];
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            angs = [pi/4 pi/6];
+            coefActual = step(testCase.omgs,angs,1,1);
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+        end
+    
         % Test for default construction
         function testPartialDifferenceWithAnglesAndMus(testCase)
             
@@ -417,6 +552,32 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             
             % Actual values
             coefActual = step(testCase.omgs,pi/4,[ 1 -1 ],1);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+            
+        end
+
+        % Test for default construction
+        function testPartialDifferenceWithAnglesAndMusMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                cos(pi/4+pi/2) -sin(pi/4+pi/2) ;
+                -sin(pi/4+pi/2) -cos(pi/4+pi/2) ];
+            coefExpctd(:,:,2) = [
+                -cos(pi/6+pi/2) sin(pi/6+pi/2) ;
+                sin(pi/6+pi/2) cos(pi/6+pi/2) ];
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            angs = [pi/4 pi/6];
+            mus = [1 -1 ; -1 1];
+            coefActual = step(testCase.omgs,angs,mus,1);            
             
             % Evaluation
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
@@ -453,6 +614,46 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             % Evaluation
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
         end
+
+        % Test for set angle
+        function testPartialDifferenceSetAnglesMultiple(testCase)
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                0 -1 ;
+                1  0 ];
+            coefExpctd(:,:,2) = [
+                0 -1 ;
+                1  0 ];
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            angs = [0 0];
+            coefActual = step(testCase.omgs,angs,1,1);
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+            
+            % Expected values
+            coefExpctd(:,:,1) = [
+                cos(pi/4+pi/2) -sin(pi/4+pi/2) ;
+                sin(pi/4+pi/2)  cos(pi/4+pi/2) ];
+            coefExpctd(:,:,2) = [
+                cos(pi/6+pi/2) -sin(pi/6+pi/2) ;
+                sin(pi/6+pi/2)  cos(pi/6+pi/2) ];
+            
+            % Actual values
+            angs = [pi/4 pi/6];
+            coefActual = step(testCase.omgs,angs,1,1);
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+        end
+
 
         % Test for set angle
         function test4x4RandAngs(testCase)
@@ -498,6 +699,7 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
 
         end
+ 
 
         % Test for set angle
         function testPartialDifference4x4RandAngPdAng3(testCase)
@@ -547,6 +749,56 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end        
 
         % Test for set angle
+        function testPartialDifference4x4RandAngPdAng3Multiple(testCase,nblks)
+            
+            % Expected values
+            mus = [ -1 1 -1 1 ];
+            angs = 2*pi*rand(6,nblks);
+            pdAng = 3;
+            coefExpctd = zeros(4,4,nblks);
+            for iblk = 1:nblks
+                coefExpctd(:,:,iblk) = ...
+                    diag(mus) * ...
+                    [ 1  0   0             0            ;
+                    0  1   0             0            ;
+                    0  0   cos(angs(6,iblk)) -sin(angs(6,iblk)) ;
+                    0  0   sin(angs(6,iblk))  cos(angs(6,iblk)) ] *...
+                    [ 1  0            0  0            ;
+                    0  cos(angs(5,iblk)) 0 -sin(angs(5,iblk)) ;
+                    0  0            1  0            ;
+                    0  sin(angs(5,iblk)) 0 cos(angs(5,iblk))  ] *...
+                    [ 1  0             0            0 ;
+                    0  cos(angs(4,iblk)) -sin(angs(4,iblk)) 0 ;
+                    0  sin(angs(4,iblk))  cos(angs(4,iblk)) 0 ;
+                    0  0             0            1 ] *...
+                    [ cos(angs(3,iblk)+pi/2) 0 0 -sin(angs(3,iblk)+pi/2)  ; % Partial Diff.
+                    0            0 0  0             ;
+                    0            0 0  0             ;
+                    sin(angs(3,iblk)+pi/2) 0 0  cos(angs(3,iblk)+pi/2) ] *...
+                    [ cos(angs(2,iblk)) 0 -sin(angs(2,iblk)) 0  ;
+                    0            1  0            0  ;
+                    sin(angs(2,iblk)) 0  cos(angs(2,iblk)) 0  ;
+                    0            0  0            1 ] *...
+                    [ cos(angs(1,iblk)) -sin(angs(1,iblk)) 0 0  ;
+                    sin(angs(1,iblk)) cos(angs(1,iblk))  0 0  ;
+                    0            0             1 0  ;
+                    0            0             0 1 ];
+            end
+
+            % Instantiation of target class
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+
+            % Actual values
+            coefActual = step(testCase.omgs,angs,mus,pdAng);
+
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+
+        end
+
+        % Test for set angle
         function testPartialDifference4x4RandAngPdAng6(testCase)
             
             % Expected values
@@ -593,7 +845,57 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
 
         end        
         
-         % Test for set angle
+        % Test for set angle
+        function testPartialDifference4x4RandAngPdAng6Multiple(testCase,nblks)
+            
+            % Expected values
+            mus = [ 1 1 -1 -1 ];
+            angs = 2*pi*rand(6,nblks);
+            pdAng = 6;
+            coefExpctd = zeros(4,4,nblks);
+            for iblk = 1:nblks
+                coefExpctd(:,:,iblk) = ...
+                    diag(mus) * ...
+                    [ 0  0   0             0            ;
+                    0  0   0             0            ;
+                    0  0   cos(angs(6,iblk)+pi/2) -sin(angs(6,iblk)+pi/2) ; % Partial Diff.
+                    0  0   sin(angs(6,iblk)+pi/2)  cos(angs(6,iblk)+pi/2) ] *...
+                    [ 1  0            0  0            ;
+                    0  cos(angs(5,iblk)) 0 -sin(angs(5,iblk)) ;
+                    0  0            1  0            ;
+                    0  sin(angs(5,iblk)) 0 cos(angs(5,iblk))  ] *...
+                    [ 1  0             0            0 ;
+                    0  cos(angs(4,iblk)) -sin(angs(4,iblk)) 0 ;
+                    0  sin(angs(4,iblk))  cos(angs(4,iblk)) 0 ;
+                    0  0             0            1 ] *...
+                    [ cos(angs(3,iblk)) 0 0 -sin(angs(3,iblk))  ;
+                    0            1 0  0             ;
+                    0            0 1  0             ;
+                    sin(angs(3,iblk)) 0 0  cos(angs(3,iblk)) ] *...
+                    [ cos(angs(2,iblk)) 0 -sin(angs(2,iblk)) 0  ;
+                    0            1  0            0  ;
+                    sin(angs(2,iblk)) 0  cos(angs(2,iblk)) 0  ;
+                    0            0  0            1 ] *...
+                    [ cos(angs(1,iblk)) -sin(angs(1,iblk)) 0 0  ;
+                    sin(angs(1,iblk)) cos(angs(1,iblk))  0 0  ;
+                    0            0             1 0  ;
+                    0            0             0 1 ];
+            end
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            coefActual = step(testCase.omgs,angs,mus,pdAng);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-10);
+
+        end        
+
+        % Test for set angle
         function testPartialDifference4x4RandAngPdAng2(testCase)
             
             % Expected values
@@ -646,7 +948,64 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-5);
 
         end
-        
+
+        % Test for set angle
+        function testPartialDifference4x4RandAngPdAng2Multiple(testCase,nblks)
+            
+            % Expected values
+            mus = [ -1 -1 -1 -1 ];
+            angs = 2*pi*rand(6,nblks);
+            pdAng = 2;
+            delta = 1e-10;
+            coefExpctd = zeros(4,4,nblks);
+            for iblk = 1:nblks
+                coefExpctd(:,:,iblk) = 1/delta * ...
+                    diag(mus) * ...
+                    [ 1  0   0             0            ;
+                    0  1   0             0            ;
+                    0  0   cos(angs(6,iblk)) -sin(angs(6,iblk)) ;
+                    0  0   sin(angs(6,iblk))  cos(angs(6,iblk)) ] *...
+                    [ 1  0            0  0            ;
+                    0  cos(angs(5,iblk)) 0 -sin(angs(5,iblk)) ;
+                    0  0            1  0            ;
+                    0  sin(angs(5,iblk)) 0 cos(angs(5,iblk))  ] *...
+                    [ 1  0             0            0 ;
+                    0  cos(angs(4,iblk)) -sin(angs(4,iblk)) 0 ;
+                    0  sin(angs(4,iblk))  cos(angs(4,iblk)) 0 ;
+                    0  0             0            1 ] *...
+                    [ cos(angs(3,iblk)) 0 0 -sin(angs(3,iblk))  ;
+                    0            1 0  0             ;
+                    0            0 1  0             ;
+                    sin(angs(3,iblk)) 0 0  cos(angs(3,iblk)) ] * ...
+                    ( ...
+                    [ cos(angs(2,iblk)+delta) 0 -sin(angs(2,iblk)+delta) 0  ;
+                    0            1  0            0  ;
+                    sin(angs(2,iblk)+delta) 0  cos(angs(2,iblk)+delta) 0  ;
+                    0            0  0            1 ] - ...
+                    [ cos(angs(2,iblk)) 0 -sin(angs(2,iblk)) 0  ;
+                    0            1  0            0  ;
+                    sin(angs(2,iblk)) 0  cos(angs(2,iblk)) 0  ;
+                    0            0  0            1 ] ...
+                    ) *...
+                    [ cos(angs(1,iblk)) -sin(angs(1,iblk)) 0 0  ;
+                    sin(angs(1,iblk)) cos(angs(1,iblk))  0 0  ;
+                    0            0             1 0  ;
+                    0            0             0 1 ];
+            end
+
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            coefActual = step(testCase.omgs,angs,mus,pdAng);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-5);
+
+        end
+
         % Test for set angle
         function testPartialDifference8x8RandAngPdAng2(testCase)
             
@@ -677,6 +1036,40 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-5);
 
         end        
+
+        % Test for set angle
+        function testPartialDifference8x8RandAngPdAng2Multiple(testCase,nblks)
+            
+            % Expected values
+            pdAng = 14;            
+            delta = 1e-10;            
+            angs0 = 2*pi*rand(28,nblks);
+            angs1 = angs0;
+            angs1(pdAng,:) = angs1(pdAng,:)+delta;
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','off');            
+            coefExpctd = 1/delta * ...
+                ( step(testCase.omgs,angs1,1) ...
+                - step(testCase.omgs,angs0,1));
+            
+            % Instantiation of target class
+            import tansacnet.utility.*            
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Actual values
+            coefActual = step(testCase.omgs,angs0,1,pdAng);            
+            
+            % Evaluation
+            testCase.verifyEqual(coefExpctd,coefActual,'AbsTol',1e-5);
+
+        end        
+
+
+% TODO test for multiple blocks     
         
         %
         function testPartialDifferenceInSequentialMode(testCase)
