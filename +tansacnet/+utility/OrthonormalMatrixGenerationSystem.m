@@ -160,59 +160,76 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
             end
             %
             nDim_ = obj.NumberOfDimensions;
+            nMatrices_ = size(angles,2);
+            matrix = repmat(eye(nDim_),[1 1 nMatrices_]);
+            if isrow(mus)
+                mus = mus.';
+            end
             if pdAng < 1 % Initialization
-                obj.matrixpst = eye(nDim_);
-                obj.matrixpre = eye(nDim_);
+                obj.matrixpst = repmat(eye(nDim_),[1 1 nMatrices_]);
+                obj.matrixpre = repmat(eye(nDim_),[1 1 nMatrices_]);
                 %
-                iAng = 1;
-                for iTop=1:nDim_-1
-                    vt = obj.matrixpst(iTop,:);
-                    for iBtm=iTop+1:nDim_
-                        angle = angles(iAng);
-                        vb = obj.matrixpst(iBtm,:);
-                        [vt,vb] = obj.rot_(vt,vb,angle);
-                        obj.matrixpst(iBtm,:) = vb;
-                        iAng = iAng + 1;
+                for iMtx = 1:nMatrices_
+                    iAng = 1;
+                    for iTop=1:nDim_-1
+                        vt = obj.matrixpst(iTop,:,iMtx);
+                        for iBtm=iTop+1:nDim_
+                            angle = angles(iAng,iMtx);
+                            vb = obj.matrixpst(iBtm,:,iMtx);
+                            [vt,vb] = obj.rot_(vt,vb,angle);
+                            obj.matrixpst(iBtm,:,iMtx) = vb;
+                            iAng = iAng + 1;
+                        end
+                        obj.matrixpst(iTop,:,iMtx) = vt;
                     end
-                    obj.matrixpst(iTop,:) = vt;
+                    if iscolumn(mus)
+                        matrix(:,:,iMtx) = mus.*obj.matrixpst(:,:,iMtx);
+                    else
+                        matrix(:,:,iMtx) = mus(:,iMtx).*obj.matrixpst(:,:,iMtx);
+                    end
                 end
-                matrix = diag(mus)*obj.matrixpst;
                 obj.nextangle = uint32(1);
             else % Sequential differentiation
                 %
-                matrix = 1;
-                matrixrev = eye(nDim_);
-                matrixdif = zeros(nDim_);
-                %
-                iAng = 1;
-                for iTop=1:nDim_-1
-                    rt = matrixrev(iTop,:);
-                    dt = zeros(1,nDim_);
-                    dt(iTop) = 1;
-                    for iBtm=iTop+1:nDim_
-                        if iAng == pdAng
-                            angle = angles(iAng);
-                            %
-                            rb = matrixrev(iBtm,:);
-                            [rt,rb] = obj.rot_(rt,rb,-angle);
-                            matrixrev(iTop,:) = rt;
-                            matrixrev(iBtm,:) = rb;
-                            %
-                            db = zeros(1,nDim_);
-                            db(iBtm) = 1;
-                            dangle = angle + pi/2;
-                            [dt,db] = obj.rot_(dt,db,dangle);
-                            matrixdif(iTop,:) = dt;
-                            matrixdif(iBtm,:) = db;
-                            %
-                            obj.matrixpst = obj.matrixpst*matrixrev;
-                            matrix = obj.matrixpst*matrixdif*obj.matrixpre;
-                            obj.matrixpre = matrixrev.'*obj.matrixpre;
+                %matrix = 1;
+                for iMtx = 1:nMatrices_
+                    matrixrev = eye(nDim_);
+                    matrixdif = zeros(nDim_);
+                    %
+                    iAng = 1;
+                    for iTop=1:nDim_-1
+                        rt = matrixrev(iTop,:);
+                        dt = zeros(1,nDim_);
+                        dt(iTop) = 1;
+                        for iBtm=iTop+1:nDim_
+                            if iAng == pdAng
+                                angle = angles(iAng,iMtx);
+                                %
+                                rb = matrixrev(iBtm,:);
+                                [rt,rb] = obj.rot_(rt,rb,-angle);
+                                matrixrev(iTop,:) = rt;
+                                matrixrev(iBtm,:) = rb;
+                                %
+                                db = zeros(1,nDim_);
+                                db(iBtm) = 1;
+                                dangle = angle + pi/2;
+                                [dt,db] = obj.rot_(dt,db,dangle);
+                                matrixdif(iTop,:) = dt;
+                                matrixdif(iBtm,:) = db;
+                                %
+                                obj.matrixpst(:,:,iMtx) = obj.matrixpst(:,:,iMtx)*matrixrev;
+                                matrix(:,:,iMtx) = obj.matrixpst(:,:,iMtx)*matrixdif*obj.matrixpre(:,:,iMtx);
+                                obj.matrixpre(:,:,iMtx) = matrixrev.'*obj.matrixpre(:,:,iMtx);
+                            end
+                            iAng = iAng + 1;
                         end
-                        iAng = iAng + 1;
                     end
+                    if iscolumn(mus)
+                        matrix(:,:,iMtx) = mus.*matrix(:,:,iMtx);
+                    else
+                        matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);
+                    end                    
                 end
-                matrix = diag(mus)*matrix;
                 obj.nextangle = obj.nextangle + 1;
             end
         end
