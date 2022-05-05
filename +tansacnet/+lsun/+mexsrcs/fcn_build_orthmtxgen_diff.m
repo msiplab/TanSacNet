@@ -50,11 +50,11 @@ if license('checkout','matlab_coder') % Coder is available
             codegenskip = true;
         end
         if strcmp(device,'cpu') % on CPU
-            aAngles   = coder.typeof(cast(0,datatype),[inf 1],[1 0]); %#ok
-            aMus      = coder.typeof(cast(0,datatype),[inf 1],[1 0]); %#ok
-            aPdAng    = coder.typeof(uint32(0),1,0); %#ok
-            aMtxPst   = coder.typeof(cast(0,datatype),[inf inf],[1 1]); %#ok
-            aMtxPre   = coder.typeof(cast(0,datatype),[inf inf],[1 1]); %#ok
+            aAngles   = coder.typeof(cast(0,datatype),[inf inf],[1 1]); %#ok
+            aMus      = coder.typeof(cast(0,datatype),[inf inf],[1 1]); %#ok
+            aPdAng    = coder.typeof(uint32(0),1,0); %#ok 
+            aMtxPst   = coder.typeof(cast(0,datatype),[inf inf inf],[1 1 1]); %#ok
+            aMtxPre   = coder.typeof(cast(0,datatype),[inf inf inf],[1 1 1]); %#ok
             cUseGpu   = coder.Constant(false); %#ok
             cIsLt21b  = coder.Constant(isLessThanR2021b); %#ok
             cfg.DynamicMemoryAllocation = 'AllVariableSizeArrays';%'Threshold';%'Off';
@@ -64,11 +64,12 @@ if license('checkout','matlab_coder') % Coder is available
             nChs = 64;
             maxAngs = (nChs-2)*nChs/8;
             maxMus = nChs/2;
-            aAngles   = coder.typeof(gpuArray(cast(0,datatype)),[maxAngs 1],[1 0]); %#ok
-            aMus      = coder.typeof(gpuArray(cast(0,datatype)),[maxMus 1],[1 0]); %#ok
+            maxBlks = 2^20;
+            aAngles   = coder.typeof(gpuArray(cast(0,datatype)),[maxAngs maxBlks],[1 1]); %#ok
+            aMus      = coder.typeof(gpuArray(cast(0,datatype)),[maxMus maxBlks],[1 1]); %#ok
             aPdAng    = coder.typeof(uint32(0),1,0); %#ok
-            aMtxPst   = coder.typeof(gpuArray(cast(0,datatype)),[maxMus maxMus],[1 1]); %#ok
-            aMtxPre   = coder.typeof(gpuArray(cast(0,datatype)),[maxMus maxMus],[1 1]); %#ok
+            aMtxPst   = coder.typeof(gpuArray(cast(0,datatype)),[maxMus maxMus maxBlks],[1 1 1]); %#ok
+            aMtxPre   = coder.typeof(gpuArray(cast(0,datatype)),[maxMus maxMus maxBlks],[1 1 1]); %#ok
             cUseGpu   = coder.Constant(true); %#ok
             cIsLt21b  = coder.Constant(isLessThanR2021b); %#ok            
             cfg.DynamicMemoryAllocation = 'Off';
