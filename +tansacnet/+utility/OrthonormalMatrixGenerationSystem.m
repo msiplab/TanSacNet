@@ -145,7 +145,7 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
                     end
                     matrix(iTop,:,iMtx) = vt;
                 end
-                if iscolumn(mus)
+                if iscolumn(mus) || isscalar(mus)
                     matrix(:,:,iMtx) = mus.*matrix(:,:,iMtx);
                 else
                     matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);

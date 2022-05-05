@@ -2,7 +2,7 @@ function matrix = fcn_orthmtxgen(angles,mus,useGpu,isLessThanR2021b) %#codegen
 %FCN_ORTHMTXGEN
 %
 % Function realization of
-% saivdr.dictionary.utility.OrthonormalMatrixGenerationSystem
+% tansacnet.utility.OrthonormalMatrixGenerationSystem
 % for supporting dlarray (Deep learning array for custom training
 % loops)
 %
@@ -24,43 +24,58 @@ end
 if nargin < 3
     useGpu = isgpuarray(angles);
 end
-nDim_ = (1+sqrt(1+8*length(angles)))/2;
-matrix = eye(nDim_,'like',angles);
+nDim_ = (1+sqrt(1+8*size(angles,1)))/2;
+nMatrices_ = size(angles,2);
+matrix = repmat(eye(nDim_,'like',angles),[1 1 nMatrices_]);
 if ~isempty(angles)
-    iAng = uint32(1);
-    for iTop=1:nDim_-1
-        vt = matrix(iTop,:);
-        for iBtm=iTop+1:nDim_
-            angle = angles(iAng);
-            if angle ~= 0
-                c = cos(angle);
-                s = sin(angle);
-                vb = matrix(iBtm,:);
-                if useGpu           
-                    u  = arrayfun(@(s,vt,vb) s.*(vt+vb),s,vt,vb);
-                    vt = arrayfun(@(c,s,vt,u) (c+s).*vt-u,c,s,vt,u);
-                    matrix(iBtm,:) = arrayfun(@(c,s,vb,u) (c-s).*vb+u,c,s,vb,u);
-                elseif isLessThanR2021b % on CPU
-                    u  = bsxfun(@times,s,bsxfun(@plus,vt,vb));
-                    vt = bsxfun(@minus,bsxfun(@times,c+s,vt),u);
-                    matrix(iBtm,:) = bsxfun(@plus,bsxfun(@times,c-s,vb),u);
-                else % on CPU                 
-                    u  = s.*(vt+vb);
-                    vt = (c+s).*vt-u;
-                    matrix(iBtm,:) = (c-s).*vb+u;
+    for iMtx = 1:nMatrices_
+        iAng = uint32(1);
+        for iTop=1:nDim_-1
+            vt = matrix(iTop,:,iMtx);
+            for iBtm=iTop+1:nDim_
+                angle = angles(iAng,iMtx);
+                if angle ~= 0
+                    c = cos(angle);
+                    s = sin(angle);
+                    vb = matrix(iBtm,:,iMtx);
+                    if useGpu
+                        u  = arrayfun(@(s,vt,vb) s.*(vt+vb),s,vt,vb);
+                        vt = arrayfun(@(c,s,vt,u) (c+s).*vt-u,c,s,vt,u);
+                        matrix(iBtm,:,iMtx) = arrayfun(@(c,s,vb,u) (c-s).*vb+u,c,s,vb,u);
+                    elseif isLessThanR2021b % on CPU
+                        u  = bsxfun(@times,s,bsxfun(@plus,vt,vb));
+                        vt = bsxfun(@minus,bsxfun(@times,c+s,vt),u);
+                        matrix(iBtm,:,iMtx) = bsxfun(@plus,bsxfun(@times,c-s,vb),u);
+                    else % on CPU
+                        u  = s.*(vt+vb);
+                        vt = (c+s).*vt-u;
+                        matrix(iBtm,:,iMtx) = (c-s).*vb+u;
+                    end
                 end
+                %
+                iAng = iAng + 1;
             end
-            %
-            iAng = iAng + 1;
+            matrix(iTop,:,iMtx) = vt;
         end
-        matrix(iTop,:) = vt;
     end
 end
-if useGpu
-    matrix = arrayfun(@times,mus(:),matrix);
-elseif isLessThanR2021b % on CPU
-    matrix = bsxfun(@times,mus(:),matrix);
-else % on CPU
-    matrix = mus(:).*matrix;
+for iMtx = 1:nMatrices_
+    if isvector(mus) || isscalar(mus)
+        if useGpu
+            matrix(:,:,iMtx) = arrayfun(@times,mus(:),matrix(:,:,iMtx));
+        elseif isLessThanR2021b % on CPU
+            matrix(:,:,iMtx) = bsxfun(@times,mus(:),matrix(:,:,iMtx));
+        else % on CPU
+            matrix(:,:,iMtx) = mus(:).*matrix(:,:,iMtx);
+        end
+    else
+        if useGpu
+            matrix(:,:,iMtx) = arrayfun(@times,mus(:,iMtx),matrix(:,:,iMtx));
+        elseif isLessThanR2021b % on CPU
+            matrix(:,:,iMtx) = bsxfun(@times,mus(:,iMtx),matrix(:,:,iMtx));
+        else % on CPU
+            matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);
+        end
+    end
 end
 end

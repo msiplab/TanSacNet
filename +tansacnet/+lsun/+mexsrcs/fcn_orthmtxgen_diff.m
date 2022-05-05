@@ -30,47 +30,60 @@ if nargin < 3
     pdAng = 0;
 end
 
-nDim_ = (1+sqrt(1+8.*length(angles)))/2.;
-matrix = eye(nDim_,'like',angles);
-matrixrev = eye(nDim_,'like',angles);
-matrixdif = zeros(nDim_,'like',angles);
-iAng = uint32(1);
-for iTop=1:nDim_-1
-    rt = matrixrev(iTop,:);
-    dt = zeros(1,nDim_,'like',angles);
-    dt(iTop) = 1;
-    for iBtm=iTop+1:nDim_
-        if iAng == pdAng
-            angle = angles(iAng);
-            %
-            rb = matrixrev(iBtm,:);
-            db = zeros(1,nDim_,'like',angles);
-            db(iBtm) = 1;
-            dangle = angle + pi/2;
-            % 
-            %[rt,rb] = rot_(rt,rb,-angle);
-            %[dt,db] = rot_(dt,db,dangle);
-            [vt,vb] = rot_([rt;dt],[rb;db],[-angle;dangle],...
-                useGpu,isLessThanR2021b);
-            %
-            matrixrev(iTop,:) = vt(1,:); %rt;
-            matrixrev(iBtm,:) = vb(1,:); %rb;
-            matrixdif(iTop,:) = vt(2,:); %dt;
-            matrixdif(iBtm,:) = vb(2,:); %db;
-            %
-            matrixpst = matrixpst*matrixrev;
-            matrix    = matrixpst*matrixdif*matrixpre;
-            matrixpre = matrixrev.'*matrixpre;
+nDim_ = (1+sqrt(1+8.*size(angles,1)))/2;
+nMatrices_ = size(angles,2);
+matrix = repmat(eye(nDim_,'like',angles),[1 1 nMatrices_]);
+for iMtx = 1:nMatrices_
+    matrixrev = eye(nDim_,'like',angles);
+    matrixdif = zeros(nDim_,'like',angles);
+    iAng = uint32(1);
+    for iTop=1:nDim_-1
+        rt = matrixrev(iTop,:);
+        dt = zeros(1,nDim_,'like',angles);
+        dt(iTop) = 1;
+        for iBtm=iTop+1:nDim_
+            if iAng == pdAng
+                angle = angles(iAng,iMtx);
+                %
+                rb = matrixrev(iBtm,:);
+                db = zeros(1,nDim_,'like',angles);
+                db(iBtm) = 1;
+                dangle = angle + pi/2;
+                %
+                %[rt,rb] = rot_(rt,rb,-angle);
+                %[dt,db] = rot_(dt,db,dangle);
+                [vt,vb] = rot_([rt;dt],[rb;db],[-angle;dangle],...
+                    useGpu,isLessThanR2021b);
+                %
+                matrixrev(iTop,:) = vt(1,:); %rt;
+                matrixrev(iBtm,:) = vb(1,:); %rb;
+                matrixdif(iTop,:) = vt(2,:); %dt;
+                matrixdif(iBtm,:) = vb(2,:); %db;
+                %
+                matrixpst(:,:,iMtx) = matrixpst(:,:,iMtx)*matrixrev;
+                matrix(:,:,iMtx) = matrixpst(:,:,iMtx)*matrixdif*matrixpre(:,:,iMtx);
+                matrixpre(:,:,iMtx) = matrixrev.'*matrixpre(:,:,iMtx);
+            end
+            iAng = iAng + 1;
         end
-        iAng = iAng + 1;
     end
-end
-if useGpu
-    matrix = arrayfun(@times,mus(:),matrix);
-elseif isLessThanR2021b % on CPU
-    matrix = bsxfun(@times,mus(:),matrix);
-else % on CPU
-    matrix = mus(:).*matrix;
+    if isvector(mus) || isscalar(mus)
+        if useGpu
+            matrix(:,:,iMtx) = arrayfun(@times,mus(:),matrix(:,:,iMtx));
+        elseif isLessThanR2021b % on CPU
+            matrix(:,:,iMtx) = bsxfun(@times,mus(:),matrix(:,:,iMtx));
+        else % on CPU
+            matrix(:,:,iMtx) = mus(:).*matrix(:,:,iMtx);
+        end
+    else
+        if useGpu
+            matrix(:,:,iMtx) = arrayfun(@times,mus(:,iMtx),matrix(:,:,iMtx));
+        elseif isLessThanR2021b % on CPU
+            matrix(:,:,iMtx) = bsxfun(@times,mus(:,iMtx),matrix(:,:,iMtx));
+        else % on CPU
+            matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);
+        end
+    end
 end
 end
 

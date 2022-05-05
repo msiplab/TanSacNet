@@ -157,7 +157,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-        %{
+
         function testPredictGrayscaleAnalysisMode(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -419,5 +419,6 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         %}
     end
+
     
 end
