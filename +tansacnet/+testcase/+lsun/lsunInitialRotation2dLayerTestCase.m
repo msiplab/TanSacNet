@@ -112,6 +112,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','V0');
             
             % Actual values
@@ -172,6 +173,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','V0');
             
             % Actual values
@@ -238,6 +240,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'NoDcLeakage',true,...
                 'Name','V0');
             
@@ -335,6 +338,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','V0');
             layer.Mus = mus_;
             %expctdZ = layer.predict(X);
@@ -434,6 +438,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','V0');
             layer.Mus = mus_;
             layer.Angles = [anglesW; anglesU];
@@ -452,7 +457,6 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        %{
         function testBackwardGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -470,14 +474,14 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             nDecs = prod(stride);
             nChsTotal = nDecs;
             nAnglesH = (nChsTotal-2)*nChsTotal/8;
-            anglesW = randn(nAnglesH,1,datatype);
-            anglesU = randn(nAnglesH,1,datatype);
+            anglesW = randn(nAnglesH,nrows*ncols,datatype);
+            anglesU = randn(nAnglesH,nrows*ncols,datatype);
             
             % nDecs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             %dLdZ = randn(nrows,ncols,sum(stride),nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            dLdZ = randn(sum(stride),nrows,ncols,nSamples,datatype);            
+            dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);            
             
             % Expected values
             % nDecs x nRows x nCols x nSamples
@@ -486,42 +490,60 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             
             % dLdX = dZdX x dLdZ
             anglesW_NoDc = anglesW;
-            anglesW_NoDc(1:ps-1,1)=zeros(ps-1,1);
-            musW = mus*ones(ps,1);
-            musW(1,1) = 1;
-            musU = mus*ones(pa,1);            
-            W0T = transpose(genW.step(anglesW_NoDc,musW,0));
-            U0T = transpose(genU.step(anglesU,musU,0));
+            anglesW_NoDc(1:ps-1,:)=zeros(ps-1,nrows*ncols);
+            musW = mus*ones(ps,nrows*ncols);
+            musW(1,:) = ones(1,nrows*ncols);
+            musU = mus*ones(pa,nrows*ncols);            
+            W0T = permute(genW.step(anglesW_NoDc,musW,0),[2 1 3]);
+            U0T = permute(genU.step(anglesU,musU,0),[2 1 3]);
             Y = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols*nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Zsa = [ W0T(1:ceil(nDecs/2),:)*Ys; U0T(1:floor(nDecs/2),:)*Ya ];
+            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            for iSample = 1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Ys(:,iblk,iSample) = W0T(1:ceil(nDecs/2),:,iblk)*Ys(:,iblk,iSample);
+                    Ya(:,iblk,iSample) = U0T(1:floor(nDecs/2),:,iblk)*Ya(:,iblk,iSample);
+                end
+            end
+            Zsa = cat(1,Ys,Ya);
             %expctddLdX = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
             expctddLdX = reshape(Zsa,nDecs,nrows,ncols,nSamples);
             
             % dLdWi = <dLdZ,(dVdWi)X>
-            expctddLdW = zeros(2*nAnglesH,1,datatype);
+            dldw_ = zeros(2*nAnglesH,nrows*ncols,datatype);
             dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols*nSamples);
-            dldz_low = reshape(dldz_(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
+            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            dldz_low = reshape(dldz_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             % (dVdWi)X
+            a_ = X; %permute(X,[3 1 2 4]);
+            c_upp = reshape(a_(1:ceil(nDecs/2),:,:,:),ceil(nDecs/2),nrows*ncols,nSamples);
+            c_low = reshape(a_(ceil(nDecs/2)+1:nDecs,:,:,:),floor(nDecs/2),nrows*ncols,nSamples);
             for iAngle = 1:nAnglesH
                 dW0 = genW.step(anglesW_NoDc,musW,iAngle);
                 dU0 = genU.step(anglesU,musU,iAngle);
-                a_ = X; %permute(X,[3 1 2 4]);
-                c_upp = reshape(a_(1:ceil(nDecs/2),:,:,:),ceil(nDecs/2),nrows*ncols*nSamples);
-                c_low = reshape(a_(ceil(nDecs/2)+1:nDecs,:,:,:),floor(nDecs/2),nrows*ncols*nSamples);
-                d_upp = dW0(:,1:ceil(nDecs/2))*c_upp;
-                d_low = dU0(:,1:floor(nDecs/2))*c_low;
-                expctddLdW(iAngle) = sum(dldz_upp.*d_upp,'all');
-                expctddLdW(nAnglesH+iAngle) = sum(dldz_low.*d_low,'all');
+                for iblk = 1:(nrows*ncols)
+                    dldz_upp_iblk = squeeze(dldz_upp(:,iblk,:));
+                    dldz_low_iblk = squeeze(dldz_low(:,iblk,:));
+                    c_upp_iblk = squeeze(c_upp(:,iblk,:));
+                    c_low_iblk = squeeze(c_low(:,iblk,:));                    
+                    d_upp_iblk = zeros(size(c_upp_iblk),'like',c_upp_iblk);
+                    d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
+                    for iSample = 1:nSamples
+                        d_upp_iblk(:,iSample) = dW0(:,1:ceil(nDecs/2),iblk)*c_upp_iblk(:,iSample);
+                        d_low_iblk(:,iSample) = dU0(:,1:floor(nDecs/2),iblk)*c_low_iblk(:,iSample);
+                    end
+                    dldw_(iAngle,iblk) = sum(dldz_upp_iblk.*d_upp_iblk,'all');
+                    dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
+                end
             end
-            
+            expctddLdW = dldw_;
+        
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
-                'NumberOfChannels',stride,...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'NoDcLeakage',true,...
                 'Name','V0');
             layer.Mus = mus;
@@ -540,7 +562,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));
             
         end
-        %}
+
     end
     
 end

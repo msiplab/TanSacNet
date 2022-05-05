@@ -107,7 +107,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             ncols = size(X,3);            
             if layer.NumberOfBlocks(1) ~= nrows || ...
                     layer.NumberOfBlocks(2) ~= ncols
-                layer.NumberOfBlocks = [nrows ncols];
+                error('Invalid # of blocks.');
             end
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
