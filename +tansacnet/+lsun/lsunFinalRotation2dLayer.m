@@ -124,8 +124,8 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T_(1:ceil(nDecs/2),:,iblk)*Ys(:,iblk,iSample);
-                    Ya(:,iblk,iSample) = U0T_(1:floor(nDecs/2),:,iblk)*Ya(:,iblk,iSample);
+                    Ys(:,iblk,iSample) = W0T_(1:ps,:,iblk)*Ys(:,iblk,iSample);
+                    Ya(:,iblk,iSample) = U0T_(1:pa,:,iblk)*Ya(:,iblk,iSample);
                 end
             end
             Zsa = cat(1,Ys,Ya);
@@ -204,8 +204,8 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             % dLdX = dZdX x dLdZ
             adldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
             cdLd_ = reshape(adldz_,nDecs,nrows*ncols,nSamples);
-            cdLd_upp = W0(:,1:ceil(nDecs/2))*cdLd_(1:ceil(nDecs/2),:);
-            cdLd_low = U0(:,1:floor(nDecs/2))*cdLd_(ceil(nDecs/2)+1:nDecs,:);
+            cdLd_upp = W0(:,1:ps)*cdLd_(1:ps,:);
+            cdLd_low = U0(:,1:pa)*cdLd_(ps+1:nDecs,:);
             adLd_ = reshape([cdLd_upp;cdLd_low],...
                 pa+ps,nrows,ncols,nSamples);
             dLdX = adLd_; %ipermute(adLd_,[3 1 2 4]);
@@ -214,8 +214,8 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);            
             dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
             dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            dldz_upp = reshape(dldz_(1:ceil(nDecs/2),:,:,:),ceil(nDecs/2),nrows*ncols,nSamples);
-            dldz_low = reshape(dldz_(ceil(nDecs/2)+1:nDecs,:,:,:),floor(nDecs/2),nrows*ncols,nSamples);
+            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            dldz_low = reshape(dldz_(ps+1:nDecs,:,:,:),pa,nrows*ncols,nSamples);
             a_ = X; %permute(X,[3 1 2 4]);
             c_upp = reshape(a_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
             c_low = reshape(a_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
@@ -234,12 +234,12 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
                     d_upp_iblk = zeros(size(c_upp_iblk),'like',c_upp_iblk);
                     d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
                     for iSample = 1:nSamples
-                        d_upp_iblk(:,iSample) = dW0_T(1:ceil(nDecs/2),:,iblk)*c_upp_iblk(:,iSample);
-                        d_low_iblk(:,iSample) = dU0_T(1:floor(nDecs/2),:,iblk)*c_low_iblk(:,iSample);
+                        d_upp_iblk(:,iSample) = dW0_T(1:ps,:,iblk)*c_upp_iblk(:,iSample);
+                        d_low_iblk(:,iSample) = dU0_T(1:pa,:,iblk)*c_low_iblk(:,iSample);
                     end
+                    dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_upp_iblk,d_upp_iblk),'all');
+                    dLdW(nAngles/2+iAngle,iblk) = sum(bsxfun(@times,dldz_low_iblk,d_low_iblk),'all');
                 end
-                dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_upp_iblk,d_upp_iblk),'all');
-                dLdW(nAngles/2+iAngle,iblk) = sum(bsxfun(@times,dldz_low_iblk,d_low_iblk),'all');
             end
         end
         
