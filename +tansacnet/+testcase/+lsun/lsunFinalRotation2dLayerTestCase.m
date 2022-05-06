@@ -32,7 +32,8 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'Stride',[2 2]);
+                'Stride',[2 2],...
+                'NumberOfBlocks',[8 8]);
             fprintf("\n --- Check layer for 2-D images ---\n");
             checkLayer(layer,[4 8 8],...
                 'ObservationDimension',4,...                
@@ -86,12 +87,18 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % nDecs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
-            W0T = eye(ps,datatype);
-            U0T = eye(pa,datatype);
+            W0T = repmat(eye(ps,datatype),[1 1 nrows*ncols]);
+            U0T = repmat(eye(pa,datatype),[1 1 nrows*ncols]);
             Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols*nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Zsa = [ W0T(1:ceil(nDecs/2),:)*Ys; U0T(1:floor(nDecs/2),:)*Ya ];
+            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            for iSample=1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Ys(:,iblk,iSample) = W0T(1:ceil(nDecs/2),:,iblk)*Ys(:,iblk,iSample); 
+                    Ya(:,iblk,iSample) = U0T(1:floor(nDecs/2),:,iblk)*Ya(:,iblk,iSample);
+                end
+            end
+            Zsa = cat(1,Ys,Ya);
             %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
             expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
@@ -100,6 +107,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','V0~');
             
             % Actual values
