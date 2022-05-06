@@ -119,7 +119,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        %{
+        
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 stride, nrows, ncols, datatype)
             
@@ -133,21 +133,27 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nDecs = prod(stride);
-            nChsTotal = sum(stride);
+            nChsTotal = nDecs;
             % nChs x nRows x nCols x nSamples
-            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,1);
+            X = randn(nDecs,nrows,ncols,nSamples,datatype);
+            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
             
             % Expected values
             % nDecs x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
-            W0T = transpose(genW.step(angles(1:length(angles)/2),1));
-            U0T = transpose(genU.step(angles(length(angles)/2+1:end),1));
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            W0T = permute(genW.step(angles(1:size(angles,1)/2,:),1),[2 1 3]);
+            U0T = permute(genU.step(angles(size(angles,1)/2+1:end,:),1),[2 1 3]);
             Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols*nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Zsa = [ W0T(1:ceil(nDecs/2),:)*Ys; U0T(1:floor(nDecs/2),:)*Ya ];
+            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            for iSample=1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Ys(:,iblk,iSample) = W0T(1:ceil(nDecs/2),:,iblk)*Ys(:,iblk,iSample);
+                    Ya(:,iblk,iSample) = U0T(1:floor(nDecs/2),:,iblk)*Ya(:,iblk,iSample);
+                end
+            end
+            Zsa = cat(1,Ys,Ya);
             %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
             expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
@@ -156,6 +162,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','V0~');
             
             % Actual values
@@ -170,57 +177,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         %{
-        function testPredictGrayscaleWithDlarrayAngles(testCase, ...
-                stride, nrows, ncols, datatype)
-            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = sum(stride);
-            % nChs x nRows x nCols x nSamples
-            X = randn(sum(stride),nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,1);
-            
-            % Expected values
-            % nDecs x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
-            W0T = transpose(genW.step(angles(1:length(angles)/2),1));
-            U0T = transpose(genU.step(angles(length(angles)/2+1:end),1));
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols*nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Zsa = [ W0T(1:ceil(nDecs/2),:)*Ys; U0T(1:floor(nDecs/2),:)*Ya ];
-            %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctdZ = dlarray(reshape(Zsa,nDecs,nrows,ncols,nSamples));
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunFinalRotation2dLayer(...
-                'Stride',stride,...
-                'Name','V0~');
-            
-            % Actual values
-            layer.Angles = dlarray(angles);
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            testCase.verifyInstanceOf(actualZ,'dlarray');
-            testCase.verifyEqual(actualZ.underlyingType,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
-        %}
-        
+               
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
