@@ -204,10 +204,16 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             % dLdX = dZdX x dLdZ
             adldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
             cdLd_ = reshape(adldz_,nDecs,nrows*ncols,nSamples);
-            cdLd_upp = W0(:,1:ps)*cdLd_(1:ps,:);
-            cdLd_low = U0(:,1:pa)*cdLd_(ps+1:nDecs,:);
-            adLd_ = reshape([cdLd_upp;cdLd_low],...
-                pa+ps,nrows,ncols,nSamples);
+            cdLd_upp = zeros(ps,nrows*ncols,nSamples,'like',cdLd_);
+            cdLd_low = zeros(pa,nrows*ncols,nSamples,'like',cdLd_);
+            for iSample = 1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    cdLd_upp(:,iblk,iSample) = W0(:,1:ps,iblk)*cdLd_(1:ps,iblk,iSample);
+                    cdLd_low(:,iblk,iSample) = U0(:,1:pa,iblk)*cdLd_(ps+1:nDecs,iblk,iSample);
+                end
+            end
+            adLd_ = reshape(cat(1,cdLd_upp,cdLd_low),...
+                    pa+ps,nrows,ncols,nSamples);
             dLdX = adLd_; %ipermute(adLd_,[3 1 2 4]);
             
             % dLdWi = <dLdZ,(dVdWi)X>

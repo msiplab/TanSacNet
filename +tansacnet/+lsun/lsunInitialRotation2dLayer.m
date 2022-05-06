@@ -163,10 +163,8 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             ncols = size(dLdZ,3);            
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            nAngles = size(layer.PrivateAngles,1);
             nSamples = size(dLdZ,4);
-            stride = layer.Stride;
-            nDecs = prod(stride);
+            nDecs = prod(layer.Stride);
             %{
             if isempty(layer.Mus)
                 layer.Mus = ones(ps+pa,1);
@@ -190,11 +188,12 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
                 layer = layer.updateParameters();
             end
             angles = layer.PrivateAngles;
+            nAngles = size(angles,1);
             mus = cast(layer.Mus,'like',angles);            
-            anglesW = angles(1:nAngles/2,:);
-            anglesU = angles(nAngles/2+1:end,:);
             muW = mus(1:ps,:);
             muU = mus(ps+1:end,:);
+            anglesW = angles(1:nAngles/2,:);
+            anglesU = angles(nAngles/2+1:end,:);
             %[W0_,dW0Pst,dW0Pre] = fcn_orthmtxgen_diff(anglesW,muW,0,[],[]);
             %[U0_,dU0Pst,dU0Pre] = fcn_orthmtxgen_diff(anglesU,muU,0,[],[]);
             W0_ = layer.W0; %transpose(fcn_orthmtxgen(anglesW,muW,0));
@@ -232,8 +231,9 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             %dLdX = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
             dLdX = reshape(Zsa,nDecs,nrows,ncols,nSamples);
-            fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);                        
+
             % dLdWi = <dLdZ,(dVdWi)X>
+            fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);                        
             dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
             dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
             dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
