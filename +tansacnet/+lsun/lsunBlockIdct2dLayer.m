@@ -22,7 +22,7 @@ classdef lsunBlockIdct2dLayer < nnet.layer.Layer %#codegen
     
     properties
         % (Optional) Layer properties.
-        DecimationFactor
+        Stride
         
         % Layer properties go here.
     end
@@ -39,23 +39,23 @@ classdef lsunBlockIdct2dLayer < nnet.layer.Layer %#codegen
             Direction = tansacnet.utility.Direction;
 
             p = inputParser;
-            addParameter(p,'DecimationFactor',[])
+            addParameter(p,'Stride',[])
             addParameter(p,'Name','')
             addParameter(p,'NumberOfComponents',1)
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
-            layer.DecimationFactor = p.Results.DecimationFactor;
+            layer.Stride = p.Results.Stride;
             layer.Name = p.Results.Name;
             layer.Description = "Block IDCT of size " ...
-                + layer.DecimationFactor(Direction.VERTICAL) + "x" ...
-                + layer.DecimationFactor(Direction.HORIZONTAL);
+                + layer.Stride(Direction.VERTICAL) + "x" ...
+                + layer.Stride(Direction.HORIZONTAL);
             layer.Type = '';
             layer.NumInputs = p.Results.NumberOfComponents;
             layer.NumOutputs = 1;
             
-            decV = layer.DecimationFactor(Direction.VERTICAL);
-            decH = layer.DecimationFactor(Direction.HORIZONTAL);
+            decV = layer.Stride(Direction.VERTICAL);
+            decH = layer.Stride(Direction.HORIZONTAL);
             
             Cv_ = dctmtx(decV);
             Ch_ = dctmtx(decH);
@@ -88,7 +88,7 @@ classdef lsunBlockIdct2dLayer < nnet.layer.Layer %#codegen
             
             % Layer forward function for prediction goes here.
             nComponents = layer.NumInputs;
-            decFactor = layer.DecimationFactor;
+            decFactor = layer.Stride;
             decV = decFactor(Direction.VERTICAL);
             decH = decFactor(Direction.HORIZONTAL);
             nDec = decV*decH;
@@ -142,7 +142,7 @@ classdef lsunBlockIdct2dLayer < nnet.layer.Layer %#codegen
             varargout = cell(1,nComponents);
             
             % Layer forward function for prediction goes here.
-            decFactor = layer.DecimationFactor;
+            decFactor = layer.Stride;
             decV = decFactor(Direction.VERTICAL);
             decH = decFactor(Direction.HORIZONTAL);
             nDec = decV*decH;

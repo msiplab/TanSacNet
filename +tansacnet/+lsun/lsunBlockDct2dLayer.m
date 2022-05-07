@@ -22,7 +22,7 @@ classdef lsunBlockDct2dLayer < nnet.layer.Layer %#codegen
     
     properties
         % (Optional) Layer properties.
-        DecimationFactor
+        Stride
         
         % Layer properties go here.
     end
@@ -38,23 +38,23 @@ classdef lsunBlockDct2dLayer < nnet.layer.Layer %#codegen
             %import tansacnet.utility.Direction
             Direction = tansacnet.utility.Direction;
             p = inputParser;
-            addParameter(p,'DecimationFactor',[])
+            addParameter(p,'Stride',[])
             addParameter(p,'Name','')
             addParameter(p,'NumberOfComponents',1);
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
-            layer.DecimationFactor = p.Results.DecimationFactor;
+            layer.Stride = p.Results.Stride;
             layer.Name = p.Results.Name;
             layer.Description = "Block DCT of size " ...
-                + layer.DecimationFactor(Direction.VERTICAL) + "x" ...
-                + layer.DecimationFactor(Direction.HORIZONTAL);
+                + layer.Stride(Direction.VERTICAL) + "x" ...
+                + layer.Stride(Direction.HORIZONTAL);
             layer.Type = '';
             layer.NumOutputs = p.Results.NumberOfComponents;
             layer.NumInputs = 1;
             
-            decV = layer.DecimationFactor(Direction.VERTICAL);
-            decH = layer.DecimationFactor(Direction.HORIZONTAL);
+            decV = layer.Stride(Direction.VERTICAL);
+            decH = layer.Stride(Direction.HORIZONTAL);
             %
             Cv_ = dctmtx(decV);
             Ch_ = dctmtx(decH);
@@ -93,7 +93,7 @@ classdef lsunBlockDct2dLayer < nnet.layer.Layer %#codegen
             end
             
             % Layer forward function for prediction goes here.
-            decFactor = layer.DecimationFactor;
+            decFactor = layer.Stride;
             decV = decFactor(Direction.VERTICAL);
             decH = decFactor(Direction.HORIZONTAL);
             nDec = decV*decH;
@@ -139,7 +139,7 @@ classdef lsunBlockDct2dLayer < nnet.layer.Layer %#codegen
             Direction = tansacnet.utility.Direction;
             
             nComponents = layer.NumOutputs;
-            decFactor = layer.DecimationFactor;
+            decFactor = layer.Stride;
             decV = decFactor(Direction.VERTICAL);
             decH = decFactor(Direction.HORIZONTAL);
             nDec = decV*decH;

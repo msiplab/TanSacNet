@@ -33,13 +33,13 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             fprintf("\n --- Check layer for 2-D images ---\n");
             % Grayscale
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',[2 2]);
+                'Stride',[2 2]);
             checkLayer(layer,[8 8 1],'ObservationDimension',4,...
                 'CheckCodegenCompatibility',true)
             % RGB color
             layer = lsunBlockDct2dLayer(...
                 'NumberOfComponents',3,...
-                'DecimationFactor',[2 2]);            
+                'Stride',[2 2]);            
             checkLayer(layer,[8 8 3],'ObservationDimension',4,...
                 'CheckCodegenCompatibility',true)
         end
@@ -57,7 +57,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'Name',expctdName);
             
             % Actual values
@@ -74,7 +74,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
             
             % Parameters
             nSamples = 8;
@@ -102,7 +102,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'Name','E0');
             
             % Actual values
@@ -121,7 +121,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
             
             % Parameters
             nSamples = 8;
@@ -149,7 +149,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'Name','E0');
             
             % Actual values
@@ -214,7 +214,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'NumberOfComponents',nComponents,...
                 'Name','E0');
             
@@ -285,7 +285,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'NumberOfComponents',nComponents,...
                 'Name','E0');
             
@@ -311,7 +311,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
             
             % Parameters
             nSamples = 8;
@@ -339,7 +339,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'Name','E0');
             
             % Actual values
@@ -407,7 +407,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunBlockDct2dLayer(...
-                'DecimationFactor',stride,...
+                'Stride',stride,...
                 'NumberOfComponents',nComponents,...
                 'Name','E0');
             

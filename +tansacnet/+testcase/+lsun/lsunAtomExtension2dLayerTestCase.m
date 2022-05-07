@@ -21,7 +21,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties (TestParameter)
-        nchs = { [3 3], [4 4], [32 32] };
+        stride = { [2 2], [4 4], [8 8 ] };
         datatype = { 'single', 'double' };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
         ncols = struct('small', 4,'medium', 8, 'large', 16);
@@ -33,11 +33,11 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunAtomExtension2dLayer(...
-                'NumberOfChannels',[3 3],...
+                'Stride',[2 2],...
                 'Direction','Right',...
                 'TargetChannels','Difference');
             fprintf("\n --- Check layer for 2-D images ---\n");
-            checkLayer(layer,[6 8 8],...
+            checkLayer(layer,[4 8 8],...
                 'ObservationDimension',4,...
                 'CheckCodegenCompatibility',true)
         end
@@ -45,8 +45,11 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
     
     methods (Test)
         
-        function testConstructor(testCase, nchs, target)
+        function testConstructor(testCase, stride, target)
             
+            % Parameters
+            nChsTotal = prod(stride);
+
             % Expected values
             expctdName = 'Qn';
             expctdDirection = 'Right';
@@ -55,12 +58,12 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
                 + lower(target) ...
                 + "-channel Coefs. " ...
                 + "(ps,pa) = (" ...
-                + nchs(1) + "," + nchs(2) + ")";
+                + ceil(nChsTotal/2) + "," + floor(nChsTotal/2) + ")";
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunAtomExtension2dLayer(...
-                'NumberOfChannels',nchs,...
+                'Stride',stride,...
                 'Name',expctdName,...
                 'Direction',expctdDirection,...
                 'TargetChannels',expctdTargetChannels);
@@ -79,7 +82,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testPredictGrayscaleShiftDifferenceCoefs(testCase, ...
-                nchs, nrows, ncols, dir, datatype)
+                stride, nrows, ncols, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -87,7 +90,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(nchs);
+            nChsTotal = prod(stride);
             target_ = 'Difference';
             % nChsTotal x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
@@ -106,8 +109,8 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
                 shift = [ 0 0 0 0 ];
             end
             % nRows x nCols x nChsTotal x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             % Block butterfly
             Ys = X(1:ps,:,:,:);
             Ya = X(ps+1:ps+pa,:,:,:);
@@ -124,7 +127,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunAtomExtension2dLayer(...
-                'NumberOfChannels',nchs,...
+                'Stride',stride,...
                 'Name','Qn~',...
                 'Direction',dir,...
                 'TargetChannels',target_);
@@ -140,7 +143,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testPredictGrayscaleShiftSumCoefs(testCase, ...
-                nchs, nrows, ncols, dir, datatype)
+                stride, nrows, ncols, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -148,7 +151,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(nchs);
+            nChsTotal = prod(stride);
             target_ = 'Sum';
             % nChsTotal x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
@@ -167,8 +170,8 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
                 shift = [ 0 0 0 0 ];
             end
             % nChsTotal x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             % Block butterfly
             Ys = X(1:ps,:,:,:);
             Ya = X(ps+1:ps+pa,:,:,:);
@@ -185,7 +188,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunAtomExtension2dLayer(...
-                'NumberOfChannels',nchs,...
+                'Stride',stride,...
                 'Name','Qn~',...
                 'Direction',dir,...
                 'TargetChannels',target_);
@@ -201,7 +204,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testBackwardGrayscaleShiftDifferenceCoefs(testCase, ...
-                nchs, nrows, ncols, dir, datatype)
+                stride, nrows, ncols, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -209,7 +212,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(nchs);
+            nChsTotal = prod(stride);
             target_ = 'Difference';
             % nChsTotal x nRows x nCols x nSamples
             %dLdZ = randn(nrows,ncols,nChsTotal,nSamples,datatype);
@@ -228,8 +231,8 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
                 shift = [ 0 0 0 0 ]; % Reverse
             end
             % nChsTotal x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
             % Block butterfly
             Ys = Y(1:ps,:,:,:);
@@ -247,7 +250,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunAtomExtension2dLayer(...
-                'NumberOfChannels',nchs,...
+                'Stride',stride,...
                 'Name','Qn',...
                 'Direction',dir,...
                 'TargetChannels',target_);
@@ -263,7 +266,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testBackwardGrayscaleShiftSumCoefs(testCase, ...
-                nchs, nrows, ncols, dir, datatype)
+                stride, nrows, ncols, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -271,7 +274,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(nchs);
+            nChsTotal = prod(stride);
             target_ = 'Sum';
             % nChsTotal x nRows x nCols x nSamples
             %dLdZ = randn(nrows,ncols,nChsTotal,nSamples,datatype);
@@ -290,8 +293,8 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
                 shift = [ 0 0 0 0 ];
             end
             % nChsTotal x nRows x nCols x nSamples
-            ps = nchs(1);
-            pa = nchs(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
             % Block butterfly
             Ys = Y(1:ps,:,:,:);
@@ -309,7 +312,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunAtomExtension2dLayer(...
-                'NumberOfChannels',nchs,...
+                'Stride',stride,...
                 'Name','Qn',...
                 'Direction',dir,...
                 'TargetChannels',target_);

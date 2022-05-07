@@ -22,7 +22,7 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
     
     properties
         % (Optional) Layer properties.
-        NumberOfChannels
+        Stride
         Direction
         TargetChannels
         
@@ -35,23 +35,24 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
             % This function must have the same name as the class.
             p = inputParser;
             addParameter(p,'Name','')
-            addParameter(p,'NumberOfChannels',[])
+            addParameter(p,'Stride',[])
             addParameter(p,'Direction','')
             addParameter(p,'TargetChannels','')
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
-            layer.NumberOfChannels = p.Results.NumberOfChannels;
+            layer.Stride = p.Results.Stride;
             layer.Name = p.Results.Name;
             layer.Direction = p.Results.Direction;
             layer.TargetChannels = p.Results.TargetChannels;
+            nChsTotal = prod(layer.Stride);
             layer.Description =  layer.Direction ...
                 + " shift the " ...
                 + lower(layer.TargetChannels) ...
                 + "-channel Coefs. " ...
                 + "(ps,pa) = (" ...
-                + layer.NumberOfChannels(1) + "," ...
-                + layer.NumberOfChannels(2) + ")";
+                + ceil(nChsTotal/2) + "," ...
+                + floor(nChsTotal/2) + ")";
             
             layer.Type = '';
             
@@ -126,8 +127,9 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
         end
         
         function Z = atomext_(layer,X,shift)
-            ps = layer.NumberOfChannels(1);
-            pa = layer.NumberOfChannels(2);
+            nChsTotal = prod(layer.Stride);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             target = layer.TargetChannels;            
             %
             % Block butterfly
