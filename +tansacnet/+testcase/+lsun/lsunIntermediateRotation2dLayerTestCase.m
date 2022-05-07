@@ -169,7 +169,6 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-        %{
         function testPredictGrayscaleAnalysisMode(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -181,30 +180,36 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(stride);
+            nChsTotal = prod(stride);
             % nChsTotal x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
             X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/8,1);
+            angles = randn((nChsTotal-2)*nChsTotal/8,nrows*ncols);
             
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             Un = genU.step(angles,mus);
             Y = X; % permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Za = Un*Ya;
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            Za = zeros(size(Ya),'like',Ya);
+            for iSample=1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Za(:,iblk,iSample) = Un(:,:,iblk)*Ya(:,iblk,iSample);
+                end
+            end            
             Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
             expctdZ = Y; %ipermute(Y,[3 1 2 4]);
             expctdDescription = "Analysis LSUN intermediate rotation " ...
                 + "(ps,pa) = (" ...
-                + stride(1) + "," + stride(2) + ")";
+                + ps + "," + pa + ")";
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn',...
                 'Mode','Analysis');
             
@@ -221,7 +226,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualDescription,expctdDescription);            
             
         end
-        
+
         function testBackwardGrayscale(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -234,9 +239,9 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = sum(stride);
+            nChsTotal = prod(stride);
             nAngles = (nChsTotal-2)*nChsTotal/8;
-            angles = zeros(nAngles,1,datatype);
+            angles = zeros(nAngles,nrows*ncols,datatype);
             
             % nChsTotal x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);            
@@ -246,35 +251,40 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
-            ps = stride(1);
-            pa = stride(2);
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
             
             % dLdX = dZdX x dLdZ
             Un = genU.step(angles,mus,0);
             adLd_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            cdLd_low = reshape(adLd_(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            cdLd_low = Un*cdLd_low;
+            cdLd_low = reshape(adLd_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            for iSample = 1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    cdLd_low(:,iblk,iSample) = Un(:,:,iblk)*cdLd_low(:,iblk,iSample);
+                end
+            end
             adLd_(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nSamples);
             expctddLdX = adLd_; %ipermute(adLd_,[3 1 2 4]);           
             
             % dLdWi = <dLdZ,(dVdWi)X>
-            expctddLdW = zeros(nAngles,1,datatype);
+            expctddLdW = zeros(nAngles,nrows*ncols,datatype);
+            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iAngle = 1:nAngles
-                dUn_T = transpose(genU.step(angles,mus,iAngle));
-                a_ = X; %permute(X,[3 1 2 4]);
-                c_low = reshape(a_(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-                c_low = dUn_T*c_low;
-                a_ = zeros(size(a_),datatype);
-                a_(ps+1:ps+pa,:,:,:) = reshape(c_low,pa,nrows,ncols,nSamples);
-                dVdW_X = a_; %ipermute(a_,[3 1 2 4]);
-                %
-                expctddLdW(iAngle) = sum(dLdZ.*dVdW_X,'all');
+                dUn_T = permute(genU.step(angles,mus,iAngle),[2 1 3]);
+                for iblk = 1:(nrows*ncols)
+                    c_low_iblk = squeeze(c_low(:,iblk,:));
+                    c_low_iblk = dUn_T(:,:,iblk)*c_low_iblk;
+                    dldz_iblk = squeeze(dldz_low(:,iblk,:));
+                    expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_low_iblk,'all');
+                end
             end
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn~');
             layer.Mus = mus;
             
@@ -289,7 +299,8 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyThat(actualdLdW,...
                 IsEqualTo(expctddLdW,'Within',tolObj));                        
         end
-        
+
+        %{
         function testBackwardGrayscaleWithRandomAngles(testCase, ...
                 stride, nrows, ncols, mus, datatype)
     
