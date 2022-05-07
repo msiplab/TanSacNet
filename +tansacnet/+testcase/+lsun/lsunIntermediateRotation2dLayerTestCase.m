@@ -32,7 +32,8 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'Stride',[2 2]);
+                'Stride',[2 2],...
+                'NumberOfBlocks',[8 8]);
             fprintf("\n --- Check layer for 2-D images ---\n");
             checkLayer(layer,[4 8 8],...
                 'ObservationDimension',4,...
@@ -86,10 +87,15 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % nChsTotal x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
-            UnT = mus*eye(pa,datatype);
+            UnT = repmat(mus*eye(pa,datatype),[1 1 nrows*ncols]);
             Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Za = UnT*Ya;
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            Za = zeros(size(Ya),'like',Ya);
+            for iSample=1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
+                end
+            end
             Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
             expctdZ = Y; %ipermute(Y,[3 1 2 4]);
             
@@ -97,6 +103,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn~');
             
             % Actual values
@@ -110,7 +117,6 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-        %{
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             
@@ -126,16 +132,21 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % nChsTotal x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
             X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/8,nSamples);
+            angles = randn((nChsTotal-2)*nChsTotal/8,nrows*ncols);
             
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
-            UnT = transpose(genU.step(angles,mus));
+            UnT = permute(genU.step(angles,mus),[2 1 3]);
             Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
-            Za = UnT*Ya;
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            Za = zeros(size(Ya),'like',Ya);
+            for iSample=1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
+                end
+            end
             Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
             expctdZ = Y; %ipermute(Y,[3 1 2 4]);
             
@@ -143,6 +154,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn~');
             
             % Actual values
@@ -157,7 +169,7 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-
+        %{
         function testPredictGrayscaleAnalysisMode(testCase, ...
                 stride, nrows, ncols, mus, datatype)
             

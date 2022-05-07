@@ -5,7 +5,7 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
     %      nChs x nRows x nCols x nSamples
     %
     %   コンポーネント別に出力(nComponents):
-    %      nDecs x nRows x nCols x nSamples
+    %      nChs x nRows x nCols x nSamples
     %
     %
     % Requirements: MATLAB R2022a
@@ -102,26 +102,21 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             %         Z           - Outputs of layer forward function
             %           
             % Layer forward function for prediction goes here.
+            
             nrows = size(X,2);
             ncols = size(X,3);    
-            if layer.NumberOfBlocks(1) ~= nrows || ...
-                    layer.NumberOfBlocks(2) ~= ncols
-                error('Invalid # of blocks.');
-            end
+            nSamples = size(X,4);
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            nSamples = size(X,4);
-            stride = layer.Stride;
-            nDecs = prod(stride);      
-            %
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
+            %
             W0T_ = layer.W0T;
             U0T_ = layer.U0T;
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            %Y = X; %permute(X,[3 1 2 4]);
+            Ys = reshape(X(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            Ya = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:(nrows*ncols)
                     Ys(:,iblk,iSample) = W0T_(1:ps,:,iblk)*Ys(:,iblk,iSample);
@@ -131,12 +126,11 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             Zsa = cat(1,Ys,Ya);
             %Z = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
-            Z = reshape(Zsa,nDecs,nrows,ncols,nSamples);
+            Z = reshape(Zsa,ps+pa,nrows,ncols,nSamples);
             
         end
         
-        function [dLdX, dLdW] = ...
-                backward(layer, X, ~, dLdZ, ~)
+        function [dLdX, dLdW] = backward(layer, X, ~, dLdZ, ~)
             % (Optional) Backward propagate the derivative of the loss
             % function through the layer.
             %
@@ -156,16 +150,16 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             nrows = size(dLdZ,2);
             ncols = size(dLdZ,3);            
             nSamples = size(dLdZ,4);
-            nDecs = prod(layer.Stride);
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            %
+            %{
             if size(layer.PrivateAngles,2) == 1
                 layer.Angles = repmat(layer.PrivateAngles,[1 (nrows*ncols)]);
             end
             if size(layer.PrivateMus,2) == 1
                 layer.Mus = repmat(layer.PrivateMus,[1 (nrows*ncols)]);
             end
+            %}
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
@@ -184,47 +178,41 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             U0_T = layer.U0T; %transpose(fcn_orthmtxgen(anglesU,muU,0));
             W0 = permute(W0_T,[2 1 3]);
             U0 = permute(U0_T,[2 1 3]);
-            %if isdlarray(W0)
-            %    dW0Pst = dlarray(muW(:).*W0);
-            %    dU0Pst = dlarray(muU(:).*U0);
-            %    dW0Pre = dlarray(eye(ps,W0.underlyingType));
-            %    dU0Pre = dlarray(eye(pa,U0.underlyingType));
-            %else
             dW0Pst = zeros(size(W0),'like',W0);
             dU0Pst = zeros(size(U0),'like',U0);
-            for iblk=1:(nrows*ncols)
+            for iblk = 1:(nrows*ncols)
                 dW0Pst(:,:,iblk) = bsxfun(@times,muW(:,iblk),W0(:,:,iblk));
                 dU0Pst(:,:,iblk) = bsxfun(@times,muU(:,iblk),U0(:,:,iblk));
             end
             dW0Pre = repmat(eye(ps,'like',W0),[1 1 (nrows*ncols)]);
             dU0Pre = repmat(eye(pa,'like',U0),[1 1 (nrows*ncols)]);
-            %end
             
             % Layer backward function goes here.
             % dLdX = dZdX x dLdZ
-            adldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            cdLd_ = reshape(adldz_,nDecs,nrows*ncols,nSamples);
+            %adldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
+            %cdLd_ = reshape(adldz_,ps+pa,nrows*ncols,nSamples);
+            cdLd_ = reshape(dLdZ,ps+pa,nrows*ncols,nSamples);
             cdLd_upp = zeros(ps,nrows*ncols,nSamples,'like',cdLd_);
             cdLd_low = zeros(pa,nrows*ncols,nSamples,'like',cdLd_);
             for iSample = 1:nSamples
                 for iblk = 1:(nrows*ncols)
                     cdLd_upp(:,iblk,iSample) = W0(:,1:ps,iblk)*cdLd_(1:ps,iblk,iSample);
-                    cdLd_low(:,iblk,iSample) = U0(:,1:pa,iblk)*cdLd_(ps+1:nDecs,iblk,iSample);
+                    cdLd_low(:,iblk,iSample) = U0(:,1:pa,iblk)*cdLd_(ps+1:ps+pa,iblk,iSample);
                 end
             end
-            adLd_ = reshape(cat(1,cdLd_upp,cdLd_low),...
-                    pa+ps,nrows,ncols,nSamples);
-            dLdX = adLd_; %ipermute(adLd_,[3 1 2 4]);
+            %adLd_ = reshape(cat(1,cdLd_upp,cdLd_low),pa+ps,nrows,ncols,nSamples);
+            %dLdX = adLd_; %ipermute(adLd_,[3 1 2 4]);
+            dLdX = reshape(cat(1,cdLd_upp,cdLd_low),pa+ps,nrows,ncols,nSamples);
             
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);            
             dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
-            dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            dldz_low = reshape(dldz_(ps+1:nDecs,:,:,:),pa,nrows*ncols,nSamples);
-            a_ = X; %permute(X,[3 1 2 4]);
-            c_upp = reshape(a_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            c_low = reshape(a_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            %dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
+            dldz_upp = reshape(dLdZ(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            %a_ = X; %permute(X,[3 1 2 4]);
+            c_upp = reshape(X(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iAngle = uint32(1:nAngles/2)
                 %dW0_T = transpose(fcn_orthmtxgen(anglesW,muW,iAngle));
                 %dU0_T = transpose(fcn_orthmtxgen(anglesU,muU,iAngle));

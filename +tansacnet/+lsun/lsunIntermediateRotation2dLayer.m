@@ -18,6 +18,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
         % (Optional) Layer properties.
         Stride
         Mode
+        NumberOfBlocks
     end
     
     properties (Dependent)
@@ -49,10 +50,12 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Mus',[])
             addParameter(p,'Mode','Synthesis')
             addParameter(p,'Name','')
+            addParameter(p,'NumberOfBlocks',[1 1])
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
+            layer.NumberOfBlocks = p.Results.NumberOfBlocks;
             layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Name = p.Results.Name;
             layer.Mode = p.Results.Mode;
@@ -67,7 +70,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             nAngles = (nChsTotal-2)*nChsTotal/8;
-            if length(layer.PrivateAngles)~=nAngles
+            if size(layer.PrivateAngles,1)~=nAngles
                 error('Invalid # of angles')
             end
             
@@ -87,26 +90,33 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             %  
             
             % Layer forward function for prediction goes here.
+            
             nrows = size(X,2);
             ncols = size(X,3);            
+            nSamples = size(X,4);            
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            nSamples = size(X,4);
-            %
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
+            %
             Un_ = layer.Un;
             Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nSamples);
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             if strcmp(layer.Mode,'Analysis')
-                Za = Un_*Ya;
+                A_ = Un_;
             elseif strcmp(layer.Mode,'Synthesis')
-                Za = Un_.'*Ya;
+                A_ = permute(Un_,[2 1 3]);
             else
                 throw(MException('NsoltLayer:InvalidMode',...
                     '%s : Mode should be either of Synthesis or Analysis',...
                     layer.Mode))
+            end
+            Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
+            for iSample = 1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Za(:,iblk,iSample) = A_(:,:,iblk)*Ya(:,iblk,iSample);
+                end
             end
             Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
             Z = Y; %ipermute(Y,[3 1 2 4]);
@@ -129,12 +139,11 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             %import tansacnet.lsun.get_fcn_orthmtxgen_diff
             
-            % Layer backward function goes here.            
             nrows = size(dLdZ,2);
             ncols = size(dLdZ,3);
+            nSamples = size(dLdZ,4);            
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);            
-            nSamples = size(dLdZ,4);
             %
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
@@ -146,55 +155,61 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             %Un = fcn_orthmtxgen(anglesU,musU,0);
             %[Un_,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,0,[],[]);
             Un_ = layer.Un;
-            dUnPst = bsxfun(@times,musU(:),Un_);
-            dUnPre = eye(pa,'like',Un_);
-            %
-            dLdX = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            cdLd_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),...
-                pa,nrows*ncols*nSamples);
-            if strcmp(layer.Mode,'Analysis')
-                cdLd_low = Un_.'*cdLd_low;
-            else
-                cdLd_low = Un_*cdLd_low;
+            dUnPst = zeros(size(Un_),'like',Un_);
+            for iblk = 1:(nrows*ncols)
+                dUnPst(:,:,iblk) = bsxfun(@times,musU(:,iblk),Un_(:,:,iblk));
             end
-            dLdX(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,...
-                pa,nrows,ncols,nSamples);
-            %dLdX = dLdX; %ipermute(adLd_,[3 1 2 4]);
+            dUnPre = repmat(eye(pa,'like',Un_),[1 1 (nrows*ncols)]);
             
+            %
+            dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples); 
+            %cdLd_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            if strcmp(layer.Mode,'Analysis')
+                A_ = permute(Un_,[2 1 3]);
+            else
+                A_ = Un_;
+            end
+            cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            for iSample = 1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    cdLd_low(:,iblk,iSample) = A_(:,:,iblk)*cdLd_low(:,iblk,iSample);
+                end
+            end
+            dLdX(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nSamples);
+            %dLdX = dLdX; %ipermute(adLd_,[3 1 2 4]);
+
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(anglesU);
-            nAngles = length(anglesU);
-            dLdW = zeros(nAngles,1,'like',dLdZ);
-            dVdW_X = zeros(size(X),'like',dLdZ);
-            if isgpuarray(X)
-                x_low = X(ps+1:ps+pa,:,:,:);
-                for iAngle = uint32(1:nAngles)
-                    [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUnPst,dUnPre);
-                    if strcmp(layer.Mode,'Analysis')
-                        dVdW_X(ps+1:ps+pa,:,:,:) = ...
-                            pagefun(@mtimes,dUn,x_low);
-                    else
-                        dVdW_X(ps+1:ps+pa,:,:,:) = ...
-                            pagefun(@mtimes,dUn.',x_low);
-                    end
-                    dLdW(iAngle) = sum(bsxfun(@times,dLdZ,dVdW_X),'all');
+            nAngles = size(anglesU,1);
+            dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);                        
+            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);  
+            for iAngle = uint32(1:nAngles)
+                [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUnPst,dUnPre);
+                if strcmp(layer.Mode,'Analysis')
+                    dA_ = dUn;
+                else
+                    dA_ = permute(dUn,[2 1 3]);
                 end
-            else
-                x_low = reshape(X(ps+1:ps+pa,:,:,:),pa,[]);
-                for iAngle = uint32(1:nAngles)
-                    [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUnPst,dUnPre);
-                    
-                    if strcmp(layer.Mode,'Analysis')
-                        c_low = dUn*x_low;
-                    else
-                        c_low = dUn.'*x_low;
+                for iblk = 1:(nrows*ncols)
+                    dA_iblk = dA_(:,:,iblk);
+                    dldz_low_iblk = squeeze(dldz_low(:,iblk,:));                    
+                    c_low_iblk = squeeze(c_low(:,iblk,:));
+                    d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
+                    %if isgpuarray(X)
+                    %    %dVdW_X(ps+1:ps+pa,:,:,:) = pagefun(@mtimes,dA_iblk,x_low_iblk);
+                    %    d_low_iblk = pagefun(@mtimes,dA_iblk,x_low_iblk);
+                    %else
+                        %dVdW_X(ps+1:ps+pa,:,:,:) = reshape(dA_*x_low,pa,nrows,ncols,nSamples);
+                    for iSample = 1:nSamples
+                        d_low_iblk(:,iSample) = dA_iblk*c_low_iblk(:,iSample);
                     end
-                    dVdW_X(ps+1:ps+pa,:,:,:) = reshape(c_low,pa,nrows,ncols,nSamples);
-                    dLdW(iAngle) = sum(bsxfun(@times,dLdZ,dVdW_X),'all');
+                    %end
+                    dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_low_iblk,d_low_iblk),'all');
                 end
             end
         end
-        
+
         function angles = get.Angles(layer)
             angles = layer.PrivateAngles;
         end
@@ -204,12 +219,13 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
         end
         
         function layer = set.Angles(layer,angles)
+            nBlocks = prod(layer.NumberOfBlocks);
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             nAngles = (nChsTotal-2)*nChsTotal/8;
             if isempty(angles)
-                angles = zeros(nAngles,1);
+                angles = zeros(nAngles,nBlocks);
             elseif isscalar(angles)
-                angles = angles*ones(nAngles,1,'like',angles);   
+                angles = angles*ones(nAngles,nBlocks,'like',angles);   
             end
             %
             layer.PrivateAngles = angles;
@@ -218,11 +234,12 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
         end
         
         function layer = set.Mus(layer,mus)
+            nBlocks = prod(layer.NumberOfBlocks);
             pa = layer.PrivateNumberOfChannels(2);
             if isempty(mus)
-                mus = ones(pa,1);   
+                mus = ones(pa,nBlocks);   
             elseif isscalar(mus)
-                mus = mus*ones(pa,1,'like',mus);   
+                mus = mus*ones(pa,nBlocks,'like',mus);   
             end
             %
             layer.PrivateMus = mus;
@@ -234,6 +251,9 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             %import tansacnet.lsun.get_fcn_orthmtxgen
             anglesU = layer.PrivateAngles;
             musU = cast(layer.PrivateMus,'like',anglesU);
+            if isrow(musU)
+                musU = musU.';
+            end
             fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
             layer.Un = fcn_orthmtxgen(anglesU,musU);
             layer.isUpdateRequested = false;

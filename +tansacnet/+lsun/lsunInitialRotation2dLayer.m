@@ -103,22 +103,12 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             %     
             
             % Layer forward function for prediction goes here.
+            
             nrows = size(X,2);
             ncols = size(X,3);            
-            if layer.NumberOfBlocks(1) ~= nrows || ...
-                    layer.NumberOfBlocks(2) ~= ncols
-                error('Invalid # of blocks.');
-            end
+            nSamples = size(X,4);
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            nSamples = size(X,4);
-            stride = layer.Stride;
-            nDecs = prod(stride);
-            nChsTotal = ps + pa;
-            % Extend Angle paremeters for every block
-            if size(layer.PrivateAngles,2) == 1
-                layer.Angles = repmat(layer.PrivateAngles,[1 (nrows*ncols)]);
-            end
             % Update parameters
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
@@ -126,8 +116,8 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             %
             W0_ = layer.W0;
             U0_ = layer.U0;
-            %Y = reshape(permute(X,[3 1 2 4]),nDecs,nrows*ncols*nSamples);
-            Y = reshape(X,nDecs,nrows*ncols,nSamples);
+            %Y = reshape(permute(X,[3 1 2 4]),ps+pa,nrows*ncols*nSamples);
+            Y = reshape(X,ps+pa,nrows*ncols,nSamples);
             Zs = zeros(ps,nrows*ncols,nSamples,'like',Y);
             Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
             for iSample = 1:nSamples
@@ -138,7 +128,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             end
             %Z = ipermute(reshape([Zs;Za],nChsTotal,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
-            Z = reshape([Zs;Za],nChsTotal,nrows,ncols,nSamples);
+            Z = reshape([Zs;Za],ps+pa,nrows,ncols,nSamples);
             
         end
         
@@ -161,10 +151,9 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             
             nrows = size(dLdZ,2);
             ncols = size(dLdZ,3);            
+            nSamples = size(dLdZ,4);
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            nSamples = size(dLdZ,4);
-            nDecs = prod(layer.Stride);
             %{
             if isempty(layer.Mus)
                 layer.Mus = ones(ps+pa,1);
@@ -176,7 +165,6 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
                 layer.Angles(1:ps-1) = ...
                     zeros(ps-1,1,'like',layer.Angles);
             end
-            %}
             % Extend Angle paremeters for every block
             if size(layer.PrivateAngles,2) == 1
                 layer.Angles = repmat(layer.PrivateAngles,[1 (nrows*ncols)]);
@@ -184,6 +172,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             if size(layer.PrivateMus,2) == 1
                 layer.Mus = repmat(layer.PrivateMus,[1 (nrows*ncols)]);
             end
+            %}
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
@@ -200,12 +189,6 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             U0_ = layer.U0; %transpose(fcn_orthmtxgen(anglesU,muU,0));
             W0T = permute(W0_,[2 1 3]);
             U0T = permute(U0_,[2 1 3]);
-            %if isdlarray(W0_)
-            %    dW0Pst = dlarray(muW(:).*W0_);
-            %    dU0Pst = dlarray(muU(:).*U0_);
-            %    dW0Pre = dlarray(eye(ps,W0_.underlyingType));
-            %    dU0Pre = dlarray(eye(pa,U0_.underlyingType));
-            %else
             dW0Pst = zeros(size(W0_),'like',W0_);
             dU0Pst = zeros(size(U0_),'like',U0_);
             for iblk = 1:(nrows*ncols)
@@ -214,13 +197,12 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             end
             dW0Pre = repmat(eye(ps,'like',W0_),[1 1 (nrows*ncols)]);
             dU0Pre = repmat(eye(pa,'like',U0_),[1 1 (nrows*ncols)]);
-            %end
             
             % Layer backward function goes here.
             % dLdX = dZdX x dLdZ
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            %Y = dLdZ; %permute(dLdZ,[3 1 2 4]);
+            Ys = reshape(dLdZ(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            Ya = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:(nrows*ncols)
                     Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample); 
@@ -228,20 +210,19 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
                 end
             end
             Zsa = cat(1,Ys,Ya);
-            %dLdX = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
+            %dLdX = ipermute(reshape(Zsa,ps+pa,nrows,ncols,nSamples),...
             %    [3 1 2 4]);
-            dLdX = reshape(Zsa,nDecs,nrows,ncols,nSamples);
+            dLdX = reshape(Zsa,ps+pa,nrows,ncols,nSamples);
 
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);                        
             dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
-            dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            dldz_low = reshape(dldz_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dldz_upp = reshape(dLdZ(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             % (dVdWi)X
-            a_ = X; %permute(X,[3 1 2 4]);
-            c_upp = reshape(a_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            c_low = reshape(a_(ps+1:nDecs,:,:,:),pa,nrows*ncols,nSamples);
+            %a_ = X; %permute(X,[3 1 2 4]);
+            c_upp = reshape(X(1:ps,:,:,:),ps,nrows*ncols,nSamples);
+            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iAngle = uint32(1:nAngles/2)
                 %dW0 = fcn_orthmtxgen(anglesW,muW,iAngle);
                 %dU0 = fcn_orthmtxgen(anglesU,muU,iAngle);
@@ -344,8 +325,6 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
         end
         
     end
-    
-
     
 end
 
