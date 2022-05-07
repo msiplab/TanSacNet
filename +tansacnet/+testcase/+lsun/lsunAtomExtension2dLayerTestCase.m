@@ -21,7 +21,7 @@ classdef lsunAtomExtension2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties (TestParameter)
-        nchs = { [3 3], [4 4] };
+        nchs = { [3 3], [4 4], [32 32] };
         datatype = { 'single', 'double' };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
         ncols = struct('small', 4,'medium', 8, 'large', 16);

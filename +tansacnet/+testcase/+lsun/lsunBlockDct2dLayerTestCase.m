@@ -21,7 +21,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties (TestParameter)
-        stride = { [1 1], [2 2], [2 4], [4 1], [4 4] };
+        stride = { [1 1], [2 2], [2 4], [4 1], [4 4], [8 8] };
         datatype = { 'single', 'double' };
         height = struct('small', 8,'medium', 16, 'large', 32);
         width = struct('small', 8,'medium', 16, 'large', 32);
@@ -168,7 +168,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
             
             % Parameters
             nSamples = 8;
@@ -239,7 +239,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
             
             % Parameters
             nSamples = 8;
@@ -357,7 +357,7 @@ classdef lsunBlockDct2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
             
             % Parameters
             nSamples = 8;
