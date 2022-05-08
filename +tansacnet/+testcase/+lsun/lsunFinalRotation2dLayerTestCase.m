@@ -323,7 +323,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
                 end
             end
-            expctddLdW = dldw_;
+            expctddLdW = dldw_/nSamples;
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -429,7 +429,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
                 end
             end
-            expctddLdW = dldw_;
+            expctddLdW = dldw_/nSamples;
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -540,7 +540,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
                 end
             end
-            expctddLdW = dldw_;
+            expctddLdW = dldw_/nSamples;
             
             % Instantiation of target class
             import tansacnet.lsun.*
