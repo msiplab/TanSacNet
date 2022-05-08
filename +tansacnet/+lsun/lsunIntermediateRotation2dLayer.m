@@ -116,9 +116,9 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
             for iSample = 1:nSamples
                 if isgpuarray(X)
-                    Ya_iSample = permute(Ya(:,:,iSample),[1 3 2]);
+                    Ya_iSample = permute(Ya(:,:,iSample),[1 4 2 3]);
                     Za_iSample = pagefun(@mtimes,A_,Ya_iSample);
-                    Za(:,:,iSample) = ipermute(Za_iSample,[1 3 2]);
+                    Za(:,:,iSample) = ipermute(Za_iSample,[1 4 2 3]);
                 else
                     for iblk = 1:(nrows*ncols)
                         Za(:,iblk,iSample) = A_(:,:,iblk)*Ya(:,iblk,iSample);
@@ -180,9 +180,9 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             for iSample = 1:nSamples
                 if isgpuarray(X)
-                    cdLd_low_iSample = permute(cdLd_low(:,:,iSample),[1 3 2]);
+                    cdLd_low_iSample = permute(cdLd_low(:,:,iSample),[1 4 2 3]);
                     cdLd_low_iSample = pagefun(@mtimes,A_,cdLd_low_iSample);
-                    cdLd_low(:,:,iSample) = ipermute(cdLd_low_iSample,[1 3 2]);                    
+                    cdLd_low(:,:,iSample) = ipermute(cdLd_low_iSample,[1 4 2 3]);                    
                 else
                     for iblk = 1:(nrows*ncols)
                         cdLd_low(:,iblk,iSample) = A_(:,:,iblk)*cdLd_low(:,iblk,iSample);
