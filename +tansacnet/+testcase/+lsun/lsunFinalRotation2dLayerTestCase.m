@@ -26,6 +26,7 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         datatype = { 'single', 'double' };
         nrows = struct('small', 2,'medium', 4, 'large', 8);
         ncols = struct('small', 2,'medium', 4, 'large', 8);
+        usegpu = struct( 'true', true, 'false', false);           
     end
     
     methods (TestClassTeardown)
@@ -70,8 +71,13 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
 
         function testPredictGrayscale(testCase, ...
-                stride, nrows, ncols, datatype)
+                usegpu, stride, nrows, ncols, datatype)
             
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -83,6 +89,10 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % nChs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
             X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            if usegpu
+                X = gpuArray(X);
+            end
+
             % Expected values        
             % nDecs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
@@ -114,6 +124,11 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             actualZ = layer.predict(X);
             
             % Evaluation
+            if usegpu
+                testCase.verifyClass(actualZ,'gpuArray')
+                actualZ = gather(actualZ);
+                expctdZ = gather(expctdZ);
+            end            
             testCase.verifyInstanceOf(actualZ,datatype);
             testCase.verifyThat(actualZ,...
                 IsEqualTo(expctdZ,'Within',tolObj));
@@ -121,8 +136,12 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testPredictGrayscaleWithRandomAngles(testCase, ...
-                stride, nrows, ncols, datatype)
+                usegpu, stride, nrows, ncols, datatype)
             
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end    
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -137,7 +156,11 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % nChs x nRows x nCols x nSamples
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
             angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
-            
+            if usegpu
+                X = gpuArray(X);
+                angles = gpuArray(angles);
+            end   
+
             % Expected values
             % nDecs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
@@ -170,6 +193,11 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             actualZ = layer.predict(X);
             
             % Evaluation
+            if usegpu
+                testCase.verifyClass(actualZ,'gpuArray')
+                actualZ = gather(actualZ);
+                expctdZ = gather(expctdZ);
+            end 
             testCase.verifyInstanceOf(actualZ,datatype);
             testCase.verifyThat(actualZ,...
                 IsEqualTo(expctdZ,'Within',tolObj));
@@ -178,8 +206,12 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         
                
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
-                stride, nrows, ncols, mus, datatype)
-            
+                usegpu, stride, nrows, ncols, mus, datatype)
+
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -195,7 +227,11 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
             angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
-            
+            if usegpu
+                X = gpuArray(X);
+                angles = gpuArray(angles);
+            end
+
             % Expected values
             % nDecs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
@@ -233,8 +269,13 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             layer.Mus = mus;
             layer.Angles = angles;
             actualZ = layer.predict(X);
-            
+
             % Evaluation
+            if usegpu
+                testCase.verifyClass(actualZ,'gpuArray')
+                actualZ = gather(actualZ);
+                expctdZ = gather(expctdZ);
+            end
             testCase.verifyInstanceOf(actualZ,datatype);
             testCase.verifyThat(actualZ,...
                 IsEqualTo(expctdZ,'Within',tolObj));
@@ -242,8 +283,12 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testBackwardGrayscale(testCase, ...
-                stride, nrows, ncols, datatype)
+                usegpu, stride, nrows, ncols, datatype)
             
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
@@ -267,7 +312,13 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             %dLdZ = randn(nrows,ncols,nDecs,nSamples,datatype);            
             X = randn(nDecs,nrows,ncols,nSamples,datatype);            
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);
-            
+            if usegpu
+                X = gpuArray(X);
+                anglesW = gpuArray(anglesW);
+                anglesU = gpuArray(anglesU);
+                dLdZ = gpuArray(dLdZ);
+            end
+
             % Expected values
             % nChs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
@@ -338,6 +389,14 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
+            if usegpu
+                testCase.verifyClass(actualdLdX,'gpuArray')
+                actualdLdX = gather(actualdLdX);
+                expctddLdX = gather(expctddLdX);
+                testCase.verifyClass(actualdLdW,'gpuArray')
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);
+            end
             testCase.verifyInstanceOf(actualdLdX,datatype);
             testCase.verifyInstanceOf(actualdLdW,datatype);            
             testCase.verifyThat(actualdLdX,...
@@ -348,8 +407,12 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
 
         function testBackwardGayscaleWithRandomAngles(testCase, ...
-                stride, nrows, ncols, datatype)
+                usegpu, stride, nrows, ncols, datatype)
             
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
@@ -373,7 +436,13 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             %dLdZ = randn(nrows,ncols,nDecs,nSamples,datatype);            
             X = randn(nDecs,nrows,ncols,nSamples,datatype);            
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);
-            
+            if usegpu
+                X = gpuArray(X);
+                anglesW = gpuArray(anglesW);
+                anglesU = gpuArray(anglesU);
+                dLdZ = gpuArray(dLdZ);
+            end
+
             % Expected values
             % nChs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
@@ -445,6 +514,14 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
+            if usegpu
+                testCase.verifyClass(actualdLdX,'gpuArray')
+                actualdLdX = gather(actualdLdX);
+                expctddLdX = gather(expctddLdX);
+                testCase.verifyClass(actualdLdW,'gpuArray')
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);
+            end
             testCase.verifyInstanceOf(actualdLdX,datatype);
             testCase.verifyInstanceOf(actualdLdW,datatype);            
             testCase.verifyThat(actualdLdX,...
@@ -455,8 +532,12 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
         end
 
         function testBackwardWithRandomAnglesNoDcLeackage(testCase, ...
-                stride, nrows, ncols, mus, datatype)
+                usegpu, stride, nrows, ncols, mus, datatype)
             
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
@@ -479,7 +560,13 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             %dLdZ = randn(nrows,ncols,nDecs,nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);            
-            
+            if usegpu
+                X = gpuArray(X);
+                anglesW = gpuArray(anglesW);
+                anglesU = gpuArray(anglesU);
+                dLdZ = gpuArray(dLdZ);
+            end
+
             % Expected values
             % nChs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
@@ -557,6 +644,14 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
+            if usegpu
+                testCase.verifyClass(actualdLdX,'gpuArray')
+                actualdLdX = gather(actualdLdX);
+                expctddLdX = gather(expctddLdX);
+                testCase.verifyClass(actualdLdW,'gpuArray')
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);
+            end
             testCase.verifyInstanceOf(actualdLdX,datatype);
             testCase.verifyInstanceOf(actualdLdW,datatype);
             testCase.verifyThat(actualdLdX,...
