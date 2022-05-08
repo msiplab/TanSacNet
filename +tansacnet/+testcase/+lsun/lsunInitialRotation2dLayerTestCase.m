@@ -24,8 +24,8 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
         stride = { [2 2], [4 4] };
         mus = { -1, 1 };
         datatype = { 'single', 'double' };
-        nrows = struct('small', 4,'medium', 8, 'large', 16);
-        ncols = struct('small', 4,'medium', 8, 'large', 16);
+        nrows = struct('small', 2,'medium', 4, 'large', 8);
+        ncols = struct('small', 2,'medium', 4, 'large', 8);
     end
     
     methods (TestClassTeardown)
@@ -333,7 +333,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
                 end
             end
-            expctddLdW = dldw_/nSamples;
+            expctddLdW = dldw_;
 
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -433,7 +433,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
                 end
             end
-            expctddLdW = dldw_/nSamples;
+            expctddLdW = dldw_;
 
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -538,7 +538,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
                 end
             end
-            expctddLdW = dldw_/nSamples;
+            expctddLdW = dldw_;
         
             % Instantiation of target class
             import tansacnet.lsun.*
