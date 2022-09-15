@@ -1,11 +1,11 @@
 classdef lsunAtomExtension3dLayer < nnet.layer.Layer %#codegen
     %NSOLTATOMEXTENSION3DLAYER
-    %!!!!Kobayashi Eisuke!!!!!
+    %
     %   コンポーネント別に入力(nComponents=1のみサポート):
-    %      nChsTotal x nRows x nCols x nSamples
+    %      nChsTotal x nRows x nCols x nLays x nSamples
     %
     %   コンポーネント別に出力(nComponents=1のみサポート):
-    %      nChsTotal x nRows x nCols x nSamples
+    %      nChsTotal x nRows x nCols x nLays x nSamples
     %
     
     properties
