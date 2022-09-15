@@ -27,8 +27,8 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
                 'TargetChannels','Difference');
             fprintf("\n --- Check layer for 3-D images ---\n");
             checkLayer(layer,[4 8 8 8],...
-                'ObservationDimension',4,...
-                'CheckCodegenCompatibility',true)
+                'ObservationDimension',5,...
+                'CheckCodegenCompatibility',false)
         end
     end
     

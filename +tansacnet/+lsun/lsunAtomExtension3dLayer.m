@@ -146,7 +146,7 @@ classdef lsunAtomExtension3dLayer < nnet.layer.Layer %#codegen
             % Block butterfly
             Y =  cat(1,bsxfun(@plus,Ys,Ya),bsxfun(@minus,Ys,Ya));
             % Output
-            Z = 0.5*Y; %ipermute(Y,[3 1 2 4])/2.0;
+            Z = 0.5*Y; %ipermute(Y,[4 1 2 3 5])/2.0;
         end
         
     end
