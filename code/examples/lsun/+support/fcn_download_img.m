@@ -1,4 +1,4 @@
-function fcn_download_img(isVerbose)
+function dstdir = fcn_download_img(isVerbose)
 % FCN_DOWNLOAD_IMG
 %
 % Copyright (c) Shogo MURAMATSU, 2018-2022
@@ -11,7 +11,7 @@ if nargin < 1
 end
 
 % 画像サンプルのダウンロード
-dstdir = './data/';
+dstdir = '../../../data/';
 if exist(dstdir,'dir') ~= 7
     mkdir(dstdir)
 end
