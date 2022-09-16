@@ -7,9 +7,21 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
     %   コンポーネント別に出力(nComponents=1のみサポート):
     %      nChsTotal x nRows x nCols x nLays x nSamples
     %
-    
+    % Requirements: MATLAB R2020b
+    %
+    % Copyright (c) 2020-2022, Eisuke KOBAYASHI, Shogo MURAMATSU
+    %
+    % All rights reserved.
+    %
+    % Contact address: Shogo MURAMATSU,
+    %                Faculty of Engineering, Niigata University,
+    %                8050 2-no-cho Ikarashi, Nishi-ku,
+    %                Niigata, 950-2181, JAPAN
+    %
+    % http://msiplab.eng.niigata-u.ac.jp/
+    %
     properties (TestParameter)
-        stride = { [2 2], [4 4], [8 8 ] };
+        stride = { [2 2 2], [4 4 4] };
         datatype = { 'single', 'double' };
         nrows = struct('small', 4,'medium', 8, 'large', 16);
         ncols = struct('small', 4,'medium', 8, 'large', 16);
@@ -22,11 +34,11 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunAtomExtension3dLayer(...
-                'Stride',[2 2],...
+                'Stride',[2 2 2],...
                 'Direction','Right',...
                 'TargetChannels','Difference');
             fprintf("\n --- Check layer for 3-D images ---\n");
-            checkLayer(layer,[4 8 8 8],...
+            checkLayer(layer,[8 8 8 8],...
                 'ObservationDimension',5,...
                 'CheckCodegenCompatibility',false)
         end
@@ -146,7 +158,7 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
             nSamples = 8;
             nChsTotal = prod(stride);
             target_ = 'Sum';
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nRows x nCols x nLays x nSamples
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
             X = randn(nChsTotal,nrows,ncols,nlays,nSamples,datatype);
             

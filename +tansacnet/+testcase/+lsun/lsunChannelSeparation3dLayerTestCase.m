@@ -8,8 +8,19 @@ classdef lsunChannelSeparation3dLayerTestCase < matlab.unittest.TestCase
     %      nRows x nCols x nLays x (nChsTotal-1) x nSamples
     %      nRows x nCols x nLays x 1 x nSamples    
     %
-    
-    
+    % Requirements: MATLAB R2020b
+    %
+    % Copyright (c) 2020-2022, Eisuke KOBAYASHI, Shogo MURAMATSU
+    %
+    % All rights reserved.
+    %
+    % Contact address: Shogo MURAMATSU,
+    %                Faculty of Engineering, Niigata University,
+    %                8050 2-no-cho Ikarashi, Nishi-ku,
+    %                Niigata, 950-2181, JAPAN
+    %
+    % http://msiplab.eng.niigata-u.ac.jp   
+    %
     properties (TestParameter)
         nchs = { [3 3], [4 4], [32 32] };
         datatype = { 'single', 'double' };
