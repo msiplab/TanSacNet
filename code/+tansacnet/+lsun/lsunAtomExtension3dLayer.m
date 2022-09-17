@@ -1,24 +1,12 @@
-classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
-    %NSOLTATOMEXTENSION2DLAYER
+classdef lsunAtomExtension3dLayer < nnet.layer.Layer %#codegen
+    %NSOLTATOMEXTENSION3DLAYER
     %
     %   コンポーネント別に入力(nComponents=1のみサポート):
-    %      nChsTotal x nRows x nCols x nSamples
+    %      nChsTotal x nRows x nCols x nLays x nSamples
     %
     %   コンポーネント別に出力(nComponents=1のみサポート):
-    %      nChsTotal x nRows x nCols x nSamples
+    %      nChsTotal x nRows x nCols x nLays x nSamples
     %
-    % Requirements: MATLAB R2020a
-    %
-    % Copyright (c) 2020-2021, Shogo MURAMATSU
-    %
-    % All rights reserved.
-    %
-    % Contact address: Shogo MURAMATSU,
-    %                Faculty of Engineering, Niigata University,
-    %                8050 2-no-cho Ikarashi, Nishi-ku,
-    %                Niigata, 950-2181, JAPAN
-    %
-    % http://msiplab.eng.niigata-u.ac.jp/
     
     properties
         % (Optional) Layer properties.
@@ -30,7 +18,7 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
     end
     
     methods
-        function layer = lsunAtomExtension2dLayer(varargin)
+        function layer = lsunAtomExtension3dLayer(varargin)
             % (Optional) Create a myLayer.
             % This function must have the same name as the class.
             p = inputParser;
@@ -73,16 +61,20 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
             dir = layer.Direction;
             %
             if strcmp(dir,'Right')
-                shift = [ 0 0 1 0 ];
+                shift = [ 0 0 1 0 0];
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 0 ];
+                shift = [ 0 0 -1 0 0];
             elseif strcmp(dir,'Down')
-                shift = [ 0 1 0 0 ];
+                shift = [ 0 1 0 0 0];
             elseif strcmp(dir,'Up')
-                shift = [ 0 -1 0 0 ];
+                shift = [ 0 -1 0 0 0];
+            elseif strcmp(dir,'Back')
+                shift = [ 0 0 0 1 0 ];
+            elseif strcmp(dir,'Front')
+                shift = [ 0 0 0 -1 0 ];
             else
                 throw(MException('NsoltLayer:InvalidDirection',...
-                    '%s : Direction should be either of Right, Left, Down or Up',...
+                    '%s : Direction should be either of Right, Left, Down, Up, Back or Front',...
                     layer.Direction))
             end
             %
@@ -110,16 +102,20 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
 
             %
             if strcmp(dir,'Right')
-                shift = [ 0 0 -1 0 ]; % Reverse
+                shift = [ 0 0 -1 0 0]; % Reverse
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 1 0 ];  % Reverse
+                shift = [ 0 0 1 0 0];  % Reverse
             elseif strcmp(dir,'Down')
-                shift = [ 0 -1 0 0 ];  % Reverse
+                shift = [ 0 -1 0 0 0];  % Reverse
             elseif strcmp(dir,'Up')
-                shift = [ 0 1 0 0 ];  % Reverse
+                shift = [ 0 1 0 0 0];  % Reverse
+            elseif strcmp(dir,'Back')
+                shift = [ 0  0 0 -1 0]; % Reverse
+            elseif strcmp(dir,'Front')
+                shift = [ 0 0 0 1 0]; % Reverse
             else
                 throw(MException('NsoltLayer:InvalidDirection',...
-                    '%s : Direction should be either of Right, Left, Down or Up',...
+                    '%s : Direction should be either of Right, Left, Down, Up, Back or Front',...
                     layer.Direction))
             end
             %
@@ -133,8 +129,8 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
             target = layer.TargetChannels;            
             %
             % Block butterfly
-            Xs = X(1:ps,:,:,:);
-            Xa = X(ps+1:ps+pa,:,:,:);
+            Xs = X(1:ps,:,:,:,:);
+            Xa = X(ps+1:ps+pa,:,:,:,:);
             Ys =  bsxfun(@plus,Xs,Xa);
             Ya =  bsxfun(@minus,Xs,Xa);
             % Block circular shift
@@ -150,7 +146,7 @@ classdef lsunAtomExtension2dLayer < nnet.layer.Layer %#codegen
             % Block butterfly
             Y =  cat(1,bsxfun(@plus,Ys,Ya),bsxfun(@minus,Ys,Ya));
             % Output
-            Z = 0.5*Y; %ipermute(Y,[3 1 2 4])/2.0;
+            Z = 0.5*Y; %ipermute(Y,[4 1 2 3 5])/2.0;
         end
         
     end

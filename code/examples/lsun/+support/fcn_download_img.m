@@ -34,4 +34,3 @@ for idx = 1:24 %length(fnames)
     end
 end
 disp('See <a href="http://www.r0k.us/graphics/kodak/">Kodak Lossless True Color Image Suite</a>')
-
