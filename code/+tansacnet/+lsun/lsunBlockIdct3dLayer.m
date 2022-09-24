@@ -6,7 +6,20 @@ classdef lsunBlockIdct3dLayer < nnet.layer.Layer %#codegen
     %
     %   ベクトル配列をブロック配列にして出力:
     %      (Stride(1)xnRows) x (Stride(2)xnCols) x (Stride(3)xnLays) x nComponents x nSamples
-    
+    %
+    %
+    % Requirements: MATLAB R2020b
+    %
+    % Copyright (c) 2020-2022, Eisuke KOBAYASHI, Shogo MURAMATSU
+    %
+    % All rights reserved.
+    %
+    % Contact address: Shogo MURAMATSU,
+    %                Faculty of Engineering, Niigata University,
+    %                8050 2-no-cho Ikarashi, Nishi-ku,
+    %                Niigata, 950-2181, JAPAN
+    %
+    % http://msiplab.eng.niigata-u.ac.jp/    
     properties
         % (Optional) Layer properties.
         Stride

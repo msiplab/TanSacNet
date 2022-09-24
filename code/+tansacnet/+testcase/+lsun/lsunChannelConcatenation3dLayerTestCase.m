@@ -8,6 +8,7 @@ classdef lsunChannelConcatenation3dLayerTestCase < matlab.unittest.TestCase
     %   １コンポーネント出力(nComponents=1のみサポート):
     %       nChsTotal x nRows x nCols xnSamples
     %
+    %
     % Requirements: MATLAB R2020b
     %
     % Copyright (c) 2020-2022, Eisuke KOBAYASHI, Shogo MURAMATSU

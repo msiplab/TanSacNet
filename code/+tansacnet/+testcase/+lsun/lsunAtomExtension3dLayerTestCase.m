@@ -7,6 +7,7 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
     %   コンポーネント別に出力(nComponents=1のみサポート):
     %      nChsTotal x nRows x nCols x nLays x nSamples
     %
+    %
     % Requirements: MATLAB R2020b
     %
     % Copyright (c) 2020-2022, Eisuke KOBAYASHI, Shogo MURAMATSU
@@ -19,7 +20,7 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
     %                Niigata, 950-2181, JAPAN
     %
     % http://msiplab.eng.niigata-u.ac.jp/
-    %
+    
     properties (TestParameter)
         stride = { [2 2 2], [4 4 4] };
         datatype = { 'single', 'double' };
