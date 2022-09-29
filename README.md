@@ -116,7 +116,7 @@ be used to see the contents as follows:
     
 ## Requirements
  
-* MATLAB R2013b or later. R2021a is recommended.
+* MATLAB R2022b is recommended.
  * Signal Processing Toolbox
  * Image Processing Toolbox
  * Optimization Toolbox
