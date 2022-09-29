@@ -1,10 +1,10 @@
-classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
-    %LSUNINTERMEDIATEROTATION2DLAYER
+classdef lsunIntermediateRotation3dLayer < nnet.layer.Layer %#codegen
+    %LSUNINTERMEDIATEROTATION3DLAYER
     %
     %
-    % Requirements: MATLAB R2022a
+    % Requirements: MATLAB R2020b
     %
-    % Copyright (c) 2022, Shogo MURAMATSU
+    % Copyright (c) 2020-2022, Eisuke KOBAYASHI, Shogo MURAMATSU
     %
     % All rights reserved.
     %
@@ -13,8 +13,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
     %                8050 2-no-cho Ikarashi, Nishi-ku,
     %                Niigata, 950-2181, JAPAN
     %
-    % http://msiplab.eng.niigata-u.ac.jp/
-    
+    % http://msiplab.eng.niigata-u.ac.jp   
+
     properties
         % (Optional) Layer properties.
         Stride
@@ -42,7 +42,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
     end
     
     methods
-        function layer = lsunIntermediateRotation2dLayer(varargin)
+        function layer = lsunIntermediateRotation3dLayer(varargin)
             % (Optional) Create a myLayer.
             % This function must have the same name as the class.
             p = inputParser;
@@ -51,7 +51,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Mus',[])
             addParameter(p,'Mode','Synthesis')
             addParameter(p,'Name','')
-            addParameter(p,'NumberOfBlocks',[1 1])
+            addParameter(p,'NumberOfBlocks',[1 1 1])
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
@@ -93,8 +93,9 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             % Layer forward function for prediction goes here.
             
             nrows = size(X,2);
-            ncols = size(X,3);            
-            nSamples = size(X,4);            
+            ncols = size(X,3);
+            nlays = size(X,4);
+            nSamples = size(X,5);            
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
             if layer.isUpdateRequested
@@ -102,8 +103,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             end
             %
             Un_ = layer.Un;
-            Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            Y = X; %permute(X,[4 1 2 3 5]);
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:,:),pa,nrows*ncols*nlays,nSamples);
             if strcmp(layer.Mode,'Analysis')
                 A_ = Un_;
             elseif strcmp(layer.Mode,'Synthesis')
@@ -114,20 +115,20 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
                     layer.Mode))
             end
 
-            Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
+            Za = zeros(pa,nrows*ncols*nlays,nSamples,'like',Y);
             for iSample = 1:nSamples
                 if isgpuarray(X)
                     Ya_iSample = permute(Ya(:,:,iSample),[1 4 2 3]);
                     Za_iSample = pagefun(@mtimes,A_,Ya_iSample);
                     Za(:,:,iSample) = ipermute(Za_iSample,[1 4 2 3]);
                 else
-                    for iblk = 1:(nrows*ncols)
+                    for iblk = 1:(nrows*ncols*nlays)
                         Za(:,iblk,iSample) = A_(:,:,iblk)*Ya(:,iblk,iSample);
                     end
                 end
             end
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
-            Z = Y; %ipermute(Y,[3 1 2 4]);
+            Y(ps+1:ps+pa,:,:,:,:) = reshape(Za,pa,nrows,ncols,nlays,nSamples);
+            Z = Y; %ipermute(Y,[4 1 2 3 5]);
         end
         
         function [dLdX, dLdW] = backward(layer, X, ~, dLdZ, ~)
@@ -149,7 +150,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             
             nrows = size(dLdZ,2);
             ncols = size(dLdZ,3);
-            nSamples = size(dLdZ,4);            
+            nlays = size(dLdZ,4);
+            nSamples = size(dLdZ,5);            
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);            
             %
@@ -165,40 +167,40 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             Un_ = layer.Un;
             %dUnPst = zeros(size(Un_),'like',Un_);
             dUnPst = bsxfun(@times,permute(musU,[1 3 2]),Un_);
-            %for iblk = 1:(nrows*ncols)
+            %for iblk = 1:(nrows*ncols*nlays)
             %    dUnPst(:,:,iblk) = bsxfun(@times,musU(:,iblk),Un_(:,:,iblk));
             %end
-            dUnPre = repmat(eye(pa,'like',Un_),[1 1 (nrows*ncols)]);
+            dUnPre = repmat(eye(pa,'like',Un_),[1 1 (nrows*ncols*nlays)]);
             
             %
-            dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples); 
-            %cdLd_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nlays,nSamples); 
+            %cdLd_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols*nlays,nSamples);
             if strcmp(layer.Mode,'Analysis')
                 A_ = permute(Un_,[2 1 3]);
             else
                 A_ = Un_;
             end
-            cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:,:),pa,nrows*ncols*nlays,nSamples);
             for iSample = 1:nSamples
                 if isgpuarray(X)
                     cdLd_low_iSample = permute(cdLd_low(:,:,iSample),[1 4 2 3]);
                     cdLd_low_iSample = pagefun(@mtimes,A_,cdLd_low_iSample);
                     cdLd_low(:,:,iSample) = ipermute(cdLd_low_iSample,[1 4 2 3]);                    
                 else
-                    for iblk = 1:(nrows*ncols)
+                    for iblk = 1:(nrows*ncols*nlays)
                         cdLd_low(:,iblk,iSample) = A_(:,:,iblk)*cdLd_low(:,iblk,iSample);
                     end
                 end
             end
-            dLdX(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nSamples);
+            dLdX(ps+1:ps+pa,:,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nlays,nSamples);
             %dLdX = dLdX; %ipermute(adLd_,[3 1 2 4]);
 
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(anglesU);
             nAngles = size(anglesU,1);
-            dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
-            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);                        
-            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);  
+            dLdW = zeros(nAngles,nrows*ncols*nlays,'like',dLdZ);
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:,:),pa,nrows*ncols*nlays,nSamples);                        
+            c_low = reshape(X(ps+1:ps+pa,:,:,:,:),pa,nrows*ncols*nlays,nSamples);  
             for iAngle = uint32(1:nAngles)
                 [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUnPst,dUnPre);
                 if strcmp(layer.Mode,'Analysis')
@@ -212,7 +214,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
                     d_low = ipermute(d_low_ext,[1 4 2 3]);
                     dLdW(iAngle,:) = sum(bsxfun(@times,dldz_low,d_low),[1 3]);
                 else
-                    for iblk = 1:(nrows*ncols)
+                    for iblk = 1:(nrows*ncols*nlays)
                         dA_iblk = dA_(:,:,iblk);
                         dldz_low_iblk = squeeze(dldz_low(:,iblk,:));
                         c_low_iblk = squeeze(c_low(:,iblk,:));
@@ -278,4 +280,3 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
     end
 
 end
-
