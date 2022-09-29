@@ -1,5 +1,5 @@
 function testRes = mytest(testCaseStr,isProfiling)
-%MYTEST Script of unit testing for SaivDr Package
+%MYTEST Script of unit testing for TanSacNet package
 %
 % This test script works with unit testing framework 
 % See the following site:
