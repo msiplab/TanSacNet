@@ -73,38 +73,31 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             % Outputs:
             %         Z1, ..., Zm - Outputs of layer forward function
             %import tansacnet.utility.Direction
-            Direction = tansacnet.utility.Direction;
             
             % Layer forward function for prediction goes here.
             nComponents = layer.NumInputs;
             decFactor = layer.Stride;
-            decV = decFactor(Direction.VERTICAL);
-            decH = decFactor(Direction.HORIZONTAL);
-            nDec = decV*decH;
-            Cvh_T = layer.C.';
+            C_T = layer.C.';
             %
             X = varargin{1};
-            nRows = size(X,2);
-            nCols = size(X,3);
-            height = decFactor(1)*nRows;
-            width = decFactor(2)*nCols;
-            nSamples = size(X,4);
-            Z = zeros(height,width,nComponents,nSamples,'like',X);
+            nSamples = size(X,2);
+            nBlks = size(X,3);
+            seqlen = decFactor*nBlks;
+            Z = zeros(nComponents,nSamples,seqlen,'like',X);
             %
             for iComponent = 1:nComponents
                 X = varargin{iComponent};
                 if isgpuarray(X)
-                    arrayY = pagefun(@mtimes,Cvh_T,X);
+                    arrayY = pagefun(@mtimes,C_T,X);
                 else
-                    arrayY = Cvh_T*reshape(X,nDec,[]);
+                    arrayY = C_T*reshape(X,decFactor,[]);
                 end
-                Z(:,:,iComponent,:) = ...
-                    reshape(ipermute(reshape(arrayY,...
-                    decV,decH,nRows,nCols,nSamples),[1 3 2 4 5]),...
-                    height,width,1,nSamples);
+                Z(iComponent,:,:) = reshape(...
+                    permute(reshape(arrayY,decFactor,nSamples,[]),[2 1 3]),...
+                    1,nSamples,[]);
             end
             if isdlarray(X)
-                Z = dlarray(Z,'SSCB');
+                Z = dlarray(Z,'CTB');
             end
             
         end
@@ -124,7 +117,6 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             %         dLdW1, ..., dLdWk - Derivatives of the loss with respect to each
             %                             learnable parameter
             %import tansacnet.utility.Direction
-            Direction = tansacnet.utility.Direction;
             
             nComponents = layer.NumInputs;
             dLdZ = varargin{layer.NumInputs+layer.NumOutputs+1};
@@ -132,29 +124,25 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             
             % Layer forward function for prediction goes here.
             decFactor = layer.Stride;
-            decV = decFactor(Direction.VERTICAL);
-            decH = decFactor(Direction.HORIZONTAL);
-            nDec = decV*decH;
             %
-            Cvh_ = layer.C;
+            C_ = layer.C;
             %
-            height = size(dLdZ,1);
-            width = size(dLdZ,2);
-            nRows = height/decV;
-            nCols = width/decH;
-            nSamples = size(dLdZ,4);
-            %
+            nSamples = size(dLdZ,2);            
+            seqlen = size(dLdZ,3);
+            nBlks = seqlen/decFactor;
+            
             for iComponent = 1:nComponents
-                arrayX = permute(reshape(dLdZ(:,:,iComponent,:),...
-                    decV,nRows,decH,nCols,nSamples),[1 3 2 4 5]);
+
+                arrayX = permute(reshape(dLdZ(iComponent,:,:),...
+                    nSamples,decFactor,nBlks),[2 1 3]);
+
                 if isgpuarray(dLdZ)
                     varargout{iComponent} = ...
-                        pagefun(@mtimes,Cvh_,...
-                        reshape(arrayX,nDec,nRows,nCols,nSamples));
+                        pagefun(@mtimes,C_,arrayX);
                 else
                     varargout{iComponent} = reshape(...
-                        Cvh_*reshape(arrayX,nDec,[]),...
-                        nDec,nRows,nCols,nSamples);
+                        C_*reshape(arrayX,decFactor,[]),...
+                        decFactor,nSamples,nBlks);
                 end
             end
         end
