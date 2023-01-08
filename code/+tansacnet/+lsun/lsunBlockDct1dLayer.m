@@ -5,7 +5,7 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
     %      nComponents x nSamples x (Stride(1)xnCols) 
     %
     %   コンポーネント別に出力(nComponents):
-    %      nDecs x nCols x nSamples
+    %      nDecs x nSamples x nBlks 
     %
     % Requirements: MATLAB R2022b
     %
@@ -85,23 +85,22 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
             %
             C_ = layer.C;
             %
-            %disp('size(X)')
-            %size(X)
             nSamples = size(X,2);            
             seqlen = size(X,3);
-            nCols = seqlen/decFactor;
+            nBlks = seqlen/decFactor;
             %
             for iComponent = 1:nComponents
                
                 arrayX = permute(reshape(X(iComponent,:,:),...
-                    nSamples,decFactor,nCols),[2 3 1]);
+                    nSamples,decFactor,nBlks),[2 1 3]);
 
                 if isgpuarray(X)
-                    varargout{iComponent} = pagefun(@mtimes,C_,arrayX);
+                    varargout{iComponent} = ...
+                        pagefun(@mtimes,C_,arrayX);
                 else
                     varargout{iComponent} = reshape(...
                         C_*reshape(arrayX,decFactor,[]),...
-                       decFactor,nCols,nSamples);
+                        decFactor,nSamples,nBlks);
                 end
             end
 
@@ -129,9 +128,9 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
             C_T = layer.C.';
             %
             dLdZ = varargin{layer.NumInputs+layer.NumOutputs+1};
-            nCols = size(dLdZ,2);
-            seqlen = decFactor*nCols;
-            nSamples = size(dLdZ,3);
+            nSamples = size(dLdZ,2);
+            nBlks = size(dLdZ,3);
+            seqlen = decFactor*nBlks;
             dLdX = zeros(nComponents,nSamples,seqlen,'like',dLdZ);
             %
             for iComponent = 1:nComponents
@@ -141,8 +140,9 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
                 else
                     arrayX = C_T*reshape(dLdZ,decFactor,[]);
                 end
-                dLdX(iComponent,:,:) = ...
-                    permute(reshape(arrayX,seqlen,nSamples),[2 3 1]);
+                dLdX(iComponent,:,:) = reshape(...
+                    permute(reshape(arrayX,decFactor,nSamples,[]),[2 1 3]),...
+                    1,nSamples,[]);
             end
         end
     end

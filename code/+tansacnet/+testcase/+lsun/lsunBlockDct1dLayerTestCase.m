@@ -2,10 +2,10 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
     %NSOLTBLOCKDCT1DLAYERTESTCASE
     %
     %   ベクトル配列をブロック配列を入力:
-    %      nComponents x nSamples x (Stride(1)xnCols) 
+    %      nComponents x nSamples x (Stride(1)xnBlks) 
     %
     %   コンポーネント別に出力:
-    %      nDecs x nCols x nSamples
+    %      nDecs x nSamples x nBlks 
     %
     % Requirements: MATLAB R2022b
     %
@@ -27,15 +27,15 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
     end
     
     methods (TestClassTeardown)
-        
+      
         function finalCheck(~)
             import tansacnet.lsun.*
-            fprintf("\n --- Check layer for 1-D vector sequenses ---\n");
+            fprintf("\n --- Check layer for 1-D sequences ---\n");
             layer = lsunBlockDct1dLayer('Stride',2);
             checkLayer(layer,[1 8 8],'ObservationDimension',2,...
                 'CheckCodegenCompatibility',false)
         end
-        
+
     end
     
     methods (Test)
@@ -75,20 +75,21 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
             X = rand(nComponents, nSamples, seqlen, datatype);
             
             % Expected values
-            ncols = ceil(seqlen/stride);
-            expctdZ = zeros(stride,ncols,nSamples,datatype);
+            nblks = ceil(seqlen/stride);
+            expctdZ = zeros(stride,nSamples,nblks,datatype);
             for iSample = 1:nSamples
                 % Block DCT
-                U = reshape(X(nComponents,iSample,:),stride,[]);
+                U = reshape(permute(X(nComponents,iSample,:),[3 1 2]),...
+                    stride,[]);
                 if stride > 1
                     Y = dct(U);
                     % Rearrange the DCT Coefs.
                     A = testCase.permuteDctCoefs_(Y);
-                    expctdZ(:,:,iSample) = ...
-                        reshape(A,stride,ncols);
+                    expctdZ(:,iSample,:) = ...
+                        reshape(A,stride,1,nblks);
                 else
-                    expctdZ(:,:,iSample) = ...
-                        reshape(U,stride,ncols);
+                    expctdZ(:,iSample,:) = ...
+                        reshape(U,stride,1,nblks);
                 end
             end
             
@@ -107,7 +108,7 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-                
+        
         function testForward(testCase, ...
                 stride, seqlen, datatype)
             import matlab.unittest.constraints.IsEqualTo
@@ -120,20 +121,21 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
             X = rand(nComponents, nSamples, seqlen, datatype);
             
             % Expected values
-            ncols = ceil(seqlen/stride);
-            expctdZ = zeros(stride,ncols,nSamples,datatype);
+            nblks = ceil(seqlen/stride);
+            expctdZ = zeros(stride,nSamples,nblks,datatype);
             for iSample = 1:nSamples
                 % Block DCT
-                U = reshape(X(nComponents,iSample,:),stride,[]);
+                U = reshape(permute(X(nComponents,iSample,:),[3 1 2]),...
+                    stride,[]);
                 if stride > 1
                     Y = dct(U);
                     % Rearrange the DCT Coefs.
                     A = testCase.permuteDctCoefs_(Y);
-                    expctdZ(:,:,iSample) = ...
-                        reshape(A,stride,ncols);
+                    expctdZ(:,iSample,:) = ...
+                        reshape(A,stride,1,nblks);
                 else
-                    expctdZ(:,:,iSample) = ...
-                        reshape(U,stride,ncols);
+                    expctdZ(:,iSample,:) = ...
+                        reshape(U,stride,1,nblks);
                 end
             end
             
@@ -161,22 +163,22 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            ncols = seqlen/stride;
+            nblks = seqlen/stride;
             nComponents = 1;
             %dLdZ = rand(nrows,ncols,nDecs,nSamples,datatype);
-            dLdZ = rand(stride,ncols,nSamples,datatype);
+            dLdZ = rand(stride,nSamples,nblks,datatype);
             
             % Expected values
             expctddLdX = zeros(nComponents,nSamples,seqlen,datatype);
             for iSample = 1:nSamples
-                A = reshape(dLdZ(:,:,iSample),stride,[]);
+                A = reshape(dLdZ(:,iSample,:),stride,[]);
                 if stride > 1
                     Y = testCase.permuteIdctCoefs_(A,stride);
                     expctddLdX(nComponents,iSample,:) = ...
-                        reshape(idct(Y),nComponents,1,seqlen,[]);
+                        reshape(idct(Y),nComponents,1,seqlen);
                 else
                     expctddLdX(nComponents,iSample,:) = ...
-                        reshape(A,nComponents,1,seqlen,[]);
+                        reshape(A,nComponents,1,seqlen);
                 end
             end
 
@@ -195,7 +197,7 @@ classdef lsunBlockDct1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdX,'Within',tolObj));
             
         end
-
+      
     end
         
     methods (Static, Access = private)
