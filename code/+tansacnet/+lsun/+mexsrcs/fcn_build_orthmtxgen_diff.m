@@ -81,7 +81,7 @@ if license('checkout','matlab_coder') % Coder is available
         else
             cfg.GenerateReport = true;
             args = '{ aAngles, aMus, aPdAng, aMtxPst, aMtxPre, cUseGpu, cIsLt21b }';
-            seval = [ 'codegen -config cfg ' ' -o ' outputdir '/' mexname ' ' ...
+            seval = [ 'codegen -config cfg ' ' -o ''' outputdir '/' mexname ''' ' ...
                 packagedir '/' bsfname '.m -args ' args];
             disp(seval)
             eval(seval)
