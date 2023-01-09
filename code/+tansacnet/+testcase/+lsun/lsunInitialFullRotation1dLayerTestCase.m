@@ -69,9 +69,9 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-    %{
-        function testPredictGrayscale(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
+    
+        function testPredict(testCase, ...
+                usegpu, stride, nblks, datatype)
 
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -84,45 +84,37 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nDecs = prod(stride);
+            nDecs = stride;
             nChsTotal = nDecs;
-            % nDecs x nRows x nCols x nSamples
+            % nDecs x nSamples x nBlks
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
+            X = randn(nDecs,nSamples,nblks,datatype);
             if usegpu
                 X = gpuArray(X);
             end
             
             % Expected values
-            % nChs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0 = repmat(eye(ps,datatype),[1 1 nrows*ncols]);
-            U0 = repmat(eye(pa,datatype),[1 1 nrows*ncols]);
+            % nChs x nSamples x nBlks
+            V0 = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
-            expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
-            Y  = zeros(nChsTotal,nrows,ncols,datatype);
+            expctdZ = zeros(nChsTotal,nSamples,nblks,datatype);
+            Y  = zeros(nChsTotal,nblks,datatype);
             for iSample=1:nSamples
                 % Perumation in each block
-                Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nDecs,nrows,ncols);
+                Ai = permute(X(:,iSample,:),[1 3 2]);
+                Yi = reshape(Ai,nDecs,nblks);
                 %
-                Ys = Yi(1:ps,:);
-                Ya = Yi(ps+1:end,:);
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
-                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
+                for iblk = 1:nblks
+                    Y(:,iblk) = V0(:,:,iblk)*Yi(:,iblk);
                 end
-                Y(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);                
-                expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
+                expctdZ(:,iSample,:) = ipermute(Y,[1 3 2]);
             end
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunInitialFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','V0');
             
             % Actual values
@@ -140,6 +132,7 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
         
+        %{
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             

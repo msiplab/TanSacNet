@@ -101,40 +101,30 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             
             % Layer forward function for prediction goes here.
             
-            nrows = size(X,2);
-            ncols = size(X,3);            
-            nSamples = size(X,4);
-            ps = layer.PrivateNumberOfChannels(1);
-            pa = layer.PrivateNumberOfChannels(2);
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
+            nSamples = size(X,2);
+            nblks = size(X,3);            
             % Update parameters
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
             %
-            W0_ = layer.W0;
-            U0_ = layer.U0;
+            V0_ = layer.V0;
             %Y = reshape(permute(X,[3 1 2 4]),ps+pa,nrows*ncols*nSamples);
-            Y = reshape(X,ps+pa,nrows*ncols,nSamples);
-            Zs = zeros(ps,nrows*ncols,nSamples,'like',Y);
-            Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
+            Y = permute(X,[1 3 2]);
+            Z_ = zeros(nChsTotal,nblks,nSamples,'like',Y);
             for iSample = 1:nSamples
                 if isgpuarray(X)
-                    Ys_iSample = permute(Y(1:ps,:,iSample),[1 4 2 3]);
-                    Ya_iSample = permute(Y(ps+1:end,:,iSample),[1 4 2 3]);
-                    Zs_iSample = pagefun(@mtimes,W0_,Ys_iSample);
-                    Za_iSample = pagefun(@mtimes,U0_,Ya_iSample);
-                    Zs(:,:,iSample) = ipermute(Zs_iSample,[1 4 2 3]);
-                    Za(:,:,iSample) = ipermute(Za_iSample,[1 4 2 3]);
+                    Y_iSample = permute(Y(:,:,iSample),[1 4 2 3]);
+                    Z_iSample = pagefun(@mtimes,V0_,Y_iSample);
+                    Z_(:,:,iSample) = ipermute(Z_iSample,[1 4 2 3]);
                 else
-                    for iblk = 1:(nrows*ncols)
-                        Zs(:,iblk,iSample) = W0_(:,1:ps,iblk)*Y(1:ps,iblk,iSample);
-                        Za(:,iblk,iSample) = U0_(:,1:pa,iblk)*Y(ps+1:end,iblk,iSample);
+                    for iblk = 1:nblks
+                        Z_(:,iblk,iSample) = V0_(:,:,iblk)*Y(:,iblk,iSample);
                     end
                 end
             end
-            %Z = ipermute(reshape([Zs;Za],nChsTotal,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            Z = reshape([Zs;Za],ps+pa,nrows,ncols,nSamples);
+            Z = ipermute(Z_,[1 3 2]);
             
         end
         
