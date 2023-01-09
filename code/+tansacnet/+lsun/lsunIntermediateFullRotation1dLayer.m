@@ -160,80 +160,108 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             %import tansacnet.lsun.get_fcn_orthmtxgen_diff
             
-            nrows = size(dLdZ,2);
-            ncols = size(dLdZ,3);
-            nSamples = size(dLdZ,4);            
+            nSamples = size(dLdZ,2);            
+            nblks = size(dLdZ,3);
+            
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);            
             %
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
-            anglesU = layer.PrivateAngles;
-            musU = cast(layer.PrivateMus,'like',anglesU);
-            
+            angles = layer.PrivateAngles;
+            nAngles = size(angles,1);
+            mus = cast(layer.PrivateMus,'like',angles);
+            muW = mus(1:ps,:);
+            muU = mus(ps+1:ps+pa,:);
+            anglesW = angles(1:nAngles/2,:);
+            anglesU = angles(nAngles/2+1:nAngles,:);
+
             % dLdX = dZdX x dLdZ
-            %Un = fcn_orthmtxgen(anglesU,musU,0);
-            %[Un_,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,0,[],[]);
-            Un_ = layer.Un;
+            Wn_ = layer.Wn;
+            Un_ = layer.Un;            
             %dUnPst = zeros(size(Un_),'like',Un_);
-            dUnPst = bsxfun(@times,permute(musU,[1 3 2]),Un_);
+            dWnPst = bsxfun(@times,permute(muW,[1 3 2]),Wn_);
+            dUnPst = bsxfun(@times,permute(muU,[1 3 2]),Un_);            
             %for iblk = 1:(nrows*ncols)
             %    dUnPst(:,:,iblk) = bsxfun(@times,musU(:,iblk),Un_(:,:,iblk));
             %end
-            dUnPre = repmat(eye(pa,'like',Un_),[1 1 (nrows*ncols)]);
+            dWnPre = repmat(eye(ps,'like',Wn_),[1 1 nblks]);
+            dUnPre = repmat(eye(pa,'like',Un_),[1 1 nblks]);            
             
             %
-            dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples); 
+            dLdX = dLdZ;
             %cdLd_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             if strcmp(layer.Mode,'Analysis')
+                S_ = permute(Wn_,[2 1 3]);
                 A_ = permute(Un_,[2 1 3]);
             else
+                S_ = Wn_;
                 A_ = Un_;
             end
-            cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            cdLd_top = permute(dLdX(1:ps,:,:),[1 3 2]);
+            cdLd_btm = permute(dLdX(ps+1:ps+pa,:,:),[1 3 2]);
             for iSample = 1:nSamples
                 if isgpuarray(X)
-                    cdLd_low_iSample = permute(cdLd_low(:,:,iSample),[1 4 2 3]);
-                    cdLd_low_iSample = pagefun(@mtimes,A_,cdLd_low_iSample);
-                    cdLd_low(:,:,iSample) = ipermute(cdLd_low_iSample,[1 4 2 3]);                    
+                    cdLd_top_iSample = permute(cdLd_top(:,:,iSample),[1 4 2 3]);
+                    cdLd_btm_iSample = permute(cdLd_btm(:,:,iSample),[1 4 2 3]);
+                    cdLd_top_iSample = pagefun(@mtimes,S_,cdLd_top_iSample);
+                    cdLd_btm_iSample = pagefun(@mtimes,A_,cdLd_btm_iSample);
+                    cdLd_top(:,:,iSample) = ipermute(cdLd_top_iSample,[1 4 2 3]);                    
+                    cdLd_btm(:,:,iSample) = ipermute(cdLd_btm_iSample,[1 4 2 3]);                                        
                 else
-                    for iblk = 1:(nrows*ncols)
-                        cdLd_low(:,iblk,iSample) = A_(:,:,iblk)*cdLd_low(:,iblk,iSample);
+                    for iblk = 1:nblks
+                        cdLd_top(:,iblk,iSample) = S_(:,1:ps,iblk)*cdLd_top(:,iblk,iSample);
+                        cdLd_btm(:,iblk,iSample) = A_(:,1:pa,iblk)*cdLd_btm(:,iblk,iSample);
                     end
                 end
             end
-            dLdX(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nSamples);
+            dLdX(1:ps,:,:) = ipermute(reshape(cdLd_top,ps,nblks,nSamples),[1 3 2]);
+            dLdX(ps+1:ps+pa,:,:) = ipermute(reshape(cdLd_btm,pa,nblks,nSamples),[1 3 2]);
             %dLdX = dLdX; %ipermute(adLd_,[3 1 2 4]);
 
             % dLdWi = <dLdZ,(dVdWi)X>
-            fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(anglesU);
-            nAngles = size(anglesU,1);
-            dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
-            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);                        
-            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);  
-            for iAngle = uint32(1:nAngles)
-                [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUnPst,dUnPre);
+            fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);
+            dLdW = zeros(nAngles,nblks,'like',dLdZ);
+            dldz_top = permute(dLdZ(1:ps,:,:),[1 3 2]);                        
+            dldz_btm = permute(dLdZ(ps+1:ps+pa,:,:),[1 3 2]);
+            c_top = permute(X(1:ps,:,:),[1 3 2]);              
+            c_btm = permute(X(ps+1:ps+pa,:,:),[1 3 2]);  
+            for iAngle = uint32(1:nAngles/2)
+                [dWn,dWnPst,dWnPre] = fcn_orthmtxgen_diff(anglesW,muW,iAngle,dWnPst,dWnPre);
+                [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,muU,iAngle,dUnPst,dUnPre);                
                 if strcmp(layer.Mode,'Analysis')
+                    dS_ = dWn;
                     dA_ = dUn;
                 else
+                    dS_ = permute(dWn,[2 1 3]);
                     dA_ = permute(dUn,[2 1 3]);
                 end
                 if isgpuarray(X)
-                    c_low_ext = permute(c_low,[1 4 2 3]); % idx 1 iblk iSample
-                    d_low_ext = pagefun(@mtimes,dA_,c_low_ext); % idx 1 iblk iSample
-                    d_low = ipermute(d_low_ext,[1 4 2 3]);
-                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_low,d_low),[1 3]);
+                    c_top_ext = permute(c_top,[1 4 2 3]); % idx 1 iblk iSample
+                    c_btm_ext = permute(c_btm,[1 4 2 3]); % idx 1 iblk iSample      
+                    d_top_ext = pagefun(@mtimes,dS_,c_top_ext); % idx 1 iblk iSample                    
+                    d_btm_ext = pagefun(@mtimes,dA_,c_btm_ext); % idx 1 iblk iSample
+                    d_top = ipermute(d_top_ext,[1 4 2 3]);
+                    d_btm = ipermute(d_btm_ext,[1 4 2 3]);                    
+                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_top,d_top),[1 3]);
+                    dLdW(nAngles/2+iAngle,:) = sum(bsxfun(@times,dldz_btm,d_btm),[1 3]);                    
                 else
-                    for iblk = 1:(nrows*ncols)
+                    for iblk = 1:nblks
+                        dS_iblk = dS_(:,:,iblk);                        
                         dA_iblk = dA_(:,:,iblk);
-                        dldz_low_iblk = squeeze(dldz_low(:,iblk,:));
-                        c_low_iblk = squeeze(c_low(:,iblk,:));
-                        d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
+                        dldz_top_iblk = squeeze(dldz_top(:,iblk,:));                        
+                        dldz_btm_iblk = squeeze(dldz_btm(:,iblk,:));
+                        c_top_iblk = squeeze(c_top(:,iblk,:));                        
+                        c_btm_iblk = squeeze(c_btm(:,iblk,:));
+                        d_top_iblk = zeros(size(c_top_iblk),'like',c_top_iblk);                        
+                        d_btm_iblk = zeros(size(c_btm_iblk),'like',c_btm_iblk);
                         for iSample = 1:nSamples
-                            d_low_iblk(:,iSample) = dA_iblk*c_low_iblk(:,iSample);
+                            d_top_iblk(:,iSample) = dS_iblk*c_top_iblk(:,iSample);
+                            d_btm_iblk(:,iSample) = dA_iblk*c_btm_iblk(:,iSample);                            
                         end
-                        dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_low_iblk,d_low_iblk),'all');
+                        dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_top_iblk,d_top_iblk),'all');
+                        dLdW(nAngles/2+iAngle,iblk) = sum(bsxfun(@times,dldz_btm_iblk,d_btm_iblk),'all');                        
                     end
                 end
             end
