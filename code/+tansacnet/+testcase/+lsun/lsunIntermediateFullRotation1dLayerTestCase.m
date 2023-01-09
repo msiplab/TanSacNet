@@ -1,5 +1,5 @@
 classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
-    %LSUNINTERMEDIATEDUALROTATION1DLAYERTESTCASE 
+    %LSUNINTERMEDIATEFULLROTATION1DLAYERTESTCASE 
     %   
     %   コンポーネント別に入力(nComponents)
     %      nChs x nSamples x nBlks
@@ -21,11 +21,10 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties (TestParameter)
-        stride = { 2, 4 };
+        stride = { 2, 4, 8 };
         datatype = { 'single', 'double' };
         mus = { -1, 1 };
-        nrows = struct('small', 2,'medium', 4, 'large', 8);
-        ncols = struct('small', 2,'medium', 4, 'large', 8);
+        nblks = struct('small', 2,'medium', 4, 'large', 8);
         usegpu = struct( 'true', true, 'false', false);        
     end
 
@@ -71,9 +70,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualMode,expctdMode);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-        %{
-        function testPredictGrayscale(testCase, ...
-                usegpu, stride, nrows, ncols, mus, datatype)
+
+        function testPredict(testCase, ...
+                usegpu, stride, nblks, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -86,34 +85,38 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = prod(stride);
-            % nChsTotal x nRows x nCols xnSamples
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            nChsTotal = stride;
+            % nChsTotal x nSamples x nBlks
+            X = randn(nChsTotal,nSamples,nblks,datatype);
             if usegpu
                 X = gpuArray(X);
             end
             % Expected values
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nBlks
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
-            UnT = repmat(mus*eye(pa,datatype),[1 1 nrows*ncols]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            WnT = repmat(mus*eye(ps,datatype),[1 1 nblks]);
+            UnT = repmat(mus*eye(pa,datatype),[1 1 nblks]);
+            Y = permute(X,[1 3 2]);
+            Ys = reshape(Y(1:ps,:,:),ps,nblks,nSamples);
+            Ya = reshape(Y(ps+1:ps+pa,:,:),pa,nblks,nSamples);
+            Zs = zeros(size(Ys),'like',Ys);
             Za = zeros(size(Ya),'like',Ya);
             for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
+                for iblk = 1:nblks
+                    Zs(:,iblk,iSample) = WnT(:,:,iblk)*Ys(:,iblk,iSample);
                     Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
                 end
             end
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+            Y(1:ps,:,:) = reshape(Zs,ps,nblks,nSamples);
+            Y(ps+1:ps+pa,:,:) = reshape(Za,pa,nblks,nSamples);
+            expctdZ = ipermute(Y,[1 3 2]);
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','Vn~');
             
             % Actual values
@@ -131,8 +134,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
-        function testPredictGrayscaleWithRandomAngles(testCase, ...
+
+        %{
+        function testPredictWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0
@@ -197,7 +201,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
         end
         
-        function testPredictGrayscaleAnalysisMode(testCase, ...
+        function testPredictAnalysisMode(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0
@@ -268,7 +272,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
         end
 
-        function testBackwardGrayscale(testCase, ...
+        function testBackward(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
             
             if usegpu && gpuDeviceCount == 0
@@ -358,7 +362,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));                        
         end
 
-        function testBackwardGrayscaleWithRandomAngles(testCase, ...
+        function testBackwardWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
     
             if usegpu && gpuDeviceCount == 0
@@ -449,7 +453,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));                             
         end
         
-        function testBackwardGrayscaleAnalysisMode(testCase, ...
+        function testBackwardAnalysisMode(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0

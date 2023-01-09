@@ -43,6 +43,7 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
     end
     
     properties (Hidden)
+        Wn
         Un
     end
     
@@ -75,7 +76,7 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             layer.Type = '';
             
             nChsTotal = sum(layer.PrivateNumberOfChannels);
-            nAngles = (nChsTotal-2)*nChsTotal/8;
+            nAngles = (nChsTotal-2)*nChsTotal/4;
             if size(layer.PrivateAngles,1)~=nAngles
                 error('Invalid # of angles')
             end
@@ -96,43 +97,50 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             %  
             
             % Layer forward function for prediction goes here.
-            
-            nrows = size(X,2);
-            ncols = size(X,3);            
-            nSamples = size(X,4);            
+
+            nSamples = size(X,2);                        
+            nblks = size(X,3);
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
             %
+            Wn_ = layer.Wn;            
             Un_ = layer.Un;
-            Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             if strcmp(layer.Mode,'Analysis')
-                A_ = Un_;
+                S_ = Wn_;
+                A_ = Un_;                
             elseif strcmp(layer.Mode,'Synthesis')
+                S_ = permute(Wn_,[2 1 3]);
                 A_ = permute(Un_,[2 1 3]);
             else
-                throw(MException('NsoltLayer:InvalidMode',...
+                throw(MException('LsunLayer:InvalidMode',...
                     '%s : Mode should be either of Synthesis or Analysis',...
                     layer.Mode))
             end
 
-            Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
+            Y = permute(X,[1 3 2]);
+            Zs = zeros(ps,nblks,nSamples,'like',Y);
+            Za = zeros(pa,nblks,nSamples,'like',Y);            
             for iSample = 1:nSamples
-                if isgpuarray(X)
-                    Ya_iSample = permute(Ya(:,:,iSample),[1 4 2 3]);
+                if isgpuarray(X) 
+                    Ys_iSample = permute(Y(1:ps,:,iSample),[1 4 2 3]);
+                    Ya_iSample = permute(Y(ps+1:ps+pa,:,iSample),[1 4 2 3]);
+                    Zs_iSample = pagefun(@mtimes,S_,Ys_iSample);
                     Za_iSample = pagefun(@mtimes,A_,Ya_iSample);
+                    Zs(:,:,iSample) = ipermute(Zs_iSample,[1 4 2 3]);
                     Za(:,:,iSample) = ipermute(Za_iSample,[1 4 2 3]);
                 else
-                    for iblk = 1:(nrows*ncols)
-                        Za(:,iblk,iSample) = A_(:,:,iblk)*Ya(:,iblk,iSample);
+                    for iblk = 1:nblks
+                        Zs(:,iblk,iSample) = S_(:,:,iblk)*Y(1:ps,iblk,iSample);
+                        Za(:,iblk,iSample) = A_(:,:,iblk)*Y(ps+1:ps+pa,iblk,iSample);
                     end
                 end
             end
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
-            Z = Y; %ipermute(Y,[3 1 2 4]);
+            Y(1:ps,:,:) = Zs;
+            Y(ps+1:ps+pa,:,:) = Za;
+            Z = ipermute(Y,[1 3 2]);
         end
         
         function [dLdX, dLdW] = backward(layer, X, ~, dLdZ, ~)
@@ -242,7 +250,7 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
         function layer = set.Angles(layer,angles)
             nBlocks = prod(layer.NumberOfBlocks);
             nChsTotal = sum(layer.PrivateNumberOfChannels);
-            nAngles = (nChsTotal-2)*nChsTotal/8;
+            nAngles = (nChsTotal-2)*nChsTotal/4;
             if isempty(angles)
                 angles = zeros(nAngles,nBlocks);
             elseif isscalar(angles)
@@ -256,11 +264,12 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = set.Mus(layer,mus)
             nBlocks = prod(layer.NumberOfBlocks);
+            ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
             if isempty(mus)
-                mus = ones(pa,nBlocks);   
+                mus = ones(ps+pa,nBlocks);
             elseif isscalar(mus)
-                mus = mus*ones(pa,nBlocks,'like',mus);   
+                mus = mus*ones(ps+pa,nBlocks);
             end
             %
             layer.PrivateMus = mus;
@@ -270,13 +279,31 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = updateParameters(layer)
             %import tansacnet.lsun.get_fcn_orthmtxgen
-            anglesU = layer.PrivateAngles;
-            musU = cast(layer.PrivateMus,'like',anglesU);
-            if isrow(musU)
-                musU = musU.';
+            ps = layer.PrivateNumberOfChannels(1);
+            pa = layer.PrivateNumberOfChannels(2);
+            %
+            angles = layer.PrivateAngles;
+            mus = cast(layer.PrivateMus,'like',angles);
+            if isvector(angles)
+                nAngles = length(angles);
+            else
+                nAngles = size(angles,1);
             end
-            fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
-            layer.Un = fcn_orthmtxgen(anglesU,musU);
+            if isrow(mus)
+                mus = mus.';
+            end
+            muW = mus(1:ps,:);
+            muU = mus(ps+1:ps+pa,:);
+            if nAngles > 0
+                anglesW = angles(1:nAngles/2,:);
+                anglesU = angles(nAngles/2+1:nAngles,:);
+                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angles);
+                layer.Wn = fcn_orthmtxgen(anglesW,muW);
+                layer.Un = fcn_orthmtxgen(anglesU,muU);
+            else
+                layer.Wn = reshape(muW,1,1,[]);
+                layer.Un = reshape(muU,1,1,[]);
+            end
             layer.isUpdateRequested = false;
         end
         
