@@ -372,9 +372,9 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));
             
         end
-    %{
+
         function testBackwardWithRandomAngles(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
+                usegpu, stride, nblks, datatype)
 
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -384,79 +384,55 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-3));
             import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on');
-            genU = OrthonormalMatrixGenerationSystem(...
+            gen = OrthonormalMatrixGenerationSystem(...
                 'PartialDifference','on');
             
             % Parameters
             nSamples = 8;
-            nDecs = prod(stride);
+            nDecs = stride;
             nChsTotal = nDecs;
-            nAnglesH = (nChsTotal-2)*nChsTotal/8;
-            anglesW = randn(nAnglesH,nrows*ncols,datatype);
-            anglesU = randn(nAnglesH,nrows*ncols,datatype);
+            nAngles = (nChsTotal-1)*nChsTotal/2;
+            angles = randn(nAngles,nblks,datatype);
             mus_ = 1;
             
             % nDecs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             %dLdZ = randn(nrows,ncols,sum(stride),nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);
+            X = randn(nDecs,nSamples,nblks,datatype);
+            dLdZ = randn(nDecs,nSamples,nblks,datatype);
             if usegpu
                 X = gpuArray(X);
-                anglesW = gpuArray(anglesW);
-                anglesU = gpuArray(anglesU);
+                angles = gpuArray(angles);
                 dLdZ = gpuArray(dLdZ);
             end
 
             % Expected values
-            % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            
+            % nDecs x nSamples x nBlks
             % dLdX = dZdX x dLdZ
-            W0T = permute(genW.step(anglesW,mus_,0),[2 1 3]);
-            U0T = permute(genU.step(anglesU,mus_,0),[2 1 3]);
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            V0T = permute(gen.step(angles,mus_,0),[2 1 3]);
+            Y = permute(dLdZ,[1 3 2]);
             for iSample = 1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample); 
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
+                for iblk = 1:nblks
+                    Y(:,iblk,iSample) = V0T(:,:,iblk)*Y(:,iblk,iSample); 
                 end
             end
-            Zsa = cat(1,Ys,Ya);
-            %expctddLdX = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctddLdX = reshape(Zsa,nDecs,nrows,ncols,nSamples);
+            expctddLdX = ipermute(reshape(Y,nDecs,nblks,nSamples),[1 3 2]);
                         
             % dLdWi = <dLdZ,(dVdWi)X>
-            dldw_ = zeros(2*nAnglesH,nrows*ncols,datatype);
-            dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            dldz_low = reshape(dldz_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dldw_ = zeros(nAngles,nblks,1,datatype);
+            dldz_ = permute(dLdZ,[1 3 2]);
             % (dVdWi)X
-            a_ = X; %permute(X,[3 1 2 4]);
-            c_upp = reshape(a_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            c_low = reshape(a_(ps+1:nDecs,:,:,:),pa,nrows*ncols,nSamples);
-            for iAngle = 1:nAnglesH
-                dW0 = genW.step(anglesW,mus_,iAngle);
-                dU0 = genU.step(anglesU,mus_,iAngle);
-                for iblk = 1:(nrows*ncols)
-                    dldz_upp_iblk = squeeze(dldz_upp(:,iblk,:));
-                    dldz_low_iblk = squeeze(dldz_low(:,iblk,:));
-                    c_upp_iblk = squeeze(c_upp(:,iblk,:));
-                    c_low_iblk = squeeze(c_low(:,iblk,:));
-                    d_upp_iblk = zeros(size(c_upp_iblk),'like',c_upp_iblk);
-                    d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
+            c_ = permute(X,[1 3 2]);
+            for iAngle = 1:nAngles
+                dV0 = gen.step(angles,mus_,iAngle);
+                for iblk = 1:nblks
+                    dldz_iblk = squeeze(dldz_(:,iblk,:));
+                    c_iblk = squeeze(c_(:,iblk,:));
+                    d_iblk = zeros(size(c_iblk),'like',c_iblk);
                     for iSample = 1:nSamples
-                        d_upp_iblk(:,iSample) = dW0(:,1:ps,iblk)*c_upp_iblk(:,iSample);
-                        d_low_iblk(:,iSample) = dU0(:,1:pa,iblk)*c_low_iblk(:,iSample);
+                        d_iblk(:,iSample) = dV0(:,:,iblk)*c_iblk(:,iSample);
                     end
-                    dldw_(iAngle,iblk) = sum(dldz_upp_iblk.*d_upp_iblk,'all');
-                    dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');
+                    dldw_(iAngle,iblk) = sum(dldz_iblk.*d_iblk,'all');
                 end
             end
             expctddLdW = dldw_;
@@ -465,10 +441,10 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','V0');
             layer.Mus = mus_;
-            layer.Angles = [anglesW; anglesU];
+            layer.Angles = angles; 
             %expctdZ = layer.predict(X);
             
             % Actual values
