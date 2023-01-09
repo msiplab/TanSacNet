@@ -32,7 +32,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         %{
         function finalCheck(~)
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',[2 2],...
                 'NumberOfBlocks',[8 8]);
             fprintf("\n --- Check layer for 2-D images ---\n");
@@ -91,6 +91,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             if usegpu
                 X = gpuArray(X);
             end
+
             % Expected values
             % nChsTotal x nSamples x nBlks
             ps = ceil(nChsTotal/2);
@@ -135,9 +136,8 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        %{
         function testPredictWithRandomAngles(testCase, ...
-                usegpu, stride, nrows, ncols, mus, datatype)
+                usegpu, stride, nblks, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -147,15 +147,17 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
             import tansacnet.utility.*
+            genW = OrthonormalMatrixGenerationSystem();
             genU = OrthonormalMatrixGenerationSystem();
             
             % Parameters
             nSamples = 8;
-            nChsTotal = prod(stride);
-            % nChsTotal x nRows x nCols x nSamples
+            nChsTotal = stride;
+            % nChsTotal x nSamplex x nBlks
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/8,nrows*ncols);
+            X = randn(nChsTotal,nSamples,nblks,datatype);
+            nAngles = (nChsTotal-2)*nChsTotal/4;
+            angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
                 angles = gpuArray(angles);
@@ -165,23 +167,35 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             % nChsTotal x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
-            UnT = permute(genU.step(angles,mus),[2 1 3]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            anglesW = angles(1:nAngles/2,:);
+            anglesU = angles(nAngles/2+1:nAngles,:);
+            if nAngles == 0
+                WnT = mus*ones(1,1,nblks);
+                UnT = mus*ones(1,1,nblks);
+            else
+                WnT = permute(genW.step(anglesW,mus),[2 1 3]);
+                UnT = permute(genU.step(anglesU,mus),[2 1 3]);
+            end
+            Y = permute(X,[1 3 2]);
+            Ys = reshape(Y(1:ps,:,:),ps,nblks,nSamples);
+            Ya = reshape(Y(ps+1:ps+pa,:,:),pa,nblks,nSamples);
+            Zs = zeros(size(Ys),'like',Ys);
             Za = zeros(size(Ya),'like',Ya);
             for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
+                for iblk = 1:nblks
+                    Zs(:,iblk,iSample) = WnT(:,:,iblk)*Ys(:,iblk,iSample);
                     Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
                 end
             end
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+            Y(1:ps,:,:) = reshape(Zs,ps,nblks,nSamples);            
+            Y(ps+1:ps+pa,:,:) = reshape(Za,pa,nblks,nSamples);
+            expctdZ = ipermute(Y,[1 3 2]);
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','Vn~');
             
             % Actual values
@@ -202,7 +216,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         end
         
         function testPredictAnalysisMode(testCase, ...
-                usegpu, stride, nrows, ncols, mus, datatype)
+                usegpu, stride, nblks, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -212,44 +226,58 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
             import tansacnet.utility.*
+            genW = OrthonormalMatrixGenerationSystem();
             genU = OrthonormalMatrixGenerationSystem();
 
             % Parameters
             nSamples = 8;
             nChsTotal = prod(stride);
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nBlks
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/8,nrows*ncols);
+            X = randn(nChsTotal,nSamples,nblks,datatype);
+            nAngles = (nChsTotal-2)*nChsTotal/4;
+            angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
                 angles = gpuArray(angles);
             end
 
             % Expected values
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nBlks
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
-            Un = genU.step(angles,mus);
-            Y = X; % permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            anglesW = angles(1:nAngles/2,:);
+            anglesU = angles(nAngles/2+1:nAngles,:);
+            if nAngles == 0
+                Wn = mus*ones(1,1,nblks);
+                Un = mus*ones(1,1,nblks);
+            else
+                Wn = genW.step(anglesW,mus);
+                Un = genU.step(anglesU,mus);
+            end
+            Y = permute(X,[1 3 2]);
+            Ys = reshape(Y(1:ps,:,:),ps,nblks,nSamples);            
+            Ya = reshape(Y(ps+1:ps+pa,:,:),pa,nblks,nSamples);
+            Zs = zeros(size(Ys),'like',Ys);
             Za = zeros(size(Ya),'like',Ya);
             for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
+                for iblk = 1:nblks
+                    Zs(:,iblk,iSample) = Wn(:,:,iblk)*Ys(:,iblk,iSample);
                     Za(:,iblk,iSample) = Un(:,:,iblk)*Ya(:,iblk,iSample);
                 end
             end            
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
-            expctdDescription = "Analysis LSUN intermediate rotation " ...
+            Y(1:ps,:,:) = reshape(Zs,ps,nblks,nSamples);
+            Y(ps+1:ps+pa,:,:) = reshape(Za,pa,nblks,nSamples);
+            expctdZ = ipermute(Y,[1 3 2]);
+            expctdDescription = "Analysis LSUN intermediate full rotation " ...
                 + "(ps,pa) = (" ...
                 + ps + "," + pa + ")";
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','Vn',...
                 'Mode','Analysis');
             
@@ -272,6 +300,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
         end
 
+        %{
         function testBackward(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
             
@@ -336,7 +365,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn~');
@@ -426,7 +455,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn~');
@@ -518,7 +547,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
+            layer = lsunIntermediateFullRotation1dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn',...
