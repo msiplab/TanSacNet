@@ -98,16 +98,15 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             V0 = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
             expctdZ = zeros(nChsTotal,nSamples,nblks,datatype);
-            Y  = zeros(nChsTotal,nblks,datatype);
             for iSample=1:nSamples
                 % Perumation in each block
                 Ai = permute(X(:,iSample,:),[1 3 2]);
                 Yi = reshape(Ai,nDecs,nblks);
                 %
                 for iblk = 1:nblks
-                    Y(:,iblk) = V0(:,:,iblk)*Yi(:,iblk);
+                    Yi(:,iblk) = V0(:,:,iblk)*Yi(:,iblk);
                 end
-                expctdZ(:,iSample,:) = ipermute(Y,[1 3 2]);
+                expctdZ(:,iSample,:) = ipermute(Yi,[1 3 2]);
             end
             
             % Instantiation of target class
@@ -131,11 +130,9 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
-        %{
-        function testPredictGrayscaleWithRandomAngles(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
-            
+
+        function testPredictWithRandomAngles(testCase, ...
+                usegpu, stride, nblks, datatype)
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
@@ -144,52 +141,43 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
             import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
+            gen = OrthonormalMatrixGenerationSystem();
             
             % Parameters
             nSamples = 8;
-            nDecs = prod(stride);
+            nDecs = stride;
             nChsTotal = nDecs;
-            % nDecs x nRows x nCols x nSamples
+            % nDecs x nSamples x nBlks
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
+            X = randn(nDecs,nSamples,nblks,datatype);
+            nAngles = (nChsTotal-1)*nChsTotal/2;
+            angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
                 angles = gpuArray(angles);
             end            
 
             % Expected values
-            % nChs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0 = genW.step(angles(1:size(angles,1)/2,:),1);
-            U0 = genU.step(angles(size(angles,1)/2+1:end,:),1);
+            % nChs x nSamples x nBlks
+            V0 = gen.step(angles,1);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
-            expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
-            Y  = zeros(nChsTotal,nrows,ncols,datatype);
+            expctdZ = zeros(nChsTotal,nSamples,nblks,datatype);
             for iSample=1:nSamples
                 % Perumation in each block
-                Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nDecs,nrows,ncols);
+                Ai = permute(X(:,iSample,:),[1 3 2]);
+                Yi = reshape(Ai,nDecs,nblks);
                 %
-                Ys = Yi(1:ps,:);
-                Ya = Yi(ps+1:end,:);
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
-                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
+                for iblk = 1:nblks
+                    Yi(:,iblk) = V0(:,:,iblk)*Yi(:,iblk);
                 end
-                Y(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);
-                expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
+                expctdZ(:,iSample,:) = ipermute(Yi,[1 3 2]);
             end
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunInitialFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','V0');
             
             % Actual values
@@ -207,8 +195,8 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-       
-        function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
+       %{
+        function testPredictWithRandomAnglesNoDcLeackage(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
             
             if usegpu && gpuDeviceCount == 0
@@ -290,7 +278,7 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        function testBackwardGrayscale(testCase, ...
+        function testBackward(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             
             if usegpu && gpuDeviceCount == 0
@@ -408,7 +396,7 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        function testBackwardGrayscaleWithRandomAngles(testCase, ...
+        function testBackwardWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
 
             if usegpu && gpuDeviceCount == 0
@@ -527,7 +515,7 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        function testBackwardGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
+        function testBackwardWithRandomAnglesNoDcLeackage(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
 
             if usegpu && gpuDeviceCount == 0

@@ -27,7 +27,7 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
     end
     
     properties (Dependent)
-        NoDcLeakage
+        %NoDcLeakage
     end
     
     properties (Dependent)
@@ -40,7 +40,7 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
     
     properties (Access = private)
         PrivateNumberOfChannels
-        PrivateNoDcLeakage
+        %PrivateNoDcLeakage
         PrivateAngles
         PrivateMus
         isUpdateRequested
@@ -60,7 +60,7 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Name','')
             addParameter(p,'Mus',[])
             addParameter(p,'Angles',[])
-            addParameter(p,'NoDcLeakage',false)
+            %addParameter(p,'NoDcLeakage',false)
             addParameter(p,'NumberOfBlocks',[1 1])
             parse(p,varargin{:})
             
@@ -71,7 +71,7 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             layer.Name = p.Results.Name;
             layer.Mus = p.Results.Mus;
             layer.Angles = p.Results.Angles;
-            layer.NoDcLeakage = p.Results.NoDcLeakage;
+            %layer.NoDcLeakage = p.Results.NoDcLeakage;
             layer.Description = "LSUN initial full rotation " ...
                 + "(ps,pa) = (" ...
                 + layer.PrivateNumberOfChannels(1) + "," ...
@@ -261,9 +261,9 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             end
         end
 
-        function nodcleak = get.NoDcLeakage(layer)
-            nodcleak = layer.PrivateNoDcLeakage;
-        end
+        %function nodcleak = get.NoDcLeakage(layer)
+        %    nodcleak = layer.PrivateNoDcLeakage;
+        %end
 
         function angles = get.Angles(layer)
             angles = layer.PrivateAngles;
@@ -273,11 +273,11 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             mus = layer.PrivateMus;
         end
         
-        function layer = set.NoDcLeakage(layer,nodcleak)
-            layer.PrivateNoDcLeakage = nodcleak;
+        %function layer = set.NoDcLeakage(layer,nodcleak)
+        %    layer.PrivateNoDcLeakage = nodcleak;
             %
-            layer.isUpdateRequested = true;
-        end
+        %    layer.isUpdateRequested = true;
+        %end
         
         function layer = set.Angles(layer,angles)
             nBlocks = prod(layer.NumberOfBlocks);
@@ -312,8 +312,8 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = updateParameters(layer)
             %import tansacnet.lsun.get_fcn_orthmtxgen
-            ps = layer.PrivateNumberOfChannels(1);
-            pa = layer.PrivateNumberOfChannels(2);
+            %ps = layer.PrivateNumberOfChannels(1);
+            %pa = layer.PrivateNumberOfChannels(2);
             %{
             if layer.NoDcLeakage
                 layer.PrivateMus(1,:) = ones(1,size(layer.PrivateMus,2));                
@@ -323,11 +323,11 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             %}
             angles = layer.PrivateAngles;            
             mus = cast(layer.PrivateMus,'like',angles);
-            if isvector(angles)
-                nAngles = length(angles);
-            else
-                nAngles = size(angles,1);
-            end
+            %if isvector(angles)
+            %    nAngles = length(angles);
+            %else
+            %    nAngles = size(angles,1);
+            %end
             if isrow(mus)
                 mus = mus.';
             end
