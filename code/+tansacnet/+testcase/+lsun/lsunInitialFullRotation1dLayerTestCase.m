@@ -29,18 +29,18 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
     end
     
     methods (TestClassTeardown)
-        %{
+
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunInitialFullRotation1dLayer(...
-                'Stride',[2 2],...
-                'NumberOfBlocks',[8 8]);
+                'Stride',2,...
+                'NumberOfBlocks',4);
             fprintf("\n --- Check layer for 1-D sequences ---\n");
             checkLayer(layer,[2 8 4],...
                 'ObservationDimension',2,...
                 'CheckCodegenCompatibility',true)
         end
-        %}
+
     end
     
     methods (Test)

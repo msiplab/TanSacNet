@@ -57,13 +57,13 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Mus',[])
             addParameter(p,'Mode','Synthesis')
             addParameter(p,'Name','')
-            addParameter(p,'NumberOfBlocks',[1 1])
+            addParameter(p,'NumberOfBlocks',1)
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
             layer.NumberOfBlocks = p.Results.NumberOfBlocks;
-            layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
+            layer.PrivateNumberOfChannels = [ceil(layer.Stride/2) floor(layer.Stride/2)];
             layer.Name = p.Results.Name;
             layer.Mode = p.Results.Mode;
             layer.Angles = p.Results.Angles;

@@ -61,13 +61,13 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Mus',[])
             addParameter(p,'Angles',[])
             %addParameter(p,'NoDcLeakage',false)
-            addParameter(p,'NumberOfBlocks',[1 1])
+            addParameter(p,'NumberOfBlocks',1)
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
             layer.NumberOfBlocks = p.Results.NumberOfBlocks;
-            layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
+            layer.PrivateNumberOfChannels = [ceil(layer.Stride/2) floor(layer.Stride/2)];
             layer.Name = p.Results.Name;
             layer.Mus = p.Results.Mus;
             layer.Angles = p.Results.Angles;
@@ -146,8 +146,8 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             %import tansacnet.lsun.get_fcn_orthmtxgen_diff
 
             nChsTotal = sum(layer.PrivateNumberOfChannels);
+            nSamples = size(dLdZ,2);            
             nblks = size(dLdZ,3);            
-            nSamples = size(dLdZ,2);
             %{
             if isempty(layer.Mus)
                 layer.Mus = ones(ps+pa,1);
@@ -175,16 +175,17 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             mus = cast(layer.Mus,'like',angles);            
             V0_ = layer.V0; %transpose(fcn_orthmtxgen(anglesW,muW,0));
             V0T = permute(V0_,[2 1 3]);
-            dV0Pst = zeros(size(V0_),'like',V0_);
-            for iblk = 1:nblks
-                dV0Pst(:,:,iblk) = bsxfun(@times,mus(:,iblk),V0_(:,:,iblk));
-            end
+            dV0Pst = bsxfun(@times,permute(mus,[1 3 2]),V0_);                        
+            %dV0Pst = zeros(size(V0_),'like',V0_);
+            %for iblk = 1:nblks
+            %    dV0Pst(:,:,iblk) = bsxfun(@times,mus(:,iblk),V0_(:,:,iblk));
+            %end
             dV0Pre = repmat(eye(nChsTotal,'like',V0_),[1 1 nblks]);
-            
+
             % Layer backward function goes here.
             % dLdX = dZdX x dLdZ
             Y = permute(dLdZ,[1 3 2]);
-             for iSample = 1:nSamples
+            for iSample = 1:nSamples
                 if isgpuarray(X)
                     Y_iSample = permute(Y(:,:,iSample),[1 4 2 3]);
                     Y_iSample = pagefun(@mtimes,V0T,Y_iSample);
@@ -260,13 +261,12 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = set.Mus(layer,mus)
             nBlocks = prod(layer.NumberOfBlocks);            
-            ps = layer.PrivateNumberOfChannels(1);
-            pa = layer.PrivateNumberOfChannels(2);
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
             %
             if isempty(mus)
-                mus = ones(ps+pa,nBlocks);
+                mus = ones(nChsTotal,nBlocks);
             elseif isscalar(mus)
-                mus = mus*ones(ps+pa,nBlocks);
+                mus = mus*ones(nChsTotal,nBlocks);
             end
             %
             layer.PrivateMus = mus;
@@ -287,16 +287,23 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             %}
             angles = layer.PrivateAngles;            
             mus = cast(layer.PrivateMus,'like',angles);
-            %if isvector(angles)
-            %    nAngles = length(angles);
-            %else
-            %    nAngles = size(angles,1);
-            %end
+            if isvector(angles)
+                nAngles = length(angles);
+            else
+                nAngles = size(angles,1);
+            end
             if isrow(mus)
                 mus = mus.';
             end
-            fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angles);                        
-            layer.V0 = fcn_orthmtxgen(angles,mus);
+            if nAngles > 0
+                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angles);
+                layer.V0 = fcn_orthmtxgen(angles,mus);
+            else
+                layer.V0 = reshape(mus,1,1,[]);
+            end
+            %size(layer.V0,3) 
+            %disp(layer.NumberOfBlocks)
+            %assert(size(layer.V0,3) == layer.NumberOfBlocks)
             layer.isUpdateRequested = false;
         end
         
