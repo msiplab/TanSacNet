@@ -126,9 +126,9 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-%{        
-        function testPredictGrayscaleWithRandomAngles(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
+
+        function testPredictWithRandomAngles(testCase, ...
+                usegpu, stride, nblks, datatype)
             
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -138,46 +138,37 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
             import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
+            gen = OrthonormalMatrixGenerationSystem();
             
             % Parameters
             nSamples = 8;
-            nDecs = prod(stride);
+            nDecs = stride;
             nChsTotal = nDecs;
-            % nChs x nRows x nCols x nSamples
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
+            % nChs x nSamples x nBlks
+            X = randn(nDecs,nSamples,nblks,datatype);
+            angles = randn((nChsTotal-1)*nChsTotal/2,nblks);
             if usegpu
                 X = gpuArray(X);
                 angles = gpuArray(angles);
             end   
 
             % Expected values
-            % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0T = permute(genW.step(angles(1:size(angles,1)/2,:),1),[2 1 3]);
-            U0T = permute(genU.step(angles(size(angles,1)/2+1:end,:),1),[2 1 3]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            % nDecs x nSamples x nBlks
+            V0T = permute(gen.step(angles,1),[2 1 3]);
+            Y = permute(X,[1 3 2]);
             for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample);
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
+                for iblk = 1:nblks
+                    Y(:,iblk,iSample) = V0T(:,:,iblk)*Y(:,iblk,iSample);
                 end
             end
-            Zsa = cat(1,Ys,Ya);
-            %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
+            expctdZ = ipermute(reshape(Y,nChsTotal,nblks,nSamples),...
+                [1 3 2]);
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','V0~');
             
             % Actual values
@@ -196,10 +187,10 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-               
+%{               
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
-
+            % TODO:
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
@@ -273,8 +264,9 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
-        function testBackwardGrayscale(testCase, ...
+%}
+       %{
+        function testBackward(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             
             if usegpu && gpuDeviceCount == 0
@@ -397,7 +389,8 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));  
             
         end
-
+       %}
+        %{
         function testBackwardGayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             
