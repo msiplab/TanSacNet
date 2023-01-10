@@ -29,7 +29,7 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
     end
     
     methods (TestClassTeardown)
-        %{
+
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunFinalFullRotation1dLayer(...
@@ -40,7 +40,7 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 'ObservationDimension',2,...                
                 'CheckCodegenCompatibility',true)
         end
-        %}
+
     end
     
     methods (Test)

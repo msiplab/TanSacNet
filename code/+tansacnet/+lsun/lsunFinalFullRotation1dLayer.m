@@ -262,7 +262,7 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = updateParameters(layer)
             %import tansacnet.lsun.get_fcn_orthmtxgen
-            ps = layer.PrivateNumberOfChannels(1);
+            %ps = layer.PrivateNumberOfChannels(1);
             %{
             if layer.NoDcLeakage
                 layer.PrivateMus(1,:) = ones(1,size(layer.PrivateMus,2));           
