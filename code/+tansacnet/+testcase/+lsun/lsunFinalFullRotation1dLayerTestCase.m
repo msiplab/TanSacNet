@@ -69,9 +69,9 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
-%{
+
         function testPredictGrayscale(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
+                usegpu, stride, nblks, datatype)
             
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -84,40 +84,32 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nDecs = prod(stride);
+            nDecs = stride;
             nChsTotal = nDecs;
-            % nChs x nRows x nCols x nSamples
+            % nChs x nSamples x nBlks
             %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            X = randn(nChsTotal,nSamples,nblks,datatype);
             if usegpu
                 X = gpuArray(X);
             end
 
             % Expected values        
-            % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0T = repmat(eye(ps,datatype),[1 1 nrows*ncols]);
-            U0T = repmat(eye(pa,datatype),[1 1 nrows*ncols]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            % nDecs x nSamples x nBlks
+            V0T = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
+            Y = permute(X,[ 1 3 2]);
             for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample); 
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
+                for iblk = 1:nblks
+                    Y(:,iblk,iSample) = V0T(:,:,iblk)*Y(:,iblk,iSample); 
                 end
             end
-            Zsa = cat(1,Ys,Ya);
-            %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
+            expctdZ = ipermute(reshape(Y,nChsTotal,nblks,nSamples),...
+                [1 3 2]);
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalFullRotation1dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
+                'NumberOfBlocks',nblks,...
                 'Name','V0~');
             
             % Actual values
@@ -134,7 +126,7 @@ classdef lsunFinalFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
+%{        
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             
