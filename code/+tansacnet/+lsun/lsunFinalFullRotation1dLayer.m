@@ -272,11 +272,11 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
             %}
             angles = layer.PrivateAngles;
             mus = cast(layer.PrivateMus,'like',angles);
-            if isvector(angles)
-                nAngles = length(angles);
-            else
-                nAngles = size(angles,1);
-            end
+            %if isvector(angles)
+            %    nAngles = length(angles);
+            %else
+            %    nAngles = size(angles,1);
+            %end
             if isrow(mus)
                 mus = mus.';
             end
