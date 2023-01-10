@@ -82,9 +82,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
         
-        %{
-        function testPredictGrayscaleShiftDifferenceCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
+        function testPredictShiftDifferenceCoefs(testCase, ...
+                stride, nblks, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -92,36 +91,32 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = prod(stride);
+            nChsTotal = stride;
             target_ = 'Difference';
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nBlks
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            X = randn(nChsTotal,nSamples,nblks,datatype);
             
             % Expected values
             if strcmp(dir,'Right')
-                shift = [ 0 0  1 0 ];
+                shift = [ 0 0 1 ];
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 0 ];
-            elseif strcmp(dir,'Down')
-                shift = [ 0  1 0 0 ];
-            elseif strcmp(dir,'Up')
-                shift = [ 0 -1 0 0 ];
+                shift = [ 0 0 -1 ];
             else
-                shift = [ 0 0 0 0 ];
+                shift = [ 0 0 0 ];
             end
-            % nRows x nCols x nChsTotal x nSamples
+            %
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
             % Block butterfly
-            Ys = X(1:ps,:,:,:);
-            Ya = X(ps+1:ps+pa,:,:,:);
+            Ys = X(1:ps,:,:);
+            Ya = X(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Block circular shift
-            Y(ps+1:ps+pa,:,:,:) = circshift(Y(ps+1:ps+pa,:,:,:),shift);
+            Y(ps+1:ps+pa,:,:) = circshift(Y(ps+1:ps+pa,:,:),shift);
             % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Output
             expctdZ = Y; %ipermute(Y,[3 1 2 4]);
@@ -144,8 +139,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-        function testPredictGrayscaleShiftSumCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
+        function testPredictShiftSumCoefs(testCase, ...
+                stride, nblks, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -153,36 +148,31 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = prod(stride);
+            nChsTotal = stride;
             target_ = 'Sum';
-            % nChsTotal x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            % nChsTotal x nSamples x nBlks
+            X = randn(nChsTotal,nSamples,nblks,datatype);
             
             % Expected values
             if strcmp(dir,'Right')
-                shift = [ 0 0  1 0 ];
+                shift = [ 0 0  1 ];
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 0 ];
-            elseif strcmp(dir,'Down')
-                shift = [ 0  1 0 0 ];
-            elseif strcmp(dir,'Up')
-                shift = [ 0 -1 0 0 ];
+                shift = [ 0 0 -1 ];
             else
-                shift = [ 0 0 0 0 ];
+                shift = [ 0 0 0 ];
             end
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nblks
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
             % Block butterfly
-            Ys = X(1:ps,:,:,:);
-            Ya = X(ps+1:ps+pa,:,:,:);
+            Ys = X(1:ps,:,:);
+            Ya = X(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Block circular shift
-            Y(1:ps,:,:,:) = circshift(Y(1:ps,:,:,:),shift);
+            Y(1:ps,:,:) = circshift(Y(1:ps,:,:),shift);
             % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Output
             expctdZ = Y; %ipermute(Y,[3 1 2 4]);
@@ -205,8 +195,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-        function testBackwardGrayscaleShiftDifferenceCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
+        function testBackwardShiftDifferenceCoefs(testCase, ...
+                stride, nblks, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -214,37 +204,32 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = prod(stride);
+            nChsTotal = stride;
             target_ = 'Difference';
-            % nChsTotal x nRows x nCols x nSamples
-            %dLdZ = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            dLdZ = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            % nChsTotal x nSamples x nBlks
+            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
             
             % Expected values
             if strcmp(dir,'Right')
-                shift = [ 0 0 -1 0 ]; % Reverse
+                shift = [ 0 0 -1 ]; % Reverse
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 1 0 ]; % Reverse
-            elseif strcmp(dir,'Down')
-                shift = [ 0 -1 0 0 ]; % Reverse
-            elseif strcmp(dir,'Up')
-                shift = [ 0 1 0 0 ]; % Reverse
+                shift = [ 0 0 1 ]; % Reverse
             else
-                shift = [ 0 0 0 0 ]; % Reverse
+                shift = [ 0 0 0 ]; % Reverse
             end
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nBlks
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
             Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
             % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Block circular shift
-            Y(ps+1:ps+pa,:,:,:) = circshift(Y(ps+1:ps+pa,:,:,:),shift);
+            Y(ps+1:ps+pa,:,:) = circshift(Y(ps+1:ps+pa,:,:),shift);
             % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Output
             expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
@@ -266,9 +251,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdX,'Within',tolObj));
             
         end
-        
-        function testBackwardGrayscaleShiftSumCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
+
+        function testBackwardShiftSumCoefs(testCase, ...
+                stride, nblks, dir, datatype)
             
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -276,37 +261,259 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % Parameters
             nSamples = 8;
-            nChsTotal = prod(stride);
+            nChsTotal = stride;
             target_ = 'Sum';
-            % nChsTotal x nRows x nCols x nSamples
-            %dLdZ = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            dLdZ = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            % nChsTotal x nSamples x nBlks
+            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
             
             % Expected values
             if strcmp(dir,'Right')
-                shift = [ 0 0 -1 0 ]; % Reverse
+                shift = [ 0 0 -1 ]; % Reverse
             elseif strcmp(dir,'Left')
-                shift = [ 0 0  1 0 ]; % Reverse
-            elseif strcmp(dir,'Down')
-                shift = [ 0 -1 0 0 ]; % Reverse
-            elseif strcmp(dir,'Up')
-                shift = [ 0 1 0 0 ]; % Reverse
+                shift = [ 0 0  1 ]; % Reverse
             else
-                shift = [ 0 0 0 0 ];
+                shift = [ 0 0 0 ];
             end
-            % nChsTotal x nRows x nCols x nSamples
+            % nChsTotal x nSamples x nBlks
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
             Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
             % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Block circular shift
-            Y(1:ps,:,:,:) = circshift(Y(1:ps,:,:,:),shift);
+            Y(1:ps,:,:) = circshift(Y(1:ps,:,:),shift);
             % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Output
+            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'Name','Qn',...
+                'Direction',dir,...
+                'TargetChannels',target_);
+            
+            % Actual values
+            actualdLdX = layer.backward([],[],dLdZ,[]);
+            
+            % Evaluation
+            testCase.verifyInstanceOf(actualdLdX,datatype);
+            testCase.verifyThat(actualdLdX,...
+                IsEqualTo(expctddLdX,'Within',tolObj));
+            
+        end
+        %{
+        function testPredictShiftDiffCoefsWithRandomAngles(testCase, ...
+                stride, nblks, dir, datatype)
+            % TODO: random angles
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            
+            % Parameters
+            nSamples = 8;
+            nChsTotal = stride;
+            nAngles = nChsTotal/2
+            target_ = 'Difference';
+            % nChsTotal x nSamples x nBlks
+            X = randn(nChsTotal,nSamples,nblks,datatype);
+            
+            % Expected values
+            if strcmp(dir,'Right')
+                shift = [ 0 0 1 ];
+            elseif strcmp(dir,'Left')
+                shift = [ 0 0 -1 ];
+            else
+                shift = [ 0 0 0 ];
+            end
+            %
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            % Block butterfly
+            Ys = X(1:ps,:,:);
+            Ya = X(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Block circular shift
+            Y(ps+1:ps+pa,:,:) = circshift(Y(ps+1:ps+pa,:,:),shift);
+            % Block butterfly
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Output
+            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'Name','Qn~',...
+                'Direction',dir,...
+                'TargetChannels',target_);
+            
+            % Actual values
+            actualZ = layer.predict(X);
+            
+            % Evaluation
+            testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
+            
+        end
+
+        function testPredictShiftSumCoefsWithRandomAngles(testCase, ...
+                stride, nblks, dir, datatype)
+            % TODO: random angles            
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            
+            % Parameters
+            nSamples = 8;
+            nChsTotal = stride;
+            target_ = 'Sum';
+            % nChsTotal x nSamples x nBlks
+            X = randn(nChsTotal,nSamples,nblks,datatype);
+            
+            % Expected values
+            if strcmp(dir,'Right')
+                shift = [ 0 0  1 ];
+            elseif strcmp(dir,'Left')
+                shift = [ 0 0 -1 ];
+            else
+                shift = [ 0 0 0 ];
+            end
+            % nChsTotal x nSamples x nblks
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            % Block butterfly
+            Ys = X(1:ps,:,:);
+            Ya = X(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Block circular shift
+            Y(1:ps,:,:) = circshift(Y(1:ps,:,:),shift);
+            % Block butterfly
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Output
+            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'Name','Qn~',...
+                'Direction',dir,...
+                'TargetChannels',target_);
+            
+            % Actual values
+            actualZ = layer.predict(X);
+            
+            % Evaluation
+            testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
+            
+        end
+        
+        function testBackwardShiftDiffCoefsWithRandomAngles(testCase, ...
+                stride, nblks, dir, datatype)
+            % TODO: random angles
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            
+            % Parameters
+            nSamples = 8;
+            nChsTotal = stride;
+            target_ = 'Difference';
+            % nChsTotal x nSamples x nBlks
+            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            
+            % Expected values
+            if strcmp(dir,'Right')
+                shift = [ 0 0 -1 ]; % Reverse
+            elseif strcmp(dir,'Left')
+                shift = [ 0 0 1 ]; % Reverse
+            else
+                shift = [ 0 0 0 ]; % Reverse
+            end
+            % nChsTotal x nSamples x nBlks
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
+            % Block butterfly
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Block circular shift
+            Y(ps+1:ps+pa,:,:) = circshift(Y(ps+1:ps+pa,:,:),shift);
+            % Block butterfly
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Output
+            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'Name','Qn',...
+                'Direction',dir,...
+                'TargetChannels',target_);
+            
+            % Actual values
+            actualdLdX = layer.backward([],[],dLdZ,[]);
+            
+            % Evaluation
+            testCase.verifyInstanceOf(actualdLdX,datatype);
+            testCase.verifyThat(actualdLdX,...
+                IsEqualTo(expctddLdX,'Within',tolObj));
+            
+        end
+
+        function testBackwardShiftSumCoefsWithRandomAngles(testCase, ...
+                stride, nblks, dir, datatype)
+            % TODO: random angles            
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            
+            % Parameters
+            nSamples = 8;
+            nChsTotal = stride;
+            target_ = 'Sum';
+            % nChsTotal x nSamples x nBlks
+            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            
+            % Expected values
+            if strcmp(dir,'Right')
+                shift = [ 0 0 -1 ]; % Reverse
+            elseif strcmp(dir,'Left')
+                shift = [ 0 0  1 ]; % Reverse
+            else
+                shift = [ 0 0 0 ];
+            end
+            % nChsTotal x nSamples x nBlks
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
+            % Block butterfly
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
+            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
+            % Block circular shift
+            Y(1:ps,:,:) = circshift(Y(1:ps,:,:),shift);
+            % Block butterfly
+            Ys = Y(1:ps,:,:);
+            Ya = Y(ps+1:ps+pa,:,:);
             Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
             % Output
             expctddLdX = Y; %ipermute(Y,[3 1 2 4]);

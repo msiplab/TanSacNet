@@ -73,13 +73,9 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             dir = layer.Direction;
             %
             if strcmp(dir,'Right')
-                shift = [ 0 0 1 0 ];
+                shift = [ 0 0 1 ];
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 0 ];
-            elseif strcmp(dir,'Down')
-                shift = [ 0 1 0 0 ];
-            elseif strcmp(dir,'Up')
-                shift = [ 0 -1 0 0 ];
+                shift = [ 0 0 -1 ];
             else
                 throw(MException('NsoltLayer:InvalidDirection',...
                     '%s : Direction should be either of Right, Left, Down or Up',...
@@ -110,13 +106,9 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
 
             %
             if strcmp(dir,'Right')
-                shift = [ 0 0 -1 0 ]; % Reverse
+                shift = [ 0 0 -1 ]; % Reverse
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 1 0 ];  % Reverse
-            elseif strcmp(dir,'Down')
-                shift = [ 0 -1 0 0 ];  % Reverse
-            elseif strcmp(dir,'Up')
-                shift = [ 0 1 0 0 ];  % Reverse
+                shift = [ 0 0 1 ];  % Reverse
             else
                 throw(MException('NsoltLayer:InvalidDirection',...
                     '%s : Direction should be either of Right, Left, Down or Up',...
