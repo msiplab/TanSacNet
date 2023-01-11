@@ -25,8 +25,23 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
         Stride
         Direction
         TargetChannels
-        
+        NumberOfBlocks
         % Layer properties go here.
+    end
+
+    properties (Learnable, Dependent)
+        Angles
+    end
+
+    properties (Access = private)
+        PrivateNumberOfChannels
+        PrivateAngles
+        isUpdateRequested
+    end
+
+    properties (Hidden)
+        Ck
+        Sk
     end
     
     methods
@@ -36,25 +51,36 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             p = inputParser;
             addParameter(p,'Name','')
             addParameter(p,'Stride',[])
+            addParameter(p,'Angles',[])
             addParameter(p,'Direction','')
             addParameter(p,'TargetChannels','')
+            addParameter(p,'NumberOfBlocks',1)
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
+            layer.NumberOfBlocks = p.Results.NumberOfBlocks;
+            layer.PrivateNumberOfChannels = [ceil(layer.Stride/2) floor(layer.Stride/2)];
             layer.Name = p.Results.Name;
+            layer.Angles = p.Results.Angles;
             layer.Direction = p.Results.Direction;
             layer.TargetChannels = p.Results.TargetChannels;
-            nChsTotal = prod(layer.Stride);
             layer.Description =  layer.Direction ...
                 + " shift the " ...
                 + lower(layer.TargetChannels) ...
                 + "-channel Coefs. " ...
-                + "(ps,pa) = (" ...
-                + ceil(nChsTotal/2) + "," ...
-                + floor(nChsTotal/2) + ")";
-            
-            layer.Type = '';
+                + "(pt,pb) = (" ...
+                + layer.PrivateNumberOfChannels(1) + "," ...
+                + layer.PrivateNumberOfChannels(2) + ")";
+            layer.Type = '';            
+
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
+            nAngles = nChsTotal/2;
+            if size(layer.PrivateAngles,1)~=nAngles
+                error('Invalid # of angles')
+            end
+
+            layer = layer.updateParameters();
             
         end
         
@@ -119,32 +145,95 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
         end
         
         function Z = atomext_(layer,X,shift)
-            nChsTotal = prod(layer.Stride);
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            nSamples = size(X,2);
+            nblks = size(X,3);
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             target = layer.TargetChannels;            
             %
-            % Block butterfly
-            Xs = X(1:ps,:,:,:);
-            Xa = X(ps+1:ps+pa,:,:,:);
-            Ys =  bsxfun(@plus,Xs,Xa);
-            Ya =  bsxfun(@minus,Xs,Xa);
+            if layer.isUpdateRequested
+                layer = layer.updateParameters();
+            end
+            %Ck_ = layer.Ck;
+            %Sk_ = layer.Sk;
+            % C-S block butterfly
+            Y = permute(X,[1 3 2]);
+            Zt = zeros(pt,nblks,nSamples,'like',Y);
+            Zb = zeros(pb,nblks,nSamples,'like',Y);            
+            %    
+            for iSample = 1:nSamples
+                if isgpuarray(X) 
+                    Yt_iSample = permute(Y(1:pt,:,iSample),[1 4 2 3]);
+                    Yb_iSample = permute(Y(pt+1:pt+pb,:,iSample),[1 4 2 3]);
+                    Zt_iSample = Yt_iSample; %pagefun(@times,Ck_,Yt_iSample);
+                    Zb_iSample = Yb_iSample; %pagefun(@times,Sk_,Yb_iSample);
+                    Zt(:,:,iSample) = ipermute(Zt_iSample,[1 4 2 3]);
+                    Zb(:,:,iSample) = ipermute(Zb_iSample,[1 4 2 3]);
+                else
+                    for iblk = 1:nblks
+                        %Zt(:,iblk,iSample) = Ck_(:,iblk).*Y(1:pt,iblk,iSample);
+                        %Zb(:,iblk,iSample) = Sk_(:,iblk).*Y(pt+1:pt+pb,iblk,iSample);
+                        Zt(:,iblk,iSample) = Y(1:pt,iblk,iSample);
+                        Zb(:,iblk,iSample) = Y(pt+1:pt+pb,iblk,iSample);                        
+                    end
+                end
+            end
+            %
+            Yt = ipermute(Zt,[1 3 2]);
+            Yb = ipermute(Zb,[1 3 2]);
             % Block circular shift
-            if strcmp(target,'Difference')
-                Ya = circshift(Ya,shift);
-            elseif strcmp(target,'Sum')
-                Ys = circshift(Ys,shift);
+            if strcmp(target,'Bottom')
+                Yb = circshift(Yb,shift);
+            elseif strcmp(target,'Top')
+                Yt = circshift(Yt,shift);
             else
                 throw(MException('NsoltLayer:InvalidTargetChannels',...
-                    '%s : TaregetChannels should be either of Sum or Difference',...
+                    '%s : TaregetChannels should be either of Top or Bottom',...
                     layer.TargetChannels))
             end
-            % Block butterfly
-            Y =  cat(1,bsxfun(@plus,Ys,Ya),bsxfun(@minus,Ys,Ya));
-            % Output
-            Z = 0.5*Y; %ipermute(Y,[3 1 2 4])/2.0;
+            Z = cat(1,Yt,Yb);
         end
         
+
+        function angles = get.Angles(layer)
+            angles = layer.PrivateAngles;
+        end
+
+        function layer = set.Angles(layer,angles)
+            nBlocks = layer.NumberOfBlocks;
+            nChsTotal = sum(layer.PrivateNumberOfChannels);
+            nAngles = nChsTotal/2;
+            if isempty(angles)
+                angles = zeros(nAngles,nBlocks);
+            elseif isscalar(angles)
+                angles = angles*ones(nAngles,nBlocks,'like',angles);   
+            end
+            %
+            layer.PrivateAngles = angles;
+            %layer = layer.updateParameters();
+            layer.isUpdateRequested = true;
+        end
+        
+
+        function layer = updateParameters(layer)
+            angles = layer.PrivateAngles;
+            nBlocks = layer.NumberOfBlocks;
+            if isvector(angles)
+                nAngles = length(angles);
+            else
+                nAngles = size(angles,1);
+            end
+            if nAngles > 0
+                layer.Ck = cos(angles);
+                layer.Sk = sin(angles);
+            else
+                layer.Ck = ones(1,nBlocks);
+                layer.Sk = zeros(1,nBlocks);
+            end
+            layer.isUpdateRequested = false;
+        end
+
     end
 
 end
