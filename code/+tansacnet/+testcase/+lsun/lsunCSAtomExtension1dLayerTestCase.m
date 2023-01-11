@@ -115,7 +115,6 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            % C-S block buttefly
             Yt = X(1:pt,:,:);
             Yb = X(pt+1:pt+pb,:,:);
             % Block circular shift
@@ -147,7 +146,6 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         end
 
-        %{
         function testPredictShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
             if usegpu && gpuDeviceCount == 0
@@ -179,14 +177,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             % nChsTotal x nSamples x nblks
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            % C-S Block butterfly
             Yt = X(1:pt,:,:);
             Yb = X(pt+1:pt+pb,:,:);
-            Y =  [ Yt ; Yb ];
             % Block circular shift
-            Y(1:pt,:,:) = circshift(Y(1:pt,:,:),shift);
+            Yt = circshift(Yt,shift);
             % Output
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+            expctdZ = cat(1,Yt,Yb);
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -211,14 +207,13 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
 
         end
-        
-        function testPredictShiftBottomCoefsWithAngles(testCase, ...
+
+        function testPredictShiftBottomCoefsWithAnglePi4(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
              if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
             end
-            % TODO: random angles
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -245,25 +240,28 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
+            Yt = X(1:pt,:,:);
+            Yb = X(pt+1:pt+pb,:,:);
+            % Block circular shift
+            Yb = circshift(Yb,shift);
+            % C-S block butterfly            
             c = cos(angles);
             s = sin(angles);
-            %
-            Y = permute(X,[1 3 2]);
-            Yt = reshape(Y(1:pt,:,:),pt,nblks,nSamples);
-            Yb = reshape(Y(pt+1:pt+pb,:,:),pb,nblks,nSamples);
-            Zt = zeros(size(Yt),'like',Yt);
-            Zb = zeros(size(Yb),'like',Yb);
+            Zct = zeros(size(Yt),'like',Yt);
+            Zst = zeros(size(Yt),'like',Yt);
+            Zcb = zeros(size(Yb),'like',Yb);
+            Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,iblk,iSample) = c*Yt(:,iblk,iSample)-s*Yb(:,iblk,iSample);
-                    Zb(:,iblk,iSample) = s*Yt(:,iblk,iSample)+c*Yb(:,iblk,iSample);
+                    Zct(:,iSample,iblk) = c*Yt(:,iSample,iblk);
+                    Zst(:,iSample,iblk) = s*Yt(:,iSample,iblk);
+                    Zcb(:,iSample,iblk) = c*Yb(:,iSample,iblk);
+                    Zsb(:,iSample,iblk) = s*Yb(:,iSample,iblk);                    
                 end
             end
-            Y(1:pt,:,:) = Zt;
-            Y(pt+1:pt+pb,:,:) = Zb;
-            % Block circular shift
-            Z = ipermute(Y,[1 3 2]);
-            expctdZ(pt+1:pt+pb,:,:) = circshift(Z(pt+1:pt+pb,:,:),shift);            
+            Yt = Zct-Zsb;
+            Yb = Zst+Zcb;
+            expctdZ = cat(1,Yt,Yb);
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -289,7 +287,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        %}
+
         %{
         function testPredictShiftBottomCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)

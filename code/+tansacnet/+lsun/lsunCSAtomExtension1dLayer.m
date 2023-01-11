@@ -155,34 +155,9 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
-            %Ck_ = layer.Ck;
-            %Sk_ = layer.Sk;
-            % C-S block butterfly
-            Y = permute(X,[1 3 2]);
-            Zt = zeros(pt,nblks,nSamples,'like',Y);
-            Zb = zeros(pb,nblks,nSamples,'like',Y);            
-            %    
-            for iSample = 1:nSamples
-                if isgpuarray(X) 
-                    Yt_iSample = permute(Y(1:pt,:,iSample),[1 4 2 3]);
-                    Yb_iSample = permute(Y(pt+1:pt+pb,:,iSample),[1 4 2 3]);
-                    Zt_iSample = Yt_iSample; %pagefun(@times,Ck_,Yt_iSample);
-                    Zb_iSample = Yb_iSample; %pagefun(@times,Sk_,Yb_iSample);
-                    Zt(:,:,iSample) = ipermute(Zt_iSample,[1 4 2 3]);
-                    Zb(:,:,iSample) = ipermute(Zb_iSample,[1 4 2 3]);
-                else
-                    for iblk = 1:nblks
-                        %Zt(:,iblk,iSample) = Ck_(:,iblk).*Y(1:pt,iblk,iSample);
-                        %Zb(:,iblk,iSample) = Sk_(:,iblk).*Y(pt+1:pt+pb,iblk,iSample);
-                        Zt(:,iblk,iSample) = Y(1:pt,iblk,iSample);
-                        Zb(:,iblk,iSample) = Y(pt+1:pt+pb,iblk,iSample);                        
-                    end
-                end
-            end
-            %
-            Yt = ipermute(Zt,[1 3 2]);
-            Yb = ipermute(Zb,[1 3 2]);
             % Block circular shift
+            Yt = X(1:pt,:,:);
+            Yb = X(pt+1:pt+pb,:,:);
             if strcmp(target,'Bottom')
                 Yb = circshift(Yb,shift);
             elseif strcmp(target,'Top')
@@ -192,6 +167,36 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                     '%s : TaregetChannels should be either of Top or Bottom',...
                     layer.TargetChannels))
             end
+            % C-S block butterfly            
+            Ck_ = layer.Ck;
+            Sk_ = layer.Sk;
+            Zct = zeros(size(Yt),'like',Yt);
+            Zst = zeros(size(Yt),'like',Yt);            
+            Zcb = zeros(size(Yb),'like',Yb);
+            Zsb = zeros(size(Yb),'like',Yb);
+            %
+            if isgpuarray(X)
+                Yt_ = permute(Yt,[1 3 2]);
+                Yb_ = permute(Yb,[1 3 2]);
+                Zct_ = pagefun(@times,Ck_,Yt_);
+                Zst_ = pagefun(@times,Sk_,Yt_);
+                Zcb_ = pagefun(@times,Ck_,Yb_);
+                Zsb_ = pagefun(@times,Sk_,Yb_);
+                Yt = ipermute(pagefun(@minus,Zct_,Zsb_),[1 3 2]);
+                Yb = ipermute(pagefun(@plus,Zst_,Zcb_),[1 3 2]);                
+            else
+                for iSample = 1:nSamples
+                    for iblk = 1:nblks
+                        Zct(:,iSample,iblk) = Ck_(:,iblk).*Yt(:,iSample,iblk);
+                        Zst(:,iSample,iblk) = Sk_(:,iblk).*Yt(:,iSample,iblk);
+                        Zcb(:,iSample,iblk) = Ck_(:,iblk).*Yb(:,iSample,iblk);
+                        Zsb(:,iSample,iblk) = Sk_(:,iblk).*Yb(:,iSample,iblk);
+                    end
+                end
+                Yt = Zct-Zsb;
+                Yb = Zst+Zcb;
+            end
+            %
             Z = cat(1,Yt,Yb);
         end
         
