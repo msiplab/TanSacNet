@@ -72,7 +72,7 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
             %layer.NoDcLeakage = p.Results.NoDcLeakage;
             layer.Name = p.Results.Name;
             layer.Description = "LSUN final full rotation " ...
-                + "(ps,pa) = (" ...
+                + "(pt,pb) = (" ...
                 + layer.PrivateNumberOfChannels(1) + "," ...
                 + layer.PrivateNumberOfChannels(2) + "), "  ...
                 + "m = " + layer.Stride;
@@ -246,13 +246,13 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = set.Mus(layer,mus)
             nBlocks = prod(layer.NumberOfBlocks);            
-            ps = layer.PrivateNumberOfChannels(1);
-            pa = layer.PrivateNumberOfChannels(2);
+            pt = layer.PrivateNumberOfChannels(1);
+            pb = layer.PrivateNumberOfChannels(2);
             %
             if isempty(mus)
-                mus = ones(ps+pa,nBlocks);
+                mus = ones(pt+pb,nBlocks);
             elseif isscalar(mus)
-                mus = mus*ones(ps+pa,nBlocks);
+                mus = mus*ones(pt+pb,nBlocks);
             end
             %
             layer.PrivateMus = mus;
@@ -262,12 +262,12 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = updateParameters(layer)
             %import tansacnet.lsun.get_fcn_orthmtxgen
-            %ps = layer.PrivateNumberOfChannels(1);
+            %pt = layer.PrivateNumberOfChannels(1);
             %{
             if layer.NoDcLeakage
                 layer.PrivateMus(1,:) = ones(1,size(layer.PrivateMus,2));           
-                layer.PrivateAngles(1:ps-1,:) = ...
-                    zeros(ps-1,size(layer.PrivateAngles,2),'like',layer.PrivateAngles);
+                layer.PrivateAngles(1:pt-1,:) = ...
+                    zeros(pt-1,size(layer.PrivateAngles,2),'like',layer.PrivateAngles);
             end      
             %}
             angles = layer.PrivateAngles;

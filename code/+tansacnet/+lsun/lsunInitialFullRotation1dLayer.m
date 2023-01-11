@@ -73,7 +73,7 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             layer.Angles = p.Results.Angles;
             %layer.NoDcLeakage = p.Results.NoDcLeakage;
             layer.Description = "LSUN initial full rotation " ...
-                + "(ps,pa) = (" ...
+                + "(pt,pb) = (" ...
                 + layer.PrivateNumberOfChannels(1) + "," ...
                 + layer.PrivateNumberOfChannels(2) + "), "  ...
                 + "m = " + layer.Stride;
@@ -110,7 +110,7 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             end
             %
             V0_ = layer.V0;
-            %Y = reshape(permute(X,[3 1 2 4]),ps+pa,nrows*ncols*nSamples);
+            %Y = reshape(permute(X,[3 1 2 4]),pt+pb,nrows*ncols*nSamples);
             Y = permute(X,[1 3 2]);
             Z_ = zeros(nChsTotal,nblks,nSamples,'like',Y);
             for iSample = 1:nSamples
@@ -150,14 +150,14 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             nblks = size(dLdZ,3);            
             %{
             if isempty(layer.Mus)
-                layer.Mus = ones(ps+pa,1);
+                layer.Mus = ones(pt+pb,1);
             elseif isscalar(layer.Mus)
-                layer.Mus = layer.Mus*ones(ps+pa,1);
+                layer.Mus = layer.Mus*ones(pt+pb,1);
             end
             if layer.NoDcLeakage
                 layer.Mus(1) = 1;
-                layer.Angles(1:ps-1) = ...
-                    zeros(ps-1,1,'like',layer.Angles);
+                layer.Angles(1:pt-1) = ...
+                    zeros(pt-1,1,'like',layer.Angles);
             end
             % Extend Angle paremeters for every block
             if size(layer.PrivateAngles,2) == 1
@@ -276,13 +276,13 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
         
         function layer = updateParameters(layer)
             %import tansacnet.lsun.get_fcn_orthmtxgen
-            %ps = layer.PrivateNumberOfChannels(1);
-            %pa = layer.PrivateNumberOfChannels(2);
+            %pt = layer.PrivateNumberOfChannels(1);
+            %pb = layer.PrivateNumberOfChannels(2);
             %{
             if layer.NoDcLeakage
                 layer.PrivateMus(1,:) = ones(1,size(layer.PrivateMus,2));                
-                layer.PrivateAngles(1:ps-1,:) = ...
-                    zeros(ps-1,size(layer.PrivateAngles,2),'like',layer.PrivateAngles);
+                layer.PrivateAngles(1:pt-1,:) = ...
+                    zeros(pt-1,size(layer.PrivateAngles,2),'like',layer.PrivateAngles);
             end            
             %}
             angles = layer.PrivateAngles;            

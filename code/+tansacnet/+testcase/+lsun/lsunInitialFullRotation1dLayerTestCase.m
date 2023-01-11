@@ -50,7 +50,7 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             % Expected values
             expctdName = 'V0';
             expctdDescription = "LSUN initial full rotation " ...
-                + "(ps,pa) = (" ...
+                + "(pt,pb) = (" ...
                 + ceil(prod(stride)/2) + "," ...
                 + floor(prod(stride)/2) + "), "  ...
                 + "m = " + stride;
@@ -226,13 +226,13 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             anglesNoDc = angles;
-            anglesNoDc(1:ps-1,:)=zeros(ps-1,nrows*ncols);
-            musW = mus*ones(ps,nrows*ncols);
+            anglesNoDc(1:pt-1,:)=zeros(pt-1,nrows*ncols);
+            musW = mus*ones(pt,nrows*ncols);
             musW(1,1:end) = 1;
-            musU = mus*ones(pa,nrows*ncols);
+            musU = mus*ones(pb,nrows*ncols);
             W0 = genW.step(anglesNoDc(1:size(angles,1)/2,:),musW);
             U0 = genU.step(anglesNoDc(size(angles,1)/2+1:end,:),musU);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
@@ -243,14 +243,14 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
                 Yi = reshape(Ai,nDecs,nrows*ncols);
                 %
-                Ys = Yi(1:ps,:);
-                Ya = Yi(ps+1:end,:);
+                Ys = Yi(1:pt,:);
+                Ya = Yi(pt+1:end,:);
                 for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
-                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
+                    Ys(:,iblk) = W0(:,1:pt,iblk)*Ys(:,iblk);
+                    Ya(:,iblk) = U0(:,1:pb,iblk)*Ya(:,iblk);
                 end
-                Y(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y(ps+1:end,:,:) = reshape(Ya,pa,nrows,ncols);                
+                Y(1:pt,:,:) = reshape(Ys,pt,nrows,ncols);
+                Y(pt+1:end,:,:) = reshape(Ya,pb,nrows,ncols);                
                 expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
             end
             
@@ -507,24 +507,24 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             
             % dLdX = dZdX x dLdZ
             anglesW_NoDc = anglesW;
-            anglesW_NoDc(1:ps-1,:)=zeros(ps-1,nrows*ncols);
-            musW = mus*ones(ps,nrows*ncols);
+            anglesW_NoDc(1:pt-1,:)=zeros(pt-1,nrows*ncols);
+            musW = mus*ones(pt,nrows*ncols);
             musW(1,:) = ones(1,nrows*ncols);
-            musU = mus*ones(pa,nrows*ncols);            
+            musU = mus*ones(pb,nrows*ncols);            
             W0T = permute(genW.step(anglesW_NoDc,musW,0),[2 1 3]);
             U0T = permute(genU.step(anglesU,musU,0),[2 1 3]);
             Y = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            Ys = reshape(Y(1:pt,:,:,:),pt,nrows*ncols,nSamples);
+            Ya = reshape(Y(pt+1:pt+pb,:,:,:),pb,nrows*ncols,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample);
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
+                    Ys(:,iblk,iSample) = W0T(1:pt,:,iblk)*Ys(:,iblk,iSample);
+                    Ya(:,iblk,iSample) = U0T(1:pb,:,iblk)*Ya(:,iblk,iSample);
                 end
             end
             Zsa = cat(1,Ys,Ya);
@@ -535,12 +535,12 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             % dLdWi = <dLdZ,(dVdWi)X>
             dldw_ = zeros(2*nAnglesH,nrows*ncols,datatype);
             dldz_ = dLdZ; %permute(dLdZ,[3 1 2 4]);
-            dldz_upp = reshape(dldz_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            dldz_low = reshape(dldz_(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dldz_upp = reshape(dldz_(1:pt,:,:,:),pt,nrows*ncols,nSamples);
+            dldz_low = reshape(dldz_(pt+1:pt+pb,:,:,:),pb,nrows*ncols,nSamples);
             % (dVdWi)X
             a_ = X; %permute(X,[3 1 2 4]);
-            c_upp = reshape(a_(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            c_low = reshape(a_(ps+1:nDecs,:,:,:),pa,nrows*ncols,nSamples);
+            c_upp = reshape(a_(1:pt,:,:,:),pt,nrows*ncols,nSamples);
+            c_low = reshape(a_(pt+1:nDecs,:,:,:),pb,nrows*ncols,nSamples);
             for iAngle = 1:nAnglesH
                 dW0 = genW.step(anglesW_NoDc,musW,iAngle);
                 dU0 = genU.step(anglesU,musU,iAngle);
@@ -552,8 +552,8 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                     d_upp_iblk = zeros(size(c_upp_iblk),'like',c_upp_iblk);
                     d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
                     for iSample = 1:nSamples
-                        d_upp_iblk(:,iSample) = dW0(:,1:ps,iblk)*c_upp_iblk(:,iSample);
-                        d_low_iblk(:,iSample) = dU0(:,1:pa,iblk)*c_low_iblk(:,iSample);
+                        d_upp_iblk(:,iSample) = dW0(:,1:pt,iblk)*c_upp_iblk(:,iSample);
+                        d_low_iblk(:,iSample) = dU0(:,1:pb,iblk)*c_low_iblk(:,iSample);
                     end
                     dldw_(iAngle,iblk) = sum(dldz_upp_iblk.*d_upp_iblk,'all');
                     dldw_(nAnglesH+iAngle,iblk) = sum(dldz_low_iblk.*d_low_iblk,'all');

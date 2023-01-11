@@ -51,7 +51,7 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             expctdName = 'Vn~';
             expctdMode = 'Synthesis';
             expctdDescription = "Synthesis LSUN intermediate full rotation " ...
-                + "(ps,pa) = (" ...
+                + "(pt,pb) = (" ...
                 + ceil(prod(stride)/2) + "," + floor(prod(stride)/2) + ")";
             
             % Instantiation of target class
@@ -94,23 +94,23 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nSamples x nBlks
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            WnT = repmat(mus*eye(ps,datatype),[1 1 nblks]);
-            UnT = repmat(mus*eye(pa,datatype),[1 1 nblks]);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
+            WnT = repmat(mus*eye(pt,datatype),[1 1 nblks]);
+            UnT = repmat(mus*eye(pb,datatype),[1 1 nblks]);
             Y = permute(X,[1 3 2]);
-            Ys = reshape(Y(1:ps,:,:),ps,nblks,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:),pa,nblks,nSamples);
-            Zs = zeros(size(Ys),'like',Ys);
-            Za = zeros(size(Ya),'like',Ya);
+            Yt = reshape(Y(1:pt,:,:),pt,nblks,nSamples);
+            Yb = reshape(Y(pt+1:pt+pb,:,:),pb,nblks,nSamples);
+            Zt = zeros(size(Yt),'like',Yt);
+            Zb = zeros(size(Yb),'like',Yb);
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zs(:,iblk,iSample) = WnT(:,:,iblk)*Ys(:,iblk,iSample);
-                    Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
+                    Zt(:,iblk,iSample) = WnT(:,:,iblk)*Yt(:,iblk,iSample);
+                    Zb(:,iblk,iSample) = UnT(:,:,iblk)*Yb(:,iblk,iSample);
                 end
             end
-            Y(1:ps,:,:) = reshape(Zs,ps,nblks,nSamples);
-            Y(ps+1:ps+pa,:,:) = reshape(Za,pa,nblks,nSamples);
+            Y(1:pt,:,:) = reshape(Zt,pt,nblks,nSamples);
+            Y(pt+1:pt+pb,:,:) = reshape(Zb,pb,nblks,nSamples);
             expctdZ = ipermute(Y,[1 3 2]);
             
             % Instantiation of target class
@@ -165,8 +165,8 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             anglesW = angles(1:nAngles/2,:);
             anglesU = angles(nAngles/2+1:nAngles,:);
             if nAngles == 0
@@ -177,18 +177,18 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 UnT = permute(genU.step(anglesU,mus),[2 1 3]);
             end
             Y = permute(X,[1 3 2]);
-            Ys = reshape(Y(1:ps,:,:),ps,nblks,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:),pa,nblks,nSamples);
-            Zs = zeros(size(Ys),'like',Ys);
-            Za = zeros(size(Ya),'like',Ya);
+            Yt = reshape(Y(1:pt,:,:),pt,nblks,nSamples);
+            Yb = reshape(Y(pt+1:pt+pb,:,:),pb,nblks,nSamples);
+            Zt = zeros(size(Yt),'like',Yt);
+            Zb = zeros(size(Yb),'like',Yb);
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zs(:,iblk,iSample) = WnT(:,:,iblk)*Ys(:,iblk,iSample);
-                    Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
+                    Zt(:,iblk,iSample) = WnT(:,:,iblk)*Yt(:,iblk,iSample);
+                    Zb(:,iblk,iSample) = UnT(:,:,iblk)*Yb(:,iblk,iSample);
                 end
             end
-            Y(1:ps,:,:) = reshape(Zs,ps,nblks,nSamples);            
-            Y(ps+1:ps+pa,:,:) = reshape(Za,pa,nblks,nSamples);
+            Y(1:pt,:,:) = reshape(Zt,pt,nblks,nSamples);            
+            Y(pt+1:pt+pb,:,:) = reshape(Zb,pb,nblks,nSamples);
             expctdZ = ipermute(Y,[1 3 2]);
             
             % Instantiation of target class
@@ -244,8 +244,8 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nSamples x nBlks
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             anglesW = angles(1:nAngles/2,:);
             anglesU = angles(nAngles/2+1:nAngles,:);
             if nAngles == 0
@@ -256,22 +256,22 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 Un = genU.step(anglesU,mus);
             end
             Y = permute(X,[1 3 2]);
-            Ys = reshape(Y(1:ps,:,:),ps,nblks,nSamples);            
-            Ya = reshape(Y(ps+1:ps+pa,:,:),pa,nblks,nSamples);
-            Zs = zeros(size(Ys),'like',Ys);
-            Za = zeros(size(Ya),'like',Ya);
+            Yt = reshape(Y(1:pt,:,:),pt,nblks,nSamples);            
+            Yb = reshape(Y(pt+1:pt+pb,:,:),pb,nblks,nSamples);
+            Zt = zeros(size(Yt),'like',Yt);
+            Zb = zeros(size(Yb),'like',Yb);
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zs(:,iblk,iSample) = Wn(:,:,iblk)*Ys(:,iblk,iSample);
-                    Za(:,iblk,iSample) = Un(:,:,iblk)*Ya(:,iblk,iSample);
+                    Zt(:,iblk,iSample) = Wn(:,:,iblk)*Yt(:,iblk,iSample);
+                    Zb(:,iblk,iSample) = Un(:,:,iblk)*Yb(:,iblk,iSample);
                 end
             end            
-            Y(1:ps,:,:) = reshape(Zs,ps,nblks,nSamples);
-            Y(ps+1:ps+pa,:,:) = reshape(Za,pa,nblks,nSamples);
+            Y(1:pt,:,:) = reshape(Zt,pt,nblks,nSamples);
+            Y(pt+1:pt+pb,:,:) = reshape(Zb,pb,nblks,nSamples);
             expctdZ = ipermute(Y,[1 3 2]);
             expctdDescription = "Analysis LSUN intermediate full rotation " ...
-                + "(ps,pa) = (" ...
-                + ps + "," + pa + ")";
+                + "(pt,pb) = (" ...
+                + pt + "," + pb + ")";
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -333,8 +333,8 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
 
             % dLdX = dZdX x dLdZ
             anglesW = angles(1:nAngles/2,:);
@@ -348,24 +348,24 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             end
             %
             adLd_ = permute(dLdZ,[1 3 2]);
-            cdLd_top = reshape(adLd_(1:ps,:,:),ps,nblks,nSamples);
-            cdLd_btm = reshape(adLd_(ps+1:ps+pa,:,:),pa,nblks,nSamples);
+            cdLd_top = reshape(adLd_(1:pt,:,:),pt,nblks,nSamples);
+            cdLd_btm = reshape(adLd_(pt+1:pt+pb,:,:),pb,nblks,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
                     cdLd_top(:,iblk,iSample) = Wn(:,:,iblk)*cdLd_top(:,iblk,iSample);
                     cdLd_btm(:,iblk,iSample) = Un(:,:,iblk)*cdLd_btm(:,iblk,iSample);
                 end
             end
-            adLd_(1:ps,:,:) = reshape(cdLd_top,ps,nblks,nSamples);
-            adLd_(ps+1:ps+pa,:,:) = reshape(cdLd_btm,pa,nblks,nSamples);
+            adLd_(1:pt,:,:) = reshape(cdLd_top,pt,nblks,nSamples);
+            adLd_(pt+1:pt+pb,:,:) = reshape(cdLd_btm,pb,nblks,nSamples);
             expctddLdX = ipermute(adLd_,[1 3 2]);           
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = permute(reshape(X(1:ps,:,:),ps,nSamples,nblks),[1 3 2]);
-            c_btm = permute(reshape(X(ps+1:ps+pa,:,:),pa,nSamples,nblks),[1 3 2]);
-            dldz_top = permute(reshape(dLdZ(1:ps,:,:),ps,nSamples,nblks),[1 3 2]);
-            dldz_btm = permute(reshape(dLdZ(ps+1:ps+pa,:,:),pa,nSamples,nblks),[1 3 2]);
+            c_top = permute(reshape(X(1:pt,:,:),pt,nSamples,nblks),[1 3 2]);
+            c_btm = permute(reshape(X(pt+1:pt+pb,:,:),pb,nSamples,nblks),[1 3 2]);
+            dldz_top = permute(reshape(dLdZ(1:pt,:,:),pt,nSamples,nblks),[1 3 2]);
+            dldz_btm = permute(reshape(dLdZ(pt+1:pt+pb,:,:),pb,nSamples,nblks),[1 3 2]);
             for iAngle = 1:nAngles/2
                 dWn_T = permute(genW.step(anglesW,mus,iAngle),[2 1 3]);
                 dUn_T = permute(genU.step(anglesU,mus,iAngle),[2 1 3]);                
@@ -441,8 +441,8 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nSamples x nBlks
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             
             % dLdX = dZdX x dLdZ
             anglesW = angles(1:nAngles/2,:);
@@ -456,24 +456,24 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             end
             %
             adLd_ = permute(dLdZ,[1 3 2]);
-            cdLd_top = reshape(adLd_(1:ps,:,:),ps,nblks,nSamples);
-            cdLd_btm = reshape(adLd_(ps+1:ps+pa,:,:),pa,nblks,nSamples);
+            cdLd_top = reshape(adLd_(1:pt,:,:),pt,nblks,nSamples);
+            cdLd_btm = reshape(adLd_(pt+1:pt+pb,:,:),pb,nblks,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
                     cdLd_top(:,iblk,iSample) = Wn(:,:,iblk)*cdLd_top(:,iblk,iSample);
                     cdLd_btm(:,iblk,iSample) = Un(:,:,iblk)*cdLd_btm(:,iblk,iSample);                    
                 end
             end
-            adLd_(1:ps,:,:) = reshape(cdLd_top,ps,nblks,nSamples);
-            adLd_(ps+1:ps+pa,:,:) = reshape(cdLd_btm,pa,nblks,nSamples);            
+            adLd_(1:pt,:,:) = reshape(cdLd_top,pt,nblks,nSamples);
+            adLd_(pt+1:pt+pb,:,:) = reshape(cdLd_btm,pb,nblks,nSamples);            
             expctddLdX = ipermute(adLd_,[1 3 2]);           
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = permute(reshape(X(1:ps,:,:),ps,nSamples,nblks),[1 3 2]);
-            c_btm = permute(reshape(X(ps+1:ps+pa,:,:),pa,nSamples,nblks),[1 3 2]);
-            dldz_top = permute(reshape(dLdZ(1:ps,:,:),ps,nSamples,nblks),[1 3 2]);
-            dldz_btm = permute(reshape(dLdZ(ps+1:ps+pa,:,:),pa,nSamples,nblks),[1 3 2]);                        
+            c_top = permute(reshape(X(1:pt,:,:),pt,nSamples,nblks),[1 3 2]);
+            c_btm = permute(reshape(X(pt+1:pt+pb,:,:),pb,nSamples,nblks),[1 3 2]);
+            dldz_top = permute(reshape(dLdZ(1:pt,:,:),pt,nSamples,nblks),[1 3 2]);
+            dldz_btm = permute(reshape(dLdZ(pt+1:pt+pb,:,:),pb,nSamples,nblks),[1 3 2]);                        
             for iAngle = 1:nAngles/2
                 dWn_T = permute(genW.step(anglesW,mus,iAngle),[2 1 3]);
                 dUn_T = permute(genU.step(anglesU,mus,iAngle),[2 1 3]);                
@@ -550,8 +550,8 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             % Expected values
             % nChsTotal x nSamples x nBlks
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
             
             % dLdX = dZdX x dLdZ
             anglesW = angles(1:nAngles/2,:);
@@ -565,24 +565,24 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             end
             %
             adLd_ = permute(dLdZ,[1 3 2]);
-            cdLd_top = reshape(adLd_(1:ps,:,:),ps,nblks,nSamples);
-            cdLd_btm = reshape(adLd_(ps+1:ps+pa,:,:),pa,nblks,nSamples);
+            cdLd_top = reshape(adLd_(1:pt,:,:),pt,nblks,nSamples);
+            cdLd_btm = reshape(adLd_(pt+1:pt+pb,:,:),pb,nblks,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
                     cdLd_top(:,iblk,iSample) = WnT(:,:,iblk)*cdLd_top(:,iblk,iSample);
                     cdLd_btm(:,iblk,iSample) = UnT(:,:,iblk)*cdLd_btm(:,iblk,iSample);                    
                 end
             end
-            adLd_(1:ps,:,:) = reshape(cdLd_top,ps,nblks,nSamples);
-            adLd_(ps+1:ps+pa,:,:) = reshape(cdLd_btm,pa,nblks,nSamples);            
+            adLd_(1:pt,:,:) = reshape(cdLd_top,pt,nblks,nSamples);
+            adLd_(pt+1:pt+pb,:,:) = reshape(cdLd_btm,pb,nblks,nSamples);            
             expctddLdX = ipermute(adLd_,[1 3 2]);           
 
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = permute(reshape(X(1:ps,:,:),ps,nSamples,nblks),[1 3 2]);
-            c_btm = permute(reshape(X(ps+1:ps+pa,:,:),pa,nSamples,nblks),[1 3 2]);
-            dldz_top = permute(reshape(dLdZ(1:ps,:,:),ps,nSamples,nblks),[1 3 2]);
-            dldz_btm = permute(reshape(dLdZ(ps+1:ps+pa,:,:),pa,nSamples,nblks),[1 3 2]);            
+            c_top = permute(reshape(X(1:pt,:,:),pt,nSamples,nblks),[1 3 2]);
+            c_btm = permute(reshape(X(pt+1:pt+pb,:,:),pb,nSamples,nblks),[1 3 2]);
+            dldz_top = permute(reshape(dLdZ(1:pt,:,:),pt,nSamples,nblks),[1 3 2]);
+            dldz_btm = permute(reshape(dLdZ(pt+1:pt+pb,:,:),pb,nSamples,nblks),[1 3 2]);            
             for iAngle = 1:nAngles/2
                 dWn = genW.step(anglesW,mus,iAngle);
                 dUn = genU.step(anglesU,mus,iAngle);
