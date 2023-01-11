@@ -218,7 +218,6 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             end
             dLdX(1:pt,:,:) = ipermute(reshape(cdLd_top,pt,nblks,nSamples),[1 3 2]);
             dLdX(pt+1:pt+pb,:,:) = ipermute(reshape(cdLd_btm,pb,nblks,nSamples),[1 3 2]);
-            %dLdX = dLdX; %ipermute(adLd_,[3 1 2 4]);
 
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);
