@@ -288,14 +288,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        %{
         function testPredictShiftBottomCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
              if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
             end
-            % TODO: random angles
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -324,20 +322,29 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            C = cos(angles);
-            S = sin(angles);
             % Block butterfly
             Yt = X(1:pt,:,:);
             Yb = X(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
             % Block circular shift
-            Y(pt+1:pt+pb,:,:) = circshift(Y(pt+1:pt+pb,:,:),shift);
+            Yb = circshift(Yb,shift);
             % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Output
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+            C = cos(angles);
+            S = sin(angles);
+            Zct = zeros(size(Yt),'like',Yt);
+            Zst = zeros(size(Yt),'like',Yt);
+            Zcb = zeros(size(Yb),'like',Yb);
+            Zsb = zeros(size(Yb),'like',Yb);            
+            for iSample=1:nSamples
+                for iblk = 1:nblks
+                    Zct(:,iSample,iblk) = C(:,iblk).*Yt(:,iSample,iblk);
+                    Zst(:,iSample,iblk) = S(:,iblk).*Yt(:,iSample,iblk);
+                    Zcb(:,iSample,iblk) = C(:,iblk).*Yb(:,iSample,iblk);
+                    Zsb(:,iSample,iblk) = S(:,iblk).*Yb(:,iSample,iblk);                    
+                end
+            end
+            Yt = Zct-Zsb;
+            Yb = Zst+Zcb;
+            expctdZ = cat(1,Yt,Yb);
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -346,6 +353,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 'Name','Qn~',...
                 'Direction',dir,...
                 'TargetChannels',target_);
+            layer.Angles = angles;
             
             % Actual values
             actualZ = layer.predict(X);
@@ -362,8 +370,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
         
-
-
+        %{
         function testBackwardShiftBottomCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
              if usegpu && gpuDeviceCount == 0
