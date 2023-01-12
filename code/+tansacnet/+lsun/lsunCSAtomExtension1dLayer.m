@@ -256,8 +256,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 Zst_ = pagefun(@times,S_,Yt_);
                 Zcb_ = pagefun(@times,C_,Yb_);
                 Zsb_ = pagefun(@times,S_,Yb_);
-                Yt = ipermute(pagefun(@minus,Zct_,Zsb_),[1 3 2]);
-                Yb = ipermute(pagefun(@plus,Zst_,Zcb_),[1 3 2]);
+                Yt = ipermute(pagefun(@plus,Zct_,Zsb_),[1 3 2]);
+                Yb = ipermute(pagefun(@minus,Zcb_,Zst_),[1 3 2]);
             else
                 for iSample = 1:nSamples
                     for iblk = 1:nblks
@@ -270,7 +270,6 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 Yt =  Zct+Zsb; % Transposed
                 Yb = -Zst+Zcb; % Transposed
             end
-            %
             % Block circular shift for Analysis Mode (Reverse)
             if strcmp(layer.Mode,'Analysis')
                 if strcmp(target,'Bottom')
@@ -319,14 +318,24 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 dCk_ = zeros(pt,nblks);
                 dSk_ = zeros(pb,nblks);
                 %if strcmp(layer.Mode,'Analysis')
-                    dCk_(iAngle,:) = zeros(1,nblks); %-sin(angles(iAngle,:));
-                    dSk_(iAngle,:) = ones(1,nblks); %cos(angles(iAngle,:));
+                    dCk_(iAngle,:) = -sin(angles(iAngle,:));
+                    dSk_(iAngle,:) =  cos(angles(iAngle,:));
                 %else
                 %end
-                %{
+                %%{
                 if isgpuarray(X)
+                    c_top_ = permute(c_top,[1 3 2]);
+                    c_btm_ = permute(c_btm,[1 3 2]);
+                    dc_top_ = pagefun(@times,dCk_,c_top_);
+                    ds_top_ = pagefun(@times,dSk_,c_top_);
+                    dc_btm_ = pagefun(@times,dCk_,c_btm_);
+                    ds_btm_ = pagefun(@times,dSk_,c_btm_);
+                    d_top_ = pagefun(@minus,dc_top_,ds_btm_);
+                    d_btm_ = pagefun(@plus,ds_top_,dc_btm_);
+                    d_ = ipermute(cat(1,d_top_,d_btm_),[1 3 2]);
+                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dLdZ,d_),1),2));
                 else
-                %}
+                %%}
                     for iblk = 1:nblks
                         dCk_iblk = dCk_(:,iblk);
                         dSk_iblk = dSk_(:,iblk);
@@ -338,7 +347,7 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                         dldz_iblk = dLdZ(:,:,iblk);
                         dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_iblk,d_iblk),'all');
                     end
-                %end
+                end
             end
         end
 
