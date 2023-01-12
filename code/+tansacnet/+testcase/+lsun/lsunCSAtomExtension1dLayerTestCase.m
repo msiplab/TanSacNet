@@ -31,19 +31,20 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
     end
     
     methods (TestClassTeardown)
-        %{
+
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunCSAtomExtension1dLayer(...
                 'Stride',2,...
                 'Direction','Right',...
+                'NumberOfBlocks',4,...
                 'TargetChannels','Bottom');
             fprintf("\n --- Check layer for 1-D sequences ---\n");
-            checkLayer(layer,[2 8 8],...
+            checkLayer(layer,[2 8 4],...
                 'ObservationDimension',2,...
                 'CheckCodegenCompatibility',true)
         end
-        %}
+
     end
     
     methods (Test)
@@ -514,7 +515,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %Yt = Yt;
             %Yb = Yb;
             % Block circular shift (Revserse)
-            Yb = circshift(Yb,-shift); % Revserse
+            Yb = circshift(Yb,-shift); % Bottom, Revserse
             expctddLdX = cat(1,Yt,Yb);
             
             % dLdWi = <dLdZ,(dVdWi)X>
@@ -522,7 +523,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             c_top = X(1:pt,:,:);
             c_btm = X(pt+1:pt+pb,:,:);
             % Block circular shift
-            c_btm = circshift(c_btm,shift); %
+            c_btm = circshift(c_btm,shift); % Bottom
             % C-S differential
             for iAngle = 1:nAngles
                 dS_ = zeros(nAngles,nblks);
@@ -567,8 +568,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        %{
-        function testBackwardShiftTopCoefs(testCase, ...
+        function testBackwardAnalysisShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
              if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
@@ -581,267 +581,96 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             nChsTotal = stride;
+            nAngles = nChsTotal/2;            
             target_ = 'Top';
+            mode_ = 'Analysis';
             % nChsTotal x nSamples x nBlks
+            X = randn(nChsTotal,nSamples,nblks,datatype);            
             dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
-                        if usegpu
-                dLdZ = gpuArray(dLdZ);
-            end
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0 -1 ]; % Reverse
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0  1 ]; % Reverse
-            else
-                shift = [ 0 0 0 ];
-            end
-            % nChsTotal x nSamples x nBlks
-            pt = ceil(nChsTotal/2);
-            pb = floor(nChsTotal/2);
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Block circular shift
-            Y(1:pt,:,:) = circshift(Y(1:pt,:,:),shift);
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Output
-            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunCSAtomExtension1dLayer(...
-                'Stride',stride,...
-                'Name','Qn',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualdLdX = layer.backward([],[],dLdZ,[]);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualdLdX,'gpuArray')
-                actualdLdX = gather(actualdLdX);
-                expctddLdX = gather(expctddLdX);
-            end            
-            testCase.verifyInstanceOf(actualdLdX,datatype);
-            testCase.verifyThat(actualdLdX,...
-                IsEqualTo(expctddLdX,'Within',tolObj));
-            
-        end
-        
-        
-        function testPredictShiftTopCoefsWithRandomAngles(testCase, ...
-                usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
-            % TODO: random angles            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = stride;
-            target_ = 'Top';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
             if usegpu
                 X = gpuArray(X);
-            end
-
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0  1 ];
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 ];
-            else
-                shift = [ 0 0 0 ];
-            end
-            % nChsTotal x nSamples x nblks
-            pt = ceil(nChsTotal/2);
-            pb = floor(nChsTotal/2);
-            % Block butterfly
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Block circular shift
-            Y(1:pt,:,:) = circshift(Y(1:pt,:,:),shift);
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Output
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunCSAtomExtension1dLayer(...
-                'Stride',stride,...
-                'Name','Qn~',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualZ,'gpuArray')
-                actualZ = gather(actualZ);
-                expctdZ = gather(expctdZ);
-            end       
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
-        
-        function testBackwardShiftBottomCoefsWithRandomAngles(testCase, ...
-                usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
-            % TODO: random angles
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-
-
-            % Parameters
-            nSamples = 8;
-            nChsTotal = stride;
-            target_ = 'Bottom';
-            % nChsTotal x nSamples x nBlks
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
-            if usegpu
                 dLdZ = gpuArray(dLdZ);
             end
-
             % Expected values
             if strcmp(dir,'Right')
-                shift = [ 0 0 -1 ]; % Reverse
+                shift = [ 0 0 1 ];  
             elseif strcmp(dir,'Left')
-                shift = [ 0 0 1 ]; % Reverse
+                shift = [ 0 0 -1 ]; 
             else
-                shift = [ 0 0 0 ]; % Reverse
+                shift = [ 0 0 0 ]; 
             end
             % nChsTotal x nSamples x nBlks
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
+            % 
+            Yt = dLdZ(1:pt,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:);
+            % C-S Block butterfly
+            %Yt = Yt;
+            %Yb = Yb;
+            % Block circular shift (Revserse)
+            Yt = circshift(Yt,-shift); % Top, Revserse
+            expctddLdX = cat(1,Yt,Yb);
+            
+            % dLdWi = <dLdZ,(dVdWi)X>
+            expctddLdW = zeros(nAngles,nblks,datatype);
+            c_top = X(1:pt,:,:);
+            c_btm = X(pt+1:pt+pb,:,:);
             % Block circular shift
-            Y(pt+1:pt+pb,:,:) = circshift(Y(pt+1:pt+pb,:,:),shift);
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Output
-            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
+            c_top = circshift(c_top,shift); % Top
+            % C-S differential
+            for iAngle = 1:nAngles
+                dS_ = zeros(nAngles,nblks);
+                dS_(iAngle,:) = ones(1,nblks);
+                for iblk = 1:nblks
+                    c_top_iblk = -dS_(:,iblk).*c_btm(:,:,iblk);                    
+                    c_btm_iblk =  dS_(:,iblk).*c_top(:,:,iblk);
+                    c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
+                    dldz_iblk = dLdZ(:,:,iblk);
+                    expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
+                end
+            end
             
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunCSAtomExtension1dLayer(...
                 'Stride',stride,...
+                'NumberOfBlocks',nblks,...
                 'Name','Qn',...
                 'Direction',dir,...
+                'Mode',mode_,...
                 'TargetChannels',target_);
             
             % Actual values
-            actualdLdX = layer.backward([],[],dLdZ,[]);
+            [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
             if usegpu
                 testCase.verifyClass(actualdLdX,'gpuArray')
-                actualdLdX = gather(actualdLdX);
-                expctddL = gather(expctddLdX);
-            end       
-            testCase.verifyInstanceOf(actualdLdX,datatype);
-            testCase.verifyThat(actualdLdX,...
-                IsEqualTo(expctddLdX,'Within',tolObj));
-            
-        end
-
-        function testBackwardShiftTopCoefsWithRandomAngles(testCase, ...
-                usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
-            % TODO: random angles            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = stride;
-            target_ = 'Top';
-            % nChsTotal x nSamples x nBlks
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
-            if usegpu
-                dLdZ = gpuArray(dLdZ);
-            end
-
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0 -1 ]; % Reverse
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0  1 ]; % Reverse
-            else
-                shift = [ 0 0 0 ];
-            end
-            % nChsTotal x nSamples x nBlks
-            pt = ceil(nChsTotal/2);
-            pb = floor(nChsTotal/2);
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Block circular shift
-            Y(1:pt,:,:) = circshift(Y(1:pt,:,:),shift);
-            % Block butterfly
-            Yt = Y(1:pt,:,:);
-            Yb = Y(pt+1:pt+pb,:,:);
-            Y =  [ Yt+Yb ; Yt-Yb ]/sqrt(2);
-            % Output
-            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunCSAtomExtension1dLayer(...
-                'Stride',stride,...
-                'Name','Qn',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualdLdX = layer.backward([],[],dLdZ,[]);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualdLdX,'gpuArray')
+                testCase.verifyClass(actualdLdW,'gpuArray')
                 actualdLdX = gather(actualdLdX);
                 expctddLdX = gather(expctddLdX);
-            end       
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);                
+            end            
             testCase.verifyInstanceOf(actualdLdX,datatype);
+            testCase.verifyInstanceOf(actualdLdW,datatype);            
             testCase.verifyThat(actualdLdX,...
                 IsEqualTo(expctddLdX,'Within',tolObj));
+           testCase.verifyThat(actualdLdW,...
+                IsEqualTo(expctddLdW,'Within',tolObj));            
             
-        end
+         end
+
+        %{
+        % TODO: BACKWARD Analysis, Bottom Shift, AnglePi4
+        % TODO: BACKWARD Analysis, Bottom Shift, Random Angles 
+        % TODO: BACKWARD Analysis, Top Shift, Random Angles 
+        % TODO: PREDICT/BACKWARD Synthesis, Bottom Shift
+        % TODO: PREDICT/BACKWARD Synthesis, Top Shift
+        % TODO: PREDICT/BACKWARD Synthesis, Bottom Shift, AnglePi4
+        % TODO: PREDICT/BACKWARD Synthesis, Bottom Shift, Random Angles 
+        % TODO: PREDICT/BACKWARD Synthesis, Top Shift, Random Angles 
         %}
     end
     

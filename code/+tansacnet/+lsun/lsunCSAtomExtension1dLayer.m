@@ -294,7 +294,7 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
 
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            %target = layer.TargetChannels;                        
+            target = layer.TargetChannels;                        
             %
             angles = layer.PrivateAngles;
             nAngles = size(angles,1);
@@ -304,15 +304,15 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             c_btm = X(pt+1:pt+pb,:,:);
             % Block circular shift
             if strcmp(layer.Mode,'Analysis')
-                %if strcmp(target,'Bottom')
+                if strcmp(target,'Bottom')
                     c_btm = circshift(c_btm,shift);
-                %elseif strcmp(target,'Top')
-                %    c_top = circshift(c_top,shift);
-                %else
-                %    throw(MException('LsunLayer:InvalidTargetChannels',...
-                %        '%s : TaregetChannels should be either of Top or Bottom',...
-                %        layer.TargetChannels))
-                %end
+                elseif strcmp(target,'Top')
+                    c_top = circshift(c_top,shift);
+                else
+                    throw(MException('LsunLayer:InvalidTargetChannels',...
+                        '%s : TaregetChannels should be either of Top or Bottom',...
+                        layer.TargetChannels))
+                end
             end
             % C-S diferential
             for iAngle = uint32(1:nAngles)
