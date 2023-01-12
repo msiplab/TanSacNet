@@ -244,12 +244,6 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                     '%s : Mode should be either of Synthesis or Analysis',...
                     layer.Mode))
             end
-            %{
-            Zct = zeros(size(Yt),'like',Yt);
-            Zst = zeros(size(Yt),'like',Yt);
-            Zcb = zeros(size(Yb),'like',Yb);
-            Zsb = zeros(size(Yb),'like',Yb);
-            %}
             if isgpuarray(X)
                 Zct_ = pagefun(@times,C_,Yt);
                 Zst_ = pagefun(@times,S_,Yt);
@@ -258,16 +252,6 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 Zt = pagefun(@plus,Zct_,Zsb_);
                 Zb = pagefun(@minus,Zcb_,Zst_);
             else
-                %{
-                for iSample = 1:nSamples
-                    for iblk = 1:nblks
-                        Zct(:,iblk,iSample) = C_(:,iblk).*Yt(:,iblk,iSample);
-                        Zst(:,iblk,iSample) = S_(:,iblk).*Yt(:,iblk,iSample);
-                        Zcb(:,iblk,iSample) = C_(:,iblk).*Yb(:,iblk,iSample);
-                        Zsb(:,iblk,iSample) = S_(:,iblk).*Yb(:,iblk,iSample);
-                    end
-                end
-                %}
                 Zt =  C_.*Yt + S_.*Yb; % Transposed
                 Zb = -S_.*Yt + C_.*Yb; % Transposed
             end
