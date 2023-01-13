@@ -155,8 +155,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
         end
         
         function Z = atomext_(layer,X,shift)
-            nSamples = size(X,2);
-            nblks = size(X,3);
+            %nSamples = size(X,2);
+            %nblks = size(X,3);
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
@@ -190,37 +190,45 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                     '%s : Mode should be either of Synthesis or Analysis',...
                     layer.Mode))
             end
-            Zct = zeros(size(Yt),'like',Yt);
-            Zst = zeros(size(Yt),'like',Yt);            
-            Zcb = zeros(size(Yb),'like',Yb);
-            Zsb = zeros(size(Yb),'like',Yb);
+            %
+            Yt_ = permute(Yt,[1 3 2]);
+            Yb_ = permute(Yb,[1 3 2]);
             %
             if isgpuarray(X)
-                Yt_ = permute(Yt,[1 3 2]);
-                Yb_ = permute(Yb,[1 3 2]);
                 Zct_ = pagefun(@times,C_,Yt_);
                 Zst_ = pagefun(@times,S_,Yt_);
                 Zcb_ = pagefun(@times,C_,Yb_);
                 Zsb_ = pagefun(@times,S_,Yb_);
-                Yt = ipermute(pagefun(@minus,Zct_,Zsb_),[1 3 2]);
-                Yb = ipermute(pagefun(@plus,Zst_,Zcb_),[1 3 2]);                
+                Yt_ = pagefun(@minus,Zct_,Zsb_);
+                Yb_ = pagefun(@plus,Zst_,Zcb_);
             else
-                for iSample = 1:nSamples
-                    for iblk = 1:nblks
-                        Zct(:,iSample,iblk) = C_(:,iblk).*Yt(:,iSample,iblk);
-                        Zst(:,iSample,iblk) = S_(:,iblk).*Yt(:,iSample,iblk);
-                        Zcb(:,iSample,iblk) = C_(:,iblk).*Yb(:,iSample,iblk);
-                        Zsb(:,iSample,iblk) = S_(:,iblk).*Yb(:,iSample,iblk);
-                    end
+                Zct_ = C_.*Yt_;
+                Zst_ = S_.*Yt_;
+                Zcb_ = C_.*Yb_;
+                Zsb_ = S_.*Yb_;
+                %
+                Yt_ = Zct_-Zsb_;
+                Yb_ = Zst_+Zcb_;
+            end
+            Yt = ipermute(Yt_,[1 3 2]);
+            Yb = ipermute(Yb_,[1 3 2]);
+            %
+            if strcmp(layer.Mode,'Synthesis')
+                if strcmp(target,'Bottom')
+                    Yb = circshift(Yb,shift);
+                elseif strcmp(target,'Top')
+                    Yt = circshift(Yt,shift);
+                else
+                    throw(MException('LsunLayer:InvalidTargetChannels',...
+                        '%s : TaregetChannels should be either of Top or Bottom',...
+                        layer.TargetChannels))
                 end
-                Yt = Zct-Zsb;
-                Yb = Zst+Zcb;
             end
             %
             Z = cat(1,Yt,Yb);
         end
 
-        function Z = atomextbp_(layer,X,shift)
+        function dLdX = atomextbp_(layer,dLdZ,shift)
             %nblks = size(X,3);
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             pt = ceil(nChsTotal/2);
@@ -231,9 +239,22 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 layer = layer.updateParameters();
             end
             
+            % Block circular shift for Synthesis Mode (Reverse)
+            Yt = dLdZ(1:pt,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:);
+            if strcmp(layer.Mode,'Synthesis')
+                if strcmp(target,'Bottom')
+                    Yb = circshift(Yb,-shift); % Reverse
+                elseif strcmp(target,'Top')
+                    Yt = circshift(Yt,-shift); % Reverse
+                else
+                    throw(MException('LsunLayer:InvalidTargetChannels',...
+                        '%s : TaregetChannels should be either of Top or Bottom',...
+                        layer.TargetChannels))
+                end
+            end
+            
             % C-S differential
-            Yt = permute(X(1:pt,:,:),[1 3 2]);
-            Yb = permute(X(pt+1:pt+pb,:,:),[1 3 2]);
             C_ = layer.Ck;
             if strcmp(layer.Mode,'Analysis')
                 S_ = layer.Sk;
@@ -244,19 +265,23 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                     '%s : Mode should be either of Synthesis or Analysis',...
                     layer.Mode))
             end
-            if isgpuarray(X)
-                Zct_ = pagefun(@times,C_,Yt);
-                Zst_ = pagefun(@times,S_,Yt);
-                Zcb_ = pagefun(@times,C_,Yb);
-                Zsb_ = pagefun(@times,S_,Yb);
+            %
+            Yt_ = permute(Yt,[1 3 2]);
+            Yb_ = permute(Yb,[1 3 2]);
+            if isgpuarray(dLdZ)
+                Zct_ = pagefun(@times,C_,Yt_);
+                Zst_ = pagefun(@times,S_,Yt_);
+                Zcb_ = pagefun(@times,C_,Yb_);
+                Zsb_ = pagefun(@times,S_,Yb_);
                 Zt = pagefun(@plus,Zct_,Zsb_);
                 Zb = pagefun(@minus,Zcb_,Zst_);
             else
-                Zt =  C_.*Yt + S_.*Yb; % Transposed
-                Zb = -S_.*Yt + C_.*Yb; % Transposed
+                Zt =  C_.*Yt_ + S_.*Yb_; % Transposed
+                Zb = -S_.*Yt_ + C_.*Yb_; % Transposed
             end
             Yt = ipermute(Zt,[1 3 2]);
             Yb = ipermute(Zb,[1 3 2]);
+
             % Block circular shift for Analysis Mode (Reverse)
             if strcmp(layer.Mode,'Analysis')
                 if strcmp(target,'Bottom')
@@ -270,17 +295,17 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 end
             end
             %
-            Z = cat(1,Yt,Yb);
+            dLdX = cat(1,Yt,Yb);
         end
 
         function dLdW = atomextdiff_(layer,X,dLdZ,shift)
             nChsTotal = sum(layer.PrivateNumberOfChannels);
-            %nSamples = size(dLdZ,2);            
-            nblks = size(dLdZ,3);            
+            %nSamples = size(dLdZ,2);
+            nblks = size(dLdZ,3);
 
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            target = layer.TargetChannels;     
+            target = layer.TargetChannels;
             %
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
@@ -292,8 +317,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             %
             c_top = X(1:pt,:,:);
             c_btm = X(pt+1:pt+pb,:,:);
-            % Block circular shift
             if strcmp(layer.Mode,'Analysis')
+                % Block circular shift for Analysis mode
                 if strcmp(target,'Bottom')
                     c_btm = circshift(c_btm,shift);
                 elseif strcmp(target,'Top')
@@ -303,43 +328,75 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                         '%s : TaregetChannels should be either of Top or Bottom',...
                         layer.TargetChannels))
                 end
-            end
-            % C-S diferential
-            for iAngle = uint32(1:nAngles)
-                dCk_ = zeros(pt,nblks);
-                dSk_ = zeros(pb,nblks);
-                %if strcmp(layer.Mode,'Analysis')
+                % C-S differential
+                c_top_ = permute(c_top,[1 3 2]);
+                c_btm_ = permute(c_btm,[1 3 2]);
+                for iAngle = uint32(1:nAngles)
+                    dCk_ = zeros(pt,nblks);
+                    dSk_ = zeros(pb,nblks);
                     dCk_(iAngle,:) = -sin(angles(iAngle,:));
                     dSk_(iAngle,:) =  cos(angles(iAngle,:));
-                %else
-                %end
-                %%{
-                if isgpuarray(X)
-                    c_top_ = permute(c_top,[1 3 2]);
-                    c_btm_ = permute(c_btm,[1 3 2]);
-                    dc_top_ = pagefun(@times,dCk_,c_top_);
-                    ds_top_ = pagefun(@times,dSk_,c_top_);
-                    dc_btm_ = pagefun(@times,dCk_,c_btm_);
-                    ds_btm_ = pagefun(@times,dSk_,c_btm_);
-                    d_top_ = pagefun(@minus,dc_top_,ds_btm_);
-                    d_btm_ = pagefun(@plus,ds_top_,dc_btm_);
-                    d_ = ipermute(cat(1,d_top_,d_btm_),[1 3 2]);
-                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dLdZ,d_),1),2));
-                else
-                %%}
-                    for iblk = 1:nblks
-                        dCk_iblk = dCk_(:,iblk);
-                        dSk_iblk = dSk_(:,iblk);
-                        c_top_iblk = c_top(:,:,iblk);
-                        c_btm_iblk = c_btm(:,:,iblk);
-                        d_top_iblk = dCk_iblk.*c_top_iblk - dSk_iblk.*c_btm_iblk;
-                        d_btm_iblk = dSk_iblk.*c_top_iblk + dCk_iblk.*c_btm_iblk;
-                        d_iblk = cat(1,d_top_iblk,d_btm_iblk);
-                        dldz_iblk = dLdZ(:,:,iblk);
-                        dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_iblk,d_iblk),'all');
+                    %
+                    if isgpuarray(X)
+                        dc_top_ = pagefun(@times,dCk_,c_top_);
+                        ds_top_ = pagefun(@times,dSk_,c_top_);
+                        dc_btm_ = pagefun(@times,dCk_,c_btm_);
+                        ds_btm_ = pagefun(@times,dSk_,c_btm_);
+                        d_top_ = pagefun(@minus,dc_top_,ds_btm_);
+                        d_btm_ = pagefun(@plus,ds_top_,dc_btm_);
+                    else
+                        d_top_ = dCk_.*c_top_ - dSk_.*c_btm_;
+                        d_btm_ = dSk_.*c_top_ + dCk_.*c_btm_;
                     end
+                    d_top = ipermute(d_top_,[1 3 2]);
+                    d_btm = ipermute(d_btm_,[1 3 2]);
+                    d = cat(1,d_top,d_btm);
+                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dLdZ,d),1),2));
                 end
+            elseif strcmp(layer.Mode,'Synthesis')
+                % Block circular shift for Synthesis mode
+                dldz_top = dLdZ(1:pt,:,:);
+                dldz_btm = dLdZ(pt+1:pt+pb,:,:);
+                if strcmp(target,'Bottom')
+                    dldz_btm = circshift(dldz_btm,-shift);
+                elseif strcmp(target,'Top')
+                    dldz_top = circshift(dldz_top,-shift);
+                else
+                    throw(MException('LsunLayer:InvalidTargetChannels',...
+                        '%s : TaregetChannels should be either of Top or Bottom',...
+                        layer.TargetChannels))
+                end
+                dldz_ = cat(1,dldz_top,dldz_btm);
+                % C-S differential
+                c_top_ = permute(c_top,[1 3 2]);
+                c_btm_ = permute(c_btm,[1 3 2]);
+                for iAngle = uint32(1:nAngles)
+                    dCk_ = zeros(pt,nblks);
+                    dSk_ = zeros(pb,nblks);
+                    dCk_(iAngle,:) = -sin(angles(iAngle,:));
+                    dSk_(iAngle,:) =  cos(angles(iAngle,:));
+                    if isgpuarray(X)
+                        dc_top_ = pagefun(@times,dCk_,c_top_);
+                        ds_top_ = pagefun(@times,dSk_,c_top_);
+                        dc_btm_ = pagefun(@times,dCk_,c_btm_);
+                        ds_btm_ = pagefun(@times,dSk_,c_btm_);
+                        d_top_ = pagefun(@plus,dc_top_,ds_btm_);
+                        d_btm_ = pagefun(@minus,dc_btm_,ds_top_);
+                    else
+                        d_top_ =  dCk_.*c_top_ + dSk_.*c_btm_;
+                        d_btm_ = -dSk_.*c_top_ + dCk_.*c_btm_;
+                    end
+                    d_top = ipermute(d_top_,[1 3 2]);
+                    d_btm = ipermute(d_btm_,[1 3 2]);
+                    d = cat(1,d_top,d_btm);
+                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dldz_,d),1),2));
+                end
+            else
+                throw(MException('LsunLayer:InvalidMode',...
+                    '%s : Mode should be either of Synthesis or Analysis',...
+                    layer.Mode))
             end
+
         end
 
         function angles = get.Angles(layer)
@@ -361,7 +418,6 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             layer.isUpdateRequested = true;
         end
         
-
         function layer = updateParameters(layer)
             angles = layer.PrivateAngles;
             nBlocks = layer.NumberOfBlocks;
