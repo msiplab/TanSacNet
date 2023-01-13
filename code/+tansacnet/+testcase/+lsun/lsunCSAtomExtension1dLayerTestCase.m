@@ -1487,7 +1487,6 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
-        %{
         function testBackwardSynthesisShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
              if usegpu && gpuDeviceCount == 0
@@ -1537,16 +1536,25 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             c_top = X(1:pt,:,:);
             c_btm = X(pt+1:pt+pb,:,:);
             % C-S differential
+            c_top_ = permute(c_top,[1 3 2]);
+            c_btm_ = permute(c_btm,[1 3 2]);
+            % Block circular shift (Revserse)
+            Yt = dLdZ(1:pt,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = circshift(Yt,-shift); % Top, Revserse            
+            dldz_ = cat(1,Yt,Yb);            
             for iAngle = 1:nAngles
-                dS_ = zeros(nAngles,nblks);
-                dS_(iAngle,:) = -ones(1,nblks);
+                %dC_ = zeros(nAngles,nblks); % -sin(0) = 0
+                dS_ = zeros(nAngles,nblks);  %  cos(0) = 1
+                dS_(iAngle,:) = ones(1,nblks); 
                 for iblk = 1:nblks
-                    c_top_iblk = -dS_(:,iblk).*c_btm(:,:,iblk);
-                    c_btm_iblk =  dS_(:,iblk).*c_top(:,:,iblk);
+                    c_top_iblk_ =  dS_(:,iblk).*c_btm_(:,iblk,:); % [  C S ]            
+                    c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:); % [ -S C ]
+                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]); % iCh,iSample,iBlk
+                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
                     % Block circular shift
-                    c_top_iblk = circshift(c_top_iblk,shift); % Top
-                    c_iblk = cat(1,c_top_iblk,c_btm_iblk);
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dldz_(:,:,iblk);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1631,25 +1639,31 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = permute(X(1:pt,:,:),[1 3 2]);
-            c_btm = permute(X(pt+1:pt+pb,:,:),[1 3 2]);
+            c_top = X(1:pt,:,:);
+            c_btm = X(pt+1:pt+pb,:,:);
             % C-S differential
+            c_top_ = permute(c_top,[1 3 2]);
+            c_btm_ = permute(c_btm,[1 3 2]);
+            % Block circular shift (Revserse)
+            Yt = dLdZ(1:pt,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yb = circshift(Yb,-shift); % Bottom, Revserse            
+            dldz_ = cat(1,Yt,Yb);            
             for iAngle = 1:nAngles
                 dC_ = zeros(nAngles,nblks);
                 dS_ = zeros(nAngles,nblks);
                 dC_(iAngle,:) = -sin(angle)*ones(1,nblks);
-                dS_(iAngle,:) = -cos(angle)*ones(1,nblks);
+                dS_(iAngle,:) =  cos(angle)*ones(1,nblks);
                 for iblk = 1:nblks
-                    c_top_iblk = dC_(:,iblk).*c_top(:,iblk,:) ...
-                        - dS_(:,iblk).*c_btm(:,iblk,:);
-                    c_btm_iblk = dS_(:,iblk).*c_top(:,iblk,:) ...
-                        + dC_(:,iblk).*c_btm(:,iblk,:);
-                    c_top_iblk = ipermute(c_top_iblk,[1 3 2]);
-                    c_btm_iblk = ipermute(c_btm_iblk,[1 3 2]);
+                    c_top_iblk_ =  dC_(:,iblk).*c_top_(:,iblk,:) ...
+                        + dS_(:,iblk).*c_btm_(:,iblk,:);
+                    c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:) ...
+                        + dC_(:,iblk).*c_btm_(:,iblk,:);
+                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]);
+                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_iblk = cat(1,c_top_iblk,c_btm_iblk);                                        
                     % Block circular shift
-                    c_btm_iblk = circshift(c_btm_iblk,shift); % Bottom
-                    c_iblk = cat(1,c_top_iblk,c_btm_iblk);
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dldz_(:,:,iblk);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1749,25 +1763,31 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = permute(X(1:pt,:,:),[1 3 2]);
-            c_btm = permute(X(pt+1:pt+pb,:,:),[1 3 2]);
+            c_top = X(1:pt,:,:);
+            c_btm = X(pt+1:pt+pb,:,:);
             % C-S differential
+            c_top_ = permute(c_top,[1 3 2]);
+            c_btm_ = permute(c_btm,[1 3 2]);
+            % Block circular shift (Revserse)
+            Yt = dLdZ(1:pt,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yb = circshift(Yb,-shift); % Bottom, Revserse
+            dldz_ = cat(1,Yt,Yb);
             for iAngle = 1:nAngles
                 dC_ = zeros(nAngles,nblks);
                 dS_ = zeros(nAngles,nblks);
                 dC_(iAngle,:) = -sin(angles(iAngle,:));
-                dS_(iAngle,:) = -cos(angles(iAngle,:)); % Inverted
+                dS_(iAngle,:) =  cos(angles(iAngle,:)); 
                 for iblk = 1:nblks
-                    c_top_iblk = dC_(:,iblk).*c_top(:,iblk,:) ...
-                        - dS_(:,iblk).*c_btm(:,iblk,:);
-                    c_btm_iblk = dS_(:,iblk).*c_top(:,iblk,:) ...
-                        + dC_(:,iblk).*c_btm(:,iblk,:);
-                    c_top_iblk = ipermute(c_top_iblk,[1 3 2]);
-                    c_btm_iblk = ipermute(c_btm_iblk,[1 3 2]);
-                    % Block circular shift
-                    c_btm_iblk = circshift(c_btm_iblk,shift); % Bottom
+                    c_top_iblk_ =  dC_(:,iblk).*c_top_(:,iblk,:) ...
+                        + dS_(:,iblk).*c_btm_(:,iblk,:);
+                    c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:) ...
+                        + dC_(:,iblk).*c_btm_(:,iblk,:);
+                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]);
+                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    % Block circular shift
+                    dldz_iblk = dldz_(:,:,iblk);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1869,24 +1889,31 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             c_top = X(1:pt,:,:);
             c_btm = X(pt+1:pt+pb,:,:);
             % C-S differential
+            c_top_ = permute(c_top,[1 3 2]);
+            c_btm_ = permute(c_btm,[1 3 2]);
+            % Block circular shift (Revserse)
+            Yt = dLdZ(1:pt,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = circshift(Yt,-shift); % Bottom, Revserse
+            dldz_ = cat(1,Yt,Yb);
             for iAngle = 1:nAngles
                 dC_ = zeros(nAngles,nblks);
                 dS_ = zeros(nAngles,nblks);
                 dC_(iAngle,:) = -sin(angles(iAngle,:));
-                dS_(iAngle,:) = -cos(angles(iAngle,:)); % Inverted
+                dS_(iAngle,:) =  cos(angles(iAngle,:)); 
                 for iblk = 1:nblks
-                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk) ...
-                        - dS_(:,iblk).*c_btm(:,:,iblk);
-                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk) ...
-                        + dC_(:,iblk).*c_btm(:,:,iblk);
-                    % Block circular shift
-                    c_top_iblk = circshift(c_top_iblk,shift); % Top
+                    c_top_iblk_ =  dC_(:,iblk).*c_top_(:,iblk,:) ...
+                        + dS_(:,iblk).*c_btm_(:,iblk,:);
+                    c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:) ...
+                        + dC_(:,iblk).*c_btm_(:,iblk,:);
+                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]);
+                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    % Block circular shift
+                    dldz_iblk = dldz_(:,:,iblk);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
-
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunCSAtomExtension1dLayer(...
@@ -1918,7 +1945,7 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));            
             
         end
-        %}
+        
     end
     
 end
