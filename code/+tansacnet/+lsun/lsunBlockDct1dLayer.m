@@ -2,10 +2,10 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
     %LSUNBLOCKDCT1DLAYER
     %
     %   ベクトル配列をブロック配列を入力:
-    %      (Stride x nBlks) x nSamples
+    %      1 x (Stride x nBlks) x 1 x nSamples
     %
     %   出力:
-    %      Stride x nSamples x nBlks 
+    %      Stride x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -85,12 +85,12 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
             %
             C_ = layer.C;
             %
-            nSamples = size(X,2);            
-            seqlen = size(X,1);
+            nSamples = size(X,4);            
+            seqlen = size(X,2);
             nBlks = seqlen/stride;
             %
-            Z = permute(reshape(C_*reshape(X,stride,[]),...
-                stride,nBlks,nSamples),[1 3 2]);
+            Z = reshape(C_*reshape(X,stride,[]),...
+                stride,1,nBlks,nSamples);
         end
         
         function dLdX = backward(layer, varargin)
@@ -115,15 +115,13 @@ classdef lsunBlockDct1dLayer < nnet.layer.Layer %#codegen
             C_T = layer.C.';
             %
             dLdZ = varargin{layer.NumInputs+layer.NumOutputs+1};
-            nSamples = size(dLdZ,2);
+            nSamples = size(dLdZ,4);
             nBlks = size(dLdZ,3);
             seqlen = stride*nBlks;
             %
             dLdZ = varargin{layer.NumInputs+layer.NumOutputs+1};
             arrayX = C_T*reshape(dLdZ,stride,[]);
-            dLdX = reshape(...
-                permute(reshape(arrayX,stride,nSamples,nBlks),[1 3 2]),...
-                seqlen,nSamples);
+            dLdX = reshape(arrayX,1,seqlen,1,nSamples);
         end
     end
 

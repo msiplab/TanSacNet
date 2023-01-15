@@ -1,7 +1,9 @@
 classdef lsunChannelConcatenation1dLayerTestCase < matlab.unittest.TestCase
     %LSUNCHANNELCONCATENATION1DLAYERTESTCASE
     %
-    %   ２コンポーネント出力(nComponents=2のみサポート): "CBT"
+    %  TODO: フォーマット変更 nChs x 1 x nBlks x nSamples
+    %
+    %   ２コンポーネント出力(nComponents=2のみサポート):
     %      1 x nSamples x nBlks
     %      (nChsTotal-1) x nSamples x nBlks
     %

@@ -2,10 +2,10 @@ classdef lsunBlockIdct1dLayerTestCase < matlab.unittest.TestCase
     %LSUNBLOCKIDCT1DLAYERTESTCASE
     %
     %   入力:
-    %      Stride x nSamples x nBlks
+    %      Stride x 1 x nBlks x nSamples
     %
     %   ベクトル配列をブロック配列にして出力:
-    %      (Stride x nBlks) x nSamples
+    %      1 x (Stride x nBlks) x 1 x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -30,11 +30,11 @@ classdef lsunBlockIdct1dLayerTestCase < matlab.unittest.TestCase
 
         function finalCheck(~)
             import tansacnet.lsun.*
-            fprintf("\n --- Check layer for 1-D sequences ---\n");
+            fprintf("\n --- Check layer for 1-D image ---\n");
             layer = lsunBlockIdct1dLayer(...
                 'Stride',2);
-            checkLayer(layer,[2 8 4],...
-                'ObservationDimension',2,...
+            checkLayer(layer,[2 1 4 8],...
+                'ObservationDimension',4,...
                 'CheckCodegenCompatibility',false)
         end
 
@@ -74,19 +74,19 @@ classdef lsunBlockIdct1dLayerTestCase < matlab.unittest.TestCase
             nSamples = 8;
             nblks = seqlen/stride;
             %nComponents = 1;
-            X = rand(stride,nSamples,nblks,datatype);
+            X = rand(stride,1,nblks,nSamples,datatype);
             
             % Expected values
-            expctdZ = zeros(seqlen,nSamples,datatype);
+            expctdZ = zeros(1,seqlen,1,nSamples,datatype);
             for iSample = 1:nSamples
-                A = reshape(X(:,iSample,:),stride,[]);
+                A = reshape(X(:,:,:,iSample),stride,[]);
                 if stride > 1
                     Y = testCase.permuteIdctCoefs_(A,stride);
-                    expctdZ(:,iSample) = ...
-                        reshape(idct(Y),seqlen,1);
+                    expctdZ(:,:,:,iSample) = ...
+                        reshape(idct(Y),1,seqlen,1);
                 else
-                    expctdZ(:,iSample) = ...
-                        reshape(A,seqlen,1);                    
+                    expctdZ(:,:,:,iSample) = ...
+                        reshape(A,1,seqlen,1);                    
                 end
             end
 
@@ -116,20 +116,19 @@ classdef lsunBlockIdct1dLayerTestCase < matlab.unittest.TestCase
             nSamples = 8;
             nblks = seqlen/stride;
             %nComponents = 1;
-            %X = rand(nrows,ncols,nDecs,nSamples,datatype);
-            X = rand(stride,nSamples,nblks,datatype);
-
+            X = rand(stride,1,nblks,nSamples,datatype);
+            
             % Expected values
-            expctdZ = zeros(seqlen,nSamples,datatype);
+            expctdZ = zeros(1,seqlen,1,nSamples,datatype);
             for iSample = 1:nSamples
-                A = reshape(X(:,iSample,:),stride,[]);
+                A = reshape(X(:,:,:,iSample),stride,[]);
                 if stride > 1
                     Y = testCase.permuteIdctCoefs_(A,stride);
-                    expctdZ(:,iSample) = ...
-                        reshape(idct(Y),seqlen,1);
+                    expctdZ(:,:,:,iSample) = ...
+                        reshape(idct(Y),1,seqlen,1);
                 else
-                    expctdZ(:,iSample) = ...
-                        reshape(A,seqlen,1);
+                    expctdZ(:,:,:,iSample) = ...
+                        reshape(A,1,seqlen,1);                    
                 end
             end
 
@@ -158,23 +157,23 @@ classdef lsunBlockIdct1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = 8;
             %nComponents = 1;
-            dLdZ = rand(seqlen, nSamples, datatype);
+            dLdZ = rand(1, seqlen, 1, nSamples, datatype);
             
             % Expected values
             nblks = seqlen/stride;
-            expctddLdX = zeros(stride,nSamples,nblks,datatype);
+            expctddLdX = zeros(stride,1,nblks,nSamples,datatype);
             for iSample = 1:nSamples
                 % Block DCT
-                U = reshape(dLdZ(:,iSample),stride,[]);
+                U = reshape(dLdZ(:,:,:,iSample),stride,[]);
                 if stride > 1
                     Y = dct(U);
                     % Rearrange the DCT Coefs.
                     A = testCase.permuteDctCoefs_(Y);
-                    expctddLdX(:,iSample,:) = ...
-                        reshape(A,stride,1,nblks);                                           
+                    expctddLdX(:,:,:,iSample) = ...
+                        reshape(A,stride,1,nblks,1);                                           
                 else
-                    expctddLdX(:,iSample,:) = ...
-                        reshape(U,stride,1,nblks);                    
+                    expctddLdX(:,:,:,iSample) = ...
+                        reshape(U,stride,1,nblks,1);                    
                 end
             end
             

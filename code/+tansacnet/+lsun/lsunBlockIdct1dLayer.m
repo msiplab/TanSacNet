@@ -2,10 +2,10 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
     %NSOLTBLOCKIDCT1DLAYER
     %
     %   入力:
-    %      Stride x nSamples x nBlks
+    %      Stride x nBlks x nSamples
     %
     %   ベクトル配列をブロック配列にして出力:
-    %      (Stride x nBlks) x nSamples
+    %      1 x (Stride x nBlks) x 1 x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -80,16 +80,14 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             C_T = layer.C.';
             %
             %X = varargin{1};
-            nSamples = size(X,2);
+            nSamples = size(X,4);
             nBlks = size(X,3);
             seqlen = stride*nBlks;
             %
             arrayY = C_T*reshape(X,stride,[]);
-            Z = reshape(...
-                    permute(reshape(arrayY,stride,nSamples,nBlks),[1 3 2]),...
-                    seqlen,nSamples);
+            Z = reshape(arrayY,1,seqlen,1,nSamples);
             if isdlarray(X)
-                Z = dlarray(Z,"TB");
+                Z = dlarray(Z,"SSCB");
             end
             
         end
@@ -119,12 +117,12 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             %
             C_ = layer.C;
             %
-            nSamples = size(dLdZ,2);            
-            seqlen = size(dLdZ,1);
+            nSamples = size(dLdZ,4);            
+            seqlen = size(dLdZ,2);
             nBlks = seqlen/stride;
             %
-            dLdX = permute(reshape(C_*reshape(dLdZ,stride,[]),...
-                stride,nBlks,nSamples),[1 3 2]);
+            dLdX = reshape(C_*reshape(dLdZ,stride,[]),...
+                stride,1,nBlks,nSamples);
         end
     end
     

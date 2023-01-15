@@ -1,8 +1,10 @@
 classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
     %LSUNINTERMEDIATEFULLROTATION1DLAYERTESTCASE 
     %   
+    %  TODO: フォーマット変更 nChs x 1 x nBlks x nSamples
+    %
     %   コンポーネント別に入力(nComponents)
-    %      nChs x nSamples x nBlks
+    %      nChs x nSamples x nBlks 
     %
     %   コンポーネント別に出力(nComponents):
     %      nChs x nSamples x nBlks

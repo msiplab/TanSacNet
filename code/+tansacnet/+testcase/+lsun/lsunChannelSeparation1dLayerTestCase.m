@@ -1,10 +1,12 @@
 classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
     %NSOLTCHANNELSEPARATION1DLAYERTESTCASE
     %
+    %  TODO: フォーマット変更 nChs x 1 x nBlks x nSamples
+    %
     %   １コンポーネント入力(nComponents=1のみサポート):
     %      nChsTotal x nSamples x nBlks
     %
-    %   ２コンポーネント出力(nComponents=2のみサポート): "CBT"
+    %   ２コンポーネント出力(nComponents=2のみサポート): 
     %      1 x nSamples x nBlks
     %      (nChsTotal-1) x nSamples x nBlks
     %
