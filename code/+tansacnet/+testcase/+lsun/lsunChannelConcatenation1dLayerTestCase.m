@@ -1,12 +1,12 @@
-classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
-    %NSOLTCHANNELSEPARATION1DLAYERTESTCASE
-    %
-    %   １コンポーネント入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+classdef lsunChannelConcatenation1dLayerTestCase < matlab.unittest.TestCase
+    %LSUNCHANNELCONCATENATION1DLAYERTESTCASE
     %
     %   ２コンポーネント出力(nComponents=2のみサポート): "CBT"
     %      1 x nSamples x nBlks
     %      (nChsTotal-1) x nSamples x nBlks
+    %
+    %   １コンポーネント入力(nComponents=1のみサポート):
+    %      nChsTotal x nSamples x nBlks
     %
     % Requirements: MATLAB R2022b
     %
@@ -32,13 +32,12 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
 
         function finalCheck(~)
             import tansacnet.lsun.*
-            layer = lsunChannelSeparation1dLayer();
+            layer = lsunChannelConcatenation1dLayer();
             fprintf("\n --- Check layer for 1-D sequences ---\n");
-            checkLayer(layer,[4 8 4],...
+            checkLayer(layer,{[3 8 4], [1 8 4]},...
                 'ObservationDimension',2,...
                 'CheckCodegenCompatibility',false) %true)
         end
-
     end
     
     methods (Test)
@@ -46,12 +45,12 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
         function testConstructor(testCase)
             
             % Expected values
-            expctdName = 'Sp';
-            expctdDescription = "Channel separation";
+            expctdName = 'Cn';
+            expctdDescription = "Channel concatenation";
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunChannelSeparation1dLayer('Name',expctdName);
+            layer = lsunChannelConcatenation1dLayer('Name',expctdName);
             
             % Actual values
             actualName = layer.Name;
@@ -71,34 +70,30 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = batch;
             nChsTotal = sum(nchs);
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % (nChsTotal-1) x nSamples x nBlks
+            Xac = randn(nChsTotal-1,nSamples,nblks,datatype);
+            % 1 x nSamples x nBlks
+            Xdc = randn(1,nSamples,nblks,datatype);
+
             
             % Expected values
-            % nBlks x (nChsTotal-1) x nSamples 
-            %expctdZ2 = X(:,2:end,:);
-            expctdZac = X(2:end,:,:);
-            % nBlks x 1 x nSamples
-            %expctdZ1 = X(:,1,:);
-            expctdZdc = X(1,:,:);
+            % nChsTotal x nSamples x nBlks
+            expctdZ = cat(1,Xdc,Xac);
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunChannelSeparation1dLayer('Name','Sp');
+            layer = lsunChannelConcatenation1dLayer('Name','Cn');
             
             % Actual values
-            [actualZac,actualZdc] = layer.predict(X);
+            actualZ = layer.predict(Xac,Xdc);
             
             % Evaluation
-            testCase.verifyInstanceOf(actualZdc,datatype);
-            testCase.verifyInstanceOf(actualZac,datatype);            
-            testCase.verifyThat(actualZdc,...
-                IsEqualTo(expctdZdc,'Within',tolObj));
-            testCase.verifyThat(actualZac,...
-                IsEqualTo(expctdZac,'Within',tolObj));            
+            testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
             
         end
-        
+                
         function testBackward(testCase,nchs,nblks,batch,datatype)
             
             import matlab.unittest.constraints.IsEqualTo
@@ -108,27 +103,29 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = batch;
             nChsTotal = sum(nchs);
-            % (nChsTotal-1) x nBlks x nSamples  
-            dLdZac = randn(nChsTotal-1,nblks,nSamples,datatype);
-            % 1 x nBlks x nSamples 
-            dLdZdc = randn(1,nblks,nSamples,datatype);
+            % nChsTotal x nSamples x nBlks
+            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
             
             % Expected values
-            % nChsTotal x nSamples x nBlks
-            %expctddLdX = cat(1,dLdZ1,dLdZ2);
-            expctddLdX = cat(1,dLdZdc,dLdZac);
+            % (nChsTotal-1) x nSamples x nBlks
+            expctddLdXac = dLdZ(2:end,:,:);
+            % 1 x nSamples x nBlks
+            expctddLdXdc = dLdZ(1,:,:);
             
             % Instantiation of target class
             import tansacnet.lsun.*
-            layer = lsunChannelSeparation1dLayer('Name','Sp');
+            layer = lsunChannelConcatenation1dLayer('Name','Cn');
             
             % Actual values
-            actualdLdX = layer.backward([],[],[],dLdZac,dLdZdc,[]);
+            [actualdLdXac,actualdLdXdc] = layer.backward([],[],[],dLdZ,[]);
             
             % Evaluation
-            testCase.verifyInstanceOf(actualdLdX,datatype);
-            testCase.verifyThat(actualdLdX,...
-                IsEqualTo(expctddLdX,'Within',tolObj));
+            testCase.verifyInstanceOf(actualdLdXdc,datatype);
+            testCase.verifyInstanceOf(actualdLdXac,datatype);            
+            testCase.verifyThat(actualdLdXdc,...
+                IsEqualTo(expctddLdXdc,'Within',tolObj));
+            testCase.verifyThat(actualdLdXac,...
+                IsEqualTo(expctddLdXac,'Within',tolObj));            
             
         end
         

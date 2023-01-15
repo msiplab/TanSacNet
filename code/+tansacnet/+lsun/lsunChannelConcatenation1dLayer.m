@@ -1,12 +1,12 @@
-classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
-    %LSUNCHANNELSEPARATION1DLAYER
-    %
-    %   １コンポーネント入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
+    %LSUNCHANNELCONCATENATION1DLAYER
     %
     %   ２コンポーネント出力(nComponents=2のみサポート): "CBT"
     %      1 x nSamples x nBlks
     %      (nChsTotal-1) x nSamples x nBlks
+    %
+    %   １コンポーネント入力(nComponents=1のみサポート):
+    %      nChsTotal x nSamples x nBlks
     %
     % Requirements: MATLAB R2022b
     %
@@ -28,7 +28,7 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
     end
     
     methods
-        function layer = lsunChannelSeparation1dLayer(varargin)
+        function layer = lsunChannelConcatenation1dLayer(varargin)
             % (Optional) Create a myLayer.
             % This function must have the same name as the class.
             p = inputParser;
@@ -37,35 +37,37 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             
             % Layer constructor function goes here.
             layer.Name = p.Results.Name;
-            layer.Description =  "Channel separation";
+            layer.Description =  "Channel concatenation";
             layer.Type = '';
-            %layer.NumOutputs = 2;
-            layer.OutputNames = { 'ac', 'dc' };            
+            %layer.NumInputs = 2;
+            layer.InputNames = { 'ac', 'dc' };
+            
         end
         
-        function [Zac,Zdc] = predict(~, X)
+        function Z = predict(~, Xac,Xdc)
             % Forward input data through the layer at prediction time and
             % output the result.
             %
             % Inputs:
             %         layer       - Layer to forward propagate through
-            %         X           - Input data (1 component)
+            %         X1, X2      - Input data (2 components)
             % Outputs:
-            %         Z1, Z2      - Outputs of layer forward function
+            %         Z           - Outputs of layer forward function
             %  
             
-            % Layer forward function for prediction goes here.
-            Zac = X(2:end,:,:);
-            Zdc = X(1,:,:);
+            if isdlarray(Xac) 
+                Xac = stripdims(Xac);
+            end                        
             
-            if isdlarray(X)
-                Zac = dlarray(Zac,'CBT');
-                Zdc = dlarray(Zdc,'CBT');
-            end
-
+            if isdlarray(Xdc) 
+                Xdc = stripdims(Xdc);
+            end                                    
+            
+            % Layer forward function for prediction goes here.
+            Z = cat(1,Xdc,Xac);
         end
         
-        function dLdX = backward(~, ~, ~, ~, dLdZac,dLdZdc,~)
+        function [dLdXac,dLdXdc] = backward(~,~, ~, ~, dLdZ, ~)
             % (Optional) Backward propagate the derivative of the loss  
             % function through the layer.
             %
@@ -82,7 +84,10 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             
             % Layer forward function for prediction goes here.
-            dLdX = cat(1,dLdZdc,dLdZac);
+            %dLdX1 = dLdZ(:,:,1,:);
+            %dLdX2 = dLdZ(:,:,2:end,:);
+            dLdXac = dLdZ(2:end,:,:);
+            dLdXdc = dLdZ(1,:,:);
         end
     end
     
