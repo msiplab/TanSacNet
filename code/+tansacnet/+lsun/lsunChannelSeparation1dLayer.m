@@ -2,11 +2,11 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
     %LSUNCHANNELSEPARATION1DLAYER
     %
     %   １コンポーネント入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChsTotal x 1 x nBlks x nSamples
     %
-    %   ２コンポーネント出力(nComponents=2のみサポート): "CBT"
-    %      1 x nSamples x nBlks
-    %      (nChsTotal-1) x nSamples x nBlks
+    %   ２コンポーネント出力(nComponents=2のみサポート):
+    %      1 x 1 x nBlks x nSamples
+    %      (nChsTotal-1) x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -55,12 +55,12 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             %  
             
             % Layer forward function for prediction goes here.
-            Zac = X(2:end,:,:);
-            Zdc = X(1,:,:);
+            Zac = X(2:end,:,:,:);
+            Zdc = X(1,:,:,:);
             
             if isdlarray(X)
-                Zac = dlarray(Zac,'CBT');
-                Zdc = dlarray(Zdc,'CBT');
+                Zac = dlarray(Zac,'SSCB');
+                Zdc = dlarray(Zdc,'SSCB');
             end
 
         end

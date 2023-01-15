@@ -2,10 +2,10 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
     %LSUNINTERMEDIATEDUALROTATION1DLAYER
     %   
     %   コンポーネント別に入力(nComponents)
-    %      nChs x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     %   コンポーネント別に出力(nComponents):
-    %      nChs x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -98,7 +98,7 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             
             % Layer forward function for prediction goes here.
 
-            nSamples = size(X,2);                        
+            nSamples = size(X,4);                        
             nblks = size(X,3);
             pt = layer.PrivateNumberOfChannels(1);
             pb = layer.PrivateNumberOfChannels(2);
@@ -120,27 +120,27 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
                     layer.Mode))
             end
 
-            Y = permute(X,[1 3 2]);
-            Zt = zeros(pt,nblks,nSamples,'like',Y);
-            Zb = zeros(pb,nblks,nSamples,'like',Y);            
+            Y = X;
+            Zt = zeros(pt,1,nblks,nSamples,'like',Y);
+            Zb = zeros(pb,1,nblks,nSamples,'like',Y);            
             for iSample = 1:nSamples
                 if isgpuarray(X) 
-                    Yt_iSample = permute(Y(1:pt,:,iSample),[1 4 2 3]);
-                    Yb_iSample = permute(Y(pt+1:pt+pb,:,iSample),[1 4 2 3]);
+                    Yt_iSample = Y(1:pt,:,:,iSample);
+                    Yb_iSample = Y(pt+1:pt+pb,:,:,iSample);
                     Zt_iSample = pagefun(@mtimes,W_,Yt_iSample);
                     Zb_iSample = pagefun(@mtimes,U_,Yb_iSample);
-                    Zt(:,:,iSample) = ipermute(Zt_iSample,[1 4 2 3]);
-                    Zb(:,:,iSample) = ipermute(Zb_iSample,[1 4 2 3]);
+                    Zt(:,:,:,iSample) = Zt_iSample;
+                    Zb(:,:,:,iSample) = Zb_iSample;
                 else
                     for iblk = 1:nblks
-                        Zt(:,iblk,iSample) = W_(:,:,iblk)*Y(1:pt,iblk,iSample);
-                        Zb(:,iblk,iSample) = U_(:,:,iblk)*Y(pt+1:pt+pb,iblk,iSample);
+                        Zt(:,:,iblk,iSample) = W_(:,:,iblk)*Y(1:pt,:,iblk,iSample);
+                        Zb(:,:,iblk,iSample) = U_(:,:,iblk)*Y(pt+1:pt+pb,:,iblk,iSample);
                     end
                 end
             end
-            Y(1:pt,:,:) = Zt;
-            Y(pt+1:pt+pb,:,:) = Zb;
-            Z = ipermute(Y,[1 3 2]);
+            Y(1:pt,:,:,:) = Zt;
+            Y(pt+1:pt+pb,:,:,:) = Zb;
+            Z = Y;
         end
         
         function [dLdX, dLdW] = backward(layer, X, ~, dLdZ, ~)
@@ -160,7 +160,7 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             %import tansacnet.lsun.get_fcn_orthmtxgen_diff
             
-            nSamples = size(dLdZ,2);            
+            nSamples = size(dLdZ,4);            
             nblks = size(dLdZ,3);
             
             pt = layer.PrivateNumberOfChannels(1);
@@ -199,33 +199,33 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
                 W_ = Wn_;
                 U_ = Un_;
             end
-            cdLd_top = permute(dLdX(1:pt,:,:),[1 3 2]);
-            cdLd_btm = permute(dLdX(pt+1:pt+pb,:,:),[1 3 2]);
+            cdLd_top = dLdX(1:pt,:,:,:);
+            cdLd_btm = dLdX(pt+1:pt+pb,:,:,:);
             for iSample = 1:nSamples
+                cdLd_top_iSample = cdLd_top(:,:,:,iSample);
+                cdLd_btm_iSample = cdLd_btm(:,:,:,iSample);
                 if isgpuarray(X)
-                    cdLd_top_iSample = permute(cdLd_top(:,:,iSample),[1 4 2 3]);
-                    cdLd_btm_iSample = permute(cdLd_btm(:,:,iSample),[1 4 2 3]);
                     cdLd_top_iSample = pagefun(@mtimes,W_,cdLd_top_iSample);
                     cdLd_btm_iSample = pagefun(@mtimes,U_,cdLd_btm_iSample);
-                    cdLd_top(:,:,iSample) = ipermute(cdLd_top_iSample,[1 4 2 3]);                    
-                    cdLd_btm(:,:,iSample) = ipermute(cdLd_btm_iSample,[1 4 2 3]);                                        
                 else
                     for iblk = 1:nblks
-                        cdLd_top(:,iblk,iSample) = W_(:,1:pt,iblk)*cdLd_top(:,iblk,iSample);
-                        cdLd_btm(:,iblk,iSample) = U_(:,1:pb,iblk)*cdLd_btm(:,iblk,iSample);
+                        cdLd_top_iSample(:,:,iblk) = W_(:,1:pt,iblk)*cdLd_top_iSample(:,:,iblk);
+                        cdLd_btm_iSample(:,:,iblk) = U_(:,1:pb,iblk)*cdLd_btm_iSample(:,:,iblk);
                     end
                 end
+                cdLd_top(:,:,:,iSample) = cdLd_top_iSample;                    
+                cdLd_btm(:,:,:,iSample) = cdLd_btm_iSample;
             end
-            dLdX(1:pt,:,:) = ipermute(reshape(cdLd_top,pt,nblks,nSamples),[1 3 2]);
-            dLdX(pt+1:pt+pb,:,:) = ipermute(reshape(cdLd_btm,pb,nblks,nSamples),[1 3 2]);
+            dLdX(1:pt,:,:,:) = cdLd_top;
+            dLdX(pt+1:pt+pb,:,:,:) = cdLd_btm;
 
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);
             dLdW = zeros(nAngles,nblks,'like',dLdZ);
-            dldz_top = permute(dLdZ(1:pt,:,:),[1 3 2]);                        
-            dldz_btm = permute(dLdZ(pt+1:pt+pb,:,:),[1 3 2]);
-            c_top = permute(X(1:pt,:,:),[1 3 2]);              
-            c_btm = permute(X(pt+1:pt+pb,:,:),[1 3 2]);  
+            dldz_top = dLdZ(1:pt,:,:,:);
+            dldz_btm = dLdZ(pt+1:pt+pb,:,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             for iAngle = uint32(1:nAngles/2)
                 [dWn,dWnPst,dWnPre] = fcn_orthmtxgen_diff(anglesW,muW,iAngle,dWnPst,dWnPre);
                 [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,muU,iAngle,dUnPst,dUnPre);                
@@ -237,22 +237,22 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
                     dU_ = permute(dUn,[2 1 3]);
                 end
                 if isgpuarray(X)
-                    c_top_ext = permute(c_top,[1 4 2 3]); % idx 1 iblk iSample
-                    c_btm_ext = permute(c_btm,[1 4 2 3]); % idx 1 iblk iSample      
+                    c_top_ext = c_top; % idx 1 iblk iSample
+                    c_btm_ext = c_btm; % idx 1 iblk iSample      
                     d_top_ext = pagefun(@mtimes,dW_,c_top_ext); % idx 1 iblk iSample                    
                     d_btm_ext = pagefun(@mtimes,dU_,c_btm_ext); % idx 1 iblk iSample
-                    d_top = ipermute(d_top_ext,[1 4 2 3]);
-                    d_btm = ipermute(d_btm_ext,[1 4 2 3]);                    
-                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_top,d_top),[1 3]);
-                    dLdW(nAngles/2+iAngle,:) = sum(bsxfun(@times,dldz_btm,d_btm),[1 3]);                    
+                    d_top = d_top_ext;
+                    d_btm = d_btm_ext;
+                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_top,d_top),[1 4]);
+                    dLdW(nAngles/2+iAngle,:) = sum(bsxfun(@times,dldz_btm,d_btm),[1 4]);                    
                 else
                     for iblk = 1:nblks
                         dW_iblk = dW_(:,:,iblk);                        
                         dU_iblk = dU_(:,:,iblk);
-                        dldz_top_iblk = squeeze(dldz_top(:,iblk,:));                        
-                        dldz_btm_iblk = squeeze(dldz_btm(:,iblk,:));
-                        c_top_iblk = squeeze(c_top(:,iblk,:));                        
-                        c_btm_iblk = squeeze(c_btm(:,iblk,:));
+                        dldz_top_iblk = squeeze(dldz_top(:,:,iblk,:));                        
+                        dldz_btm_iblk = squeeze(dldz_btm(:,:,iblk,:));
+                        c_top_iblk = squeeze(c_top(:,:,iblk,:));                        
+                        c_btm_iblk = squeeze(c_btm(:,:,iblk,:));
                         d_top_iblk = zeros(size(c_top_iblk),'like',c_top_iblk);                        
                         d_btm_iblk = zeros(size(c_btm_iblk),'like',c_btm_iblk);
                         for iSample = 1:nSamples

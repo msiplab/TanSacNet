@@ -47,7 +47,7 @@ classdef lsunComponentSeparation1dLayer < nnet.layer.Layer %#codegen
            varargout = cell(numOutputs,1);
            for idx = 1:numOutputs
                 varargout{idx} = ...
-                    X((idx-1)*nChsPerCmp+1:idx*nChsPerCmp,:,:);
+                    X((idx-1)*nChsPerCmp+1:idx*nChsPerCmp,:,:,:);
            end
         end
         

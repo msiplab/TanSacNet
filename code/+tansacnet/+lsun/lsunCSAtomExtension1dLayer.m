@@ -2,10 +2,10 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
     %LSUNCSATOMEXTENSION1DLAYER
     %
     %   コンポーネント別に入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     %   コンポーネント別に出力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -155,8 +155,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
         end
         
         function Z = atomext_(layer,X,shift)
-            %nSamples = size(X,2);
-            %nblks = size(X,3);
+            nSamples = size(X,4);
+            nBlks = size(X,3);
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
@@ -166,8 +166,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 layer = layer.updateParameters();
             end
             % Block circular shift for Analysis Mode
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             if strcmp(layer.Mode,'Analysis')
                 if strcmp(target,'Bottom')
                     Yb = circshift(Yb,shift);
@@ -191,8 +191,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                     layer.Mode))
             end
             %
-            Yt_ = permute(Yt,[1 3 2]);
-            Yb_ = permute(Yb,[1 3 2]);
+            Yt_ = reshape(Yt,pt,nBlks,nSamples);
+            Yb_ = reshape(Yb,pb,nBlks,nSamples);
             %
             if isgpuarray(X)
                 Zct_ = pagefun(@times,C_,Yt_);
@@ -210,8 +210,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 Yt_ = Zct_-Zsb_;
                 Yb_ = Zst_+Zcb_;
             end
-            Yt = ipermute(Yt_,[1 3 2]);
-            Yb = ipermute(Yb_,[1 3 2]);
+            Yt = reshape(Yt_,pt,1,nBlks,nSamples);
+            Yb = reshape(Yb_,pb,1,nBlks,nSamples);
             %
             if strcmp(layer.Mode,'Synthesis')
                 if strcmp(target,'Bottom')
@@ -229,7 +229,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
         end
 
         function dLdX = atomextbp_(layer,dLdZ,shift)
-            %nblks = size(X,3);
+            nSamples = size(dLdZ,4);
+            nBlks = size(dLdZ,3);
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
@@ -240,8 +241,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             end
             
             % Block circular shift for Synthesis Mode (Reverse)
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             if strcmp(layer.Mode,'Synthesis')
                 if strcmp(target,'Bottom')
                     Yb = circshift(Yb,-shift); % Reverse
@@ -266,8 +267,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                     layer.Mode))
             end
             %
-            Yt_ = permute(Yt,[1 3 2]);
-            Yb_ = permute(Yb,[1 3 2]);
+            Yt_ = reshape(Yt,pt,nBlks,nSamples);
+            Yb_ = reshape(Yb,pb,nBlks,nSamples);
             if isgpuarray(dLdZ)
                 Zct_ = pagefun(@times,C_,Yt_);
                 Zst_ = pagefun(@times,S_,Yt_);
@@ -279,8 +280,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 Zt =  C_.*Yt_ + S_.*Yb_; % Transposed
                 Zb = -S_.*Yt_ + C_.*Yb_; % Transposed
             end
-            Yt = ipermute(Zt,[1 3 2]);
-            Yb = ipermute(Zb,[1 3 2]);
+            Yt = reshape(Zt,pt,1,nBlks,nSamples);
+            Yb = reshape(Zb,pb,1,nBlks,nSamples);
 
             % Block circular shift for Analysis Mode (Reverse)
             if strcmp(layer.Mode,'Analysis')
@@ -300,8 +301,8 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
 
         function dLdW = atomextdiff_(layer,X,dLdZ,shift)
             nChsTotal = sum(layer.PrivateNumberOfChannels);
-            %nSamples = size(dLdZ,2);
-            nblks = size(dLdZ,3);
+            nSamples = size(dLdZ,4);
+            nBlks = size(dLdZ,3);
 
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
@@ -313,10 +314,10 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
             %
             angles = layer.PrivateAngles;
             nAngles = size(angles,1);
-            dLdW = zeros(nAngles,nblks,'like',dLdZ);
+            dLdW = zeros(nAngles,nBlks,'like',dLdZ);
             %
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             if strcmp(layer.Mode,'Analysis')
                 % Block circular shift for Analysis mode
                 if strcmp(target,'Bottom')
@@ -329,11 +330,11 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                         layer.TargetChannels))
                 end
                 % C-S differential
-                c_top_ = permute(c_top,[1 3 2]);
-                c_btm_ = permute(c_btm,[1 3 2]);
+                c_top_ = reshape(c_top,pt,nBlks,nSamples);
+                c_btm_ = reshape(c_btm,pb,nBlks,nSamples);
                 for iAngle = uint32(1:nAngles)
-                    dCk_ = zeros(pt,nblks);
-                    dSk_ = zeros(pb,nblks);
+                    dCk_ = zeros(pt,nBlks);
+                    dSk_ = zeros(pb,nBlks);
                     dCk_(iAngle,:) = -sin(angles(iAngle,:));
                     dSk_(iAngle,:) =  cos(angles(iAngle,:));
                     %
@@ -348,15 +349,15 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                         d_top_ = dCk_.*c_top_ - dSk_.*c_btm_;
                         d_btm_ = dSk_.*c_top_ + dCk_.*c_btm_;
                     end
-                    d_top = ipermute(d_top_,[1 3 2]);
-                    d_btm = ipermute(d_btm_,[1 3 2]);
+                    d_top = reshape(d_top_,pt,1,nBlks,nSamples);
+                    d_btm = reshape(d_btm_,pb,1,nBlks,nSamples);
                     d = cat(1,d_top,d_btm);
-                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dLdZ,d),1),2));
+                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dLdZ,d),1),4));
                 end
             elseif strcmp(layer.Mode,'Synthesis')
                 % Block circular shift for Synthesis mode
-                dldz_top = dLdZ(1:pt,:,:);
-                dldz_btm = dLdZ(pt+1:pt+pb,:,:);
+                dldz_top = dLdZ(1:pt,:,:,:);
+                dldz_btm = dLdZ(pt+1:pt+pb,:,:,:);
                 if strcmp(target,'Bottom')
                     dldz_btm = circshift(dldz_btm,-shift);
                 elseif strcmp(target,'Top')
@@ -368,11 +369,11 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                 end
                 dldz_ = cat(1,dldz_top,dldz_btm);
                 % C-S differential
-                c_top_ = permute(c_top,[1 3 2]);
-                c_btm_ = permute(c_btm,[1 3 2]);
+                c_top_ = reshape(c_top,pt,nBlks,nSamples);
+                c_btm_ = reshape(c_btm,pb,nBlks,nSamples);
                 for iAngle = uint32(1:nAngles)
-                    dCk_ = zeros(pt,nblks);
-                    dSk_ = zeros(pb,nblks);
+                    dCk_ = zeros(pt,nBlks);
+                    dSk_ = zeros(pb,nBlks);
                     dCk_(iAngle,:) = -sin(angles(iAngle,:));
                     dSk_(iAngle,:) =  cos(angles(iAngle,:));
                     if isgpuarray(X)
@@ -386,10 +387,10 @@ classdef lsunCSAtomExtension1dLayer < nnet.layer.Layer %#codegen
                         d_top_ =  dCk_.*c_top_ + dSk_.*c_btm_;
                         d_btm_ = -dSk_.*c_top_ + dCk_.*c_btm_;
                     end
-                    d_top = ipermute(d_top_,[1 3 2]);
-                    d_btm = ipermute(d_btm_,[1 3 2]);
+                    d_top = reshape(d_top_,pt,1,nBlks,nSamples);
+                    d_btm = reshape(d_btm_,pb,1,nBlks,nSamples);
                     d = cat(1,d_top,d_btm);
-                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dldz_,d),1),2));
+                    dLdW(iAngle,:) = squeeze(sum(sum(bsxfun(@times,dldz_,d),1),4));
                 end
             else
                 throw(MException('LsunLayer:InvalidMode',...

@@ -1,14 +1,12 @@
 classdef lsunChannelConcatenation1dLayerTestCase < matlab.unittest.TestCase
     %LSUNCHANNELCONCATENATION1DLAYERTESTCASE
     %
-    %  TODO: フォーマット変更 nChs x 1 x nBlks x nSamples
-    %
     %   ２コンポーネント出力(nComponents=2のみサポート):
-    %      1 x nSamples x nBlks
-    %      (nChsTotal-1) x nSamples x nBlks
+    %      1 x 1 x nBlks x nSamples 
+    %      (nChsTotal-1) x 1 x nBlks x nSamples
     %
     %   １コンポーネント入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChsTotal x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -35,9 +33,9 @@ classdef lsunChannelConcatenation1dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunChannelConcatenation1dLayer();
-            fprintf("\n --- Check layer for 1-D sequences ---\n");
-            checkLayer(layer,{[3 8 4], [1 8 4]},...
-                'ObservationDimension',2,...
+            fprintf("\n --- Check layer for 1-D images ---\n");
+            checkLayer(layer,{[3 1 4 8], [1 1 4 8]},...
+                'ObservationDimension',4,...
                 'CheckCodegenCompatibility',false) %true)
         end
     end
@@ -72,14 +70,14 @@ classdef lsunChannelConcatenation1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = batch;
             nChsTotal = sum(nchs);
-            % (nChsTotal-1) x nSamples x nBlks
-            Xac = randn(nChsTotal-1,nSamples,nblks,datatype);
-            % 1 x nSamples x nBlks
-            Xdc = randn(1,nSamples,nblks,datatype);
+            % (nChsTotal-1) x 1 x nBlks x nSamples
+            Xac = randn(nChsTotal-1,1,nblks,nSamples,datatype);
+            % 1 x 1 x nBlks x nSamples
+            Xdc = randn(1,1,nblks,nSamples,datatype);
 
             
             % Expected values
-            % nChsTotal x nSamples x nBlks
+            % nChsTotal x 1 x nBlks x nSamples
             expctdZ = cat(1,Xdc,Xac);
             
             % Instantiation of target class
@@ -105,14 +103,14 @@ classdef lsunChannelConcatenation1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = batch;
             nChsTotal = sum(nchs);
-            % nChsTotal x nSamples x nBlks
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChsTotal x 1 x nBlks x nSamples
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             
             % Expected values
-            % (nChsTotal-1) x nSamples x nBlks
-            expctddLdXac = dLdZ(2:end,:,:);
-            % 1 x nSamples x nBlks
-            expctddLdXdc = dLdZ(1,:,:);
+            % (nChsTotal-1) x 1 x nBlks x nSamples
+            expctddLdXac = dLdZ(2:end,:,:,:);
+            % 1 x 1 x nBlks x nSamples
+            expctddLdXdc = dLdZ(1,:,:,:);
             
             % Instantiation of target class
             import tansacnet.lsun.*

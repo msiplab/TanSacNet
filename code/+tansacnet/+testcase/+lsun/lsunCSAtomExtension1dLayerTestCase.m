@@ -1,13 +1,11 @@
 classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
     %LSUNCSATOMEXTENSION1DLAYERTESTCASE
     %
-    %  TODO: フォーマット変更 nChs x 1 x nBlks x nSamples
-    %
     %   コンポーネント別に入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     %   コンポーネント別に出力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -42,9 +40,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 'NumberOfBlocks',4,...
                 'Mode','Analysis',...
                 'TargetChannels','Bottom');
-            fprintf("\n --- Check layer for 1-D sequences ---\n");
-            checkLayer(layer,[2 8 4],...
-                'ObservationDimension',2,...
+            fprintf("\n --- Check layer for 1-D images ---\n");
+            checkLayer(layer,[2 1 4 8],...
+                'ObservationDimension',4,...
                 'CheckCodegenCompatibility',true)
 
             layer = lsunCSAtomExtension1dLayer(...
@@ -53,9 +51,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 'NumberOfBlocks',4,...
                 'Mode','Synthesis',...
                 'TargetChannels','Top');
-            fprintf("\n --- Check layer for 1-D sequences ---\n");
-            checkLayer(layer,[2 8 4],...
-                'ObservationDimension',2,...
+            fprintf("\n --- Check layer for 1-D images ---\n");
+            checkLayer(layer,[2 1 4 8],...
+                'ObservationDimension',4,...
                 'CheckCodegenCompatibility',true)
 
         end
@@ -123,9 +121,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nChsTotal = stride;
             target_ = 'Bottom';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
             end
@@ -141,8 +138,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yb = circshift(Yb,shift);
             % Output
@@ -188,8 +185,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nChsTotal = stride;
             target_ = 'Top';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
             end
@@ -202,11 +199,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ];
             end
-            % nChsTotal x nSamples x nblks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yt = circshift(Yt,shift);
             % Output
@@ -252,8 +249,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nChsTotal = stride;
             target_ = 'Bottom';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             angle = pi/4;
             if usegpu
                 X = gpuArray(X);
@@ -270,8 +267,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yb = circshift(Yb,shift);
             % C-S block butterfly            
@@ -283,10 +280,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zct(:,iSample,iblk) = c*Yt(:,iSample,iblk);
-                    Zst(:,iSample,iblk) = s*Yt(:,iSample,iblk);
-                    Zcb(:,iSample,iblk) = c*Yb(:,iSample,iblk);
-                    Zsb(:,iSample,iblk) = s*Yb(:,iSample,iblk);                    
+                    Zct(:,:,iblk,iSample) = c*Yt(:,:,iblk,iSample);
+                    Zst(:,:,iblk,iSample) = s*Yt(:,:,iblk,iSample);
+                    Zcb(:,:,iblk,iSample) = c*Yb(:,:,iblk,iSample);
+                    Zsb(:,:,iblk,iSample) = s*Yb(:,:,iblk,iSample);                    
                 end
             end
             Yt = Zct-Zsb;
@@ -335,8 +332,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;
             target_ = 'Bottom';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
@@ -355,8 +352,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yb = circshift(Yb,shift);
             % C-S Block butterfly
@@ -368,10 +365,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zct(:,iSample,iblk) = C(:,iblk).*Yt(:,iSample,iblk);
-                    Zst(:,iSample,iblk) = S(:,iblk).*Yt(:,iSample,iblk);
-                    Zcb(:,iSample,iblk) = C(:,iblk).*Yb(:,iSample,iblk);
-                    Zsb(:,iSample,iblk) = S(:,iblk).*Yb(:,iSample,iblk);                    
+                    Zct(:,:,iblk,iSample) = C(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zst(:,:,iblk,iSample) = S(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zcb(:,:,iblk,iSample) = C(:,iblk).*Yb(:,:,iblk,iSample);
+                    Zsb(:,:,iblk,iSample) = S(:,iblk).*Yb(:,:,iblk,iSample);                    
                 end
             end
             Yt = Zct-Zsb;
@@ -420,8 +417,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;
             target_ = 'Top';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
@@ -440,8 +437,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yt = circshift(Yt,shift);
             % C-S Block butterfly
@@ -453,10 +450,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zct(:,iSample,iblk) = C(:,iblk).*Yt(:,iSample,iblk);
-                    Zst(:,iSample,iblk) = S(:,iblk).*Yt(:,iSample,iblk);
-                    Zcb(:,iSample,iblk) = C(:,iblk).*Yb(:,iSample,iblk);
-                    Zsb(:,iSample,iblk) = S(:,iblk).*Yb(:,iSample,iblk);                    
+                    Zct(:,:,iblk,iSample) = C(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zst(:,:,iblk,iSample) = S(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zcb(:,:,iblk,iSample) = C(:,iblk).*Yb(:,:,iblk,iSample);
+                    Zsb(:,:,iblk,iSample) = S(:,iblk).*Yb(:,:,iblk,iSample);                    
                 end
             end
             Yt = Zct-Zsb;
@@ -505,9 +502,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Bottom';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -520,12 +517,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             % C-S Block butterfly
             %Yt = Yt;
             %Yb = Yb;
@@ -535,8 +532,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             c_btm = circshift(c_btm,shift); % Bottom
             % C-S differential
@@ -544,10 +541,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 dS_ = zeros(nAngles,nblks);
                 dS_(iAngle,:) = ones(1,nblks);
                 for iblk = 1:nblks
-                    c_top_iblk = -dS_(:,iblk).*c_btm(:,:,iblk);                    
-                    c_btm_iblk =  dS_(:,iblk).*c_top(:,:,iblk);
+                    c_top_iblk = -dS_(:,iblk).*c_btm(:,:,iblk,:);                    
+                    c_btm_iblk =  dS_(:,iblk).*c_top(:,:,iblk,:);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dLdZ(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -599,9 +596,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Top';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -614,12 +611,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             % C-S Block butterfly
             %Yt = Yt;
             %Yb = Yb;
@@ -629,8 +626,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             c_top = circshift(c_top,shift); % Top
             % C-S differential
@@ -638,10 +635,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 dS_ = zeros(nAngles,nblks);
                 dS_(iAngle,:) = ones(1,nblks);
                 for iblk = 1:nblks
-                    c_top_iblk = -dS_(:,iblk).*c_btm(:,:,iblk);                    
-                    c_btm_iblk =  dS_(:,iblk).*c_top(:,:,iblk);
+                    c_top_iblk = -dS_(:,iblk).*c_btm(:,:,iblk,:);                    
+                    c_btm_iblk =  dS_(:,iblk).*c_top(:,:,iblk,:);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dLdZ(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -693,10 +690,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Bottom';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             angle = pi/4;
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -709,12 +706,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Zt = dLdZ(1:pt,:,:);
-            Zb = dLdZ(pt+1:pt+pb,:,:);
+            Zt = dLdZ(1:pt,:,:,:);
+            Zb = dLdZ(pt+1:pt+pb,:,:,:);
             % C-S Block butterfly (Transpose)
             c = cos(angle);
             s = sin(angle);
@@ -726,8 +723,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             c_btm = circshift(c_btm,shift); % Bottom
             % C-S differential
@@ -737,12 +734,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 dC_(iAngle,:) = -sin(angle)*ones(1,nblks);
                 dS_(iAngle,:) =  cos(angle)*ones(1,nblks);
                 for iblk = 1:nblks
-                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk) ...
-                        - dS_(:,iblk).*c_btm(:,:,iblk);                    
-                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk) ...
-                        + dC_(:,iblk).*c_btm(:,:,iblk);
+                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk,:) ...
+                        - dS_(:,iblk).*c_btm(:,:,iblk,:);                    
+                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk,:) ...
+                        + dC_(:,iblk).*c_btm(:,:,iblk,:);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dLdZ(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -795,10 +792,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Bottom';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             angles = randn(nAngles,nblks);
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -812,12 +809,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = permute(dLdZ(1:pt,:,:),[1 3 2]);
-            Yb = permute(dLdZ(pt+1:pt+pb,:,:),[1 3 2]);
+            Yt = reshape(dLdZ(1:pt,:,:,:),pt,nblks,nSamples);
+            Yb = reshape(dLdZ(pt+1:pt+pb,:,:,:),pb,nblks,nSamples);
             % C-S Block butterfly (Transpose)
             C_ = cos(angles);
             S_ = sin(angles);
@@ -825,22 +822,22 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zb = zeros(size(Yb),'like',Yb);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,iblk,iSample) =  C_(:,iblk).*Yt(:,iblk,iSample) ...
+                    Zt(:,iblk,iSample)=  C_(:,iblk).*Yt(:,iblk,iSample)...
                         + S_(:,iblk).*Yb(:,iblk,iSample);
-                    Zb(:,iblk,iSample) = -S_(:,iblk).*Yt(:,iblk,iSample) ...
+                    Zb(:,iblk,iSample)= -S_(:,iblk).*Yt(:,iblk,iSample)...
                         + C_(:,iblk).*Yb(:,iblk,iSample);
                 end
             end
-            Yt = ipermute(Zt,[1 3 2]);
-            Yb = ipermute(Zb,[1 3 2]);
+            Yt = reshape(Zt,pt,1,nblks,nSamples);
+            Yb = reshape(Zb,pb,1,nblks,nSamples);
             % Block circular shift (Revserse)
             Yb = circshift(Yb,-shift); % Bottom, Revserse
             expctddLdX = cat(1,Yt,Yb);
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             c_btm = circshift(c_btm,shift); % Bottom
             % C-S differential
@@ -850,12 +847,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 dC_(iAngle,:) = -sin(angles(iAngle,:));
                 dS_(iAngle,:) =  cos(angles(iAngle,:));
                 for iblk = 1:nblks
-                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk) ...
-                        - dS_(:,iblk).*c_btm(:,:,iblk);                    
-                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk) ...
-                        + dC_(:,iblk).*c_btm(:,:,iblk);
+                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk,:) ...
+                        - dS_(:,iblk).*c_btm(:,:,iblk,:);                    
+                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk,:) ...
+                        + dC_(:,iblk).*c_btm(:,:,iblk,:);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dLdZ(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -908,10 +905,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Top';
             mode_ = 'Analysis';
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             angles = randn(nAngles,nblks);
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -925,12 +922,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = permute(dLdZ(1:pt,:,:),[1 3 2]);
-            Yb = permute(dLdZ(pt+1:pt+pb,:,:),[1 3 2]);
+            Yt = reshape(dLdZ(1:pt,:,:,:),pt,nblks,nSamples);
+            Yb = reshape(dLdZ(pt+1:pt+pb,:,:,:),pb,nblks,nSamples);
             % C-S Block butterfly (Transpose)
             C_ = cos(angles);
             S_ = sin(angles);
@@ -938,22 +935,22 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zb = zeros(size(Yb),'like',Yb);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,iblk,iSample) =  C_(:,iblk).*Yt(:,iblk,iSample) ...
+                    Zt(:,iblk,iSample)=  C_(:,iblk).*Yt(:,iblk,iSample)...
                         + S_(:,iblk).*Yb(:,iblk,iSample);
-                    Zb(:,iblk,iSample) = -S_(:,iblk).*Yt(:,iblk,iSample) ...
+                    Zb(:,iblk,iSample)= -S_(:,iblk).*Yt(:,iblk,iSample)...
                         + C_(:,iblk).*Yb(:,iblk,iSample);
                 end
             end
-            Yt = ipermute(Zt,[1 3 2]);
-            Yb = ipermute(Zb,[1 3 2]);
+            Yt = reshape(Zt,pt,1,nblks,nSamples);
+            Yb = reshape(Zb,pb,1,nblks,nSamples);
             % Block circular shift (Revserse)
             Yt = circshift(Yt,-shift); % Top, Revserse
             expctddLdX = cat(1,Yt,Yb);
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             c_top = circshift(c_top,shift); % Top
             % C-S differential
@@ -963,12 +960,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 dC_(iAngle,:) = -sin(angles(iAngle,:));
                 dS_(iAngle,:) =  cos(angles(iAngle,:));
                 for iblk = 1:nblks
-                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk) ...
-                        - dS_(:,iblk).*c_btm(:,:,iblk);                    
-                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk) ...
-                        + dC_(:,iblk).*c_btm(:,:,iblk);
+                    c_top_iblk = dC_(:,iblk).*c_top(:,:,iblk,:) ...
+                        - dS_(:,iblk).*c_btm(:,:,iblk,:);                    
+                    c_btm_iblk = dS_(:,iblk).*c_top(:,:,iblk,:) ...
+                        + dC_(:,iblk).*c_btm(:,:,iblk,:);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
-                    dldz_iblk = dLdZ(:,:,iblk);
+                    dldz_iblk = dLdZ(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1020,9 +1017,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nChsTotal = stride;
             target_ = 'Bottom';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
             end
@@ -1038,8 +1034,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yb = circshift(Yb,shift);
             % Output
@@ -1085,8 +1081,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nChsTotal = stride;
             target_ = 'Top';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
             end
@@ -1099,11 +1095,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ];
             end
-            % nChsTotal x nSamples x nblks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % Block circular shift
             Yt = circshift(Yt,shift);
             % Output
@@ -1149,8 +1145,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nChsTotal = stride;
             target_ = 'Bottom';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             angle = pi/4;
             if usegpu
                 X = gpuArray(X);
@@ -1167,8 +1163,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             %
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % C-S block butterfly            
             c = cos(angle);
             s = sin(angle);
@@ -1178,10 +1174,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zct(:,iSample,iblk) = c*Yt(:,iSample,iblk);
-                    Zst(:,iSample,iblk) = s*Yt(:,iSample,iblk);
-                    Zcb(:,iSample,iblk) = c*Yb(:,iSample,iblk);
-                    Zsb(:,iSample,iblk) = s*Yb(:,iSample,iblk);                    
+                    Zct(:,:,iblk,iSample) = c*Yt(:,:,iblk,iSample);
+                    Zst(:,:,iblk,iSample) = s*Yt(:,:,iblk,iSample);
+                    Zcb(:,:,iblk,iSample) = c*Yb(:,:,iblk,iSample);
+                    Zsb(:,:,iblk,iSample) = s*Yb(:,:,iblk,iSample);                    
                 end
             end
             Yt =  Zct+Zsb; % Inverted
@@ -1232,8 +1228,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;
             target_ = 'Bottom';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
@@ -1252,8 +1248,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % C-S Block butterfly
             C = cos(angles);
             S = sin(angles);
@@ -1263,10 +1259,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zct(:,iSample,iblk) = C(:,iblk).*Yt(:,iSample,iblk);
-                    Zst(:,iSample,iblk) = S(:,iblk).*Yt(:,iSample,iblk);
-                    Zcb(:,iSample,iblk) = C(:,iblk).*Yb(:,iSample,iblk);
-                    Zsb(:,iSample,iblk) = S(:,iblk).*Yb(:,iSample,iblk);                    
+                    Zct(:,:,iblk,iSample) = C(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zst(:,:,iblk,iSample) = S(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zcb(:,:,iblk,iSample) = C(:,iblk).*Yb(:,:,iblk,iSample);
+                    Zsb(:,:,iblk,iSample) = S(:,iblk).*Yb(:,:,iblk,iSample);                    
                 end
             end
             Yt =  Zct+Zsb; % Inverted
@@ -1317,8 +1313,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;
             target_ = 'Top';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             angles = randn(nAngles,nblks);
             if usegpu
                 X = gpuArray(X);
@@ -1337,8 +1333,8 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = X(1:pt,:,:);
-            Yb = X(pt+1:pt+pb,:,:);
+            Yt = X(1:pt,:,:,:);
+            Yb = X(pt+1:pt+pb,:,:,:);
             % C-S Block butterfly
             C = cos(angles);
             S = sin(angles);
@@ -1348,10 +1344,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zsb = zeros(size(Yb),'like',Yb);            
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zct(:,iSample,iblk) = C(:,iblk).*Yt(:,iSample,iblk);
-                    Zst(:,iSample,iblk) = S(:,iblk).*Yt(:,iSample,iblk);
-                    Zcb(:,iSample,iblk) = C(:,iblk).*Yb(:,iSample,iblk);
-                    Zsb(:,iSample,iblk) = S(:,iblk).*Yb(:,iSample,iblk);                    
+                    Zct(:,:,iblk,iSample) = C(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zst(:,:,iblk,iSample) = S(:,iblk).*Yt(:,:,iblk,iSample);
+                    Zcb(:,:,iblk,iSample) = C(:,iblk).*Yb(:,:,iblk,iSample);
+                    Zsb(:,:,iblk,iSample) = S(:,iblk).*Yb(:,:,iblk,iSample);                    
                 end
             end
             Yt =  Zct+Zsb; % Inverted
@@ -1402,9 +1398,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Bottom';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -1417,12 +1413,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             % 
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             % Block circular shift (Revserse)
             Yb = circshift(Yb,-shift); % Bottom, Revserse
             % C-S Block butterfly
@@ -1432,14 +1428,14 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % C-S differential
-            c_top_ = permute(c_top,[1 3 2]);
-            c_btm_ = permute(c_btm,[1 3 2]);
+            c_top_ = reshape(c_top,pt,nblks,nSamples);
+            c_btm_ = reshape(c_btm,pb,nblks,nSamples);
             % Block circular shift (Revserse)
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             Yb = circshift(Yb,-shift); % Bottom, Revserse            
             dldz_ = cat(1,Yt,Yb);
             for iAngle = 1:nAngles
@@ -1449,11 +1445,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 for iblk = 1:nblks
                     c_top_iblk_ =  dS_(:,iblk).*c_btm_(:,iblk,:); % [  C S ]            
                     c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:); % [ -S C ]
-                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]); % iCh,iSample,iBlk
-                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_top_iblk = c_top_iblk_; % 
+                    c_btm_iblk = c_btm_iblk_;
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
                     % Block circular shift
-                    dldz_iblk = dldz_(:,:,iblk);
+                    dldz_iblk = reshape(dldz_(:,:,iblk,:),pt+pb,1,nSamples)                    ;
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1505,9 +1501,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Top';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChs x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -1520,12 +1516,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             %
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             % Block circular shift (Revserse)
             Yt = circshift(Yt,-shift); % Top, Revserse
             % C-S Block butterfly
@@ -1535,14 +1531,14 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % C-S differential
-            c_top_ = permute(c_top,[1 3 2]);
-            c_btm_ = permute(c_btm,[1 3 2]);
+            c_top_ = reshape(c_top,pt,nblks,nSamples);
+            c_btm_ = reshape(c_btm,pb,nblks,nSamples);
             % Block circular shift (Revserse)
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             Yt = circshift(Yt,-shift); % Top, Revserse            
             dldz_ = cat(1,Yt,Yb);            
             for iAngle = 1:nAngles
@@ -1552,11 +1548,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                 for iblk = 1:nblks
                     c_top_iblk_ =  dS_(:,iblk).*c_btm_(:,iblk,:); % [  C S ]            
                     c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:); % [ -S C ]
-                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]); % iCh,iSample,iBlk
-                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_top_iblk = c_top_iblk_; % iCh,iSample,iBlk
+                    c_btm_iblk = c_btm_iblk_;
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                    
                     % Block circular shift
-                    dldz_iblk = dldz_(:,:,iblk);
+                    dldz_iblk = reshape(dldz_(:,:,iblk,:),pt+pb,1,nSamples);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1608,10 +1604,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Bottom';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             angle = pi/4;
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -1624,12 +1620,12 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             %
-            Zt = dLdZ(1:pt,:,:);
-            Zb = dLdZ(pt+1:pt+pb,:,:);
+            Zt = dLdZ(1:pt,:,:,:);
+            Zb = dLdZ(pt+1:pt+pb,:,:,:);
             % Block circular shift (Revserse)
             Zb = circshift(Zb,-shift); % Bottom, Revserse
             % C-S Block butterfly (Transpose)
@@ -1641,14 +1637,14 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % C-S differential
-            c_top_ = permute(c_top,[1 3 2]);
-            c_btm_ = permute(c_btm,[1 3 2]);
+            c_top_ = reshape(c_top,pt,nblks,nSamples);
+            c_btm_ = reshape(c_btm,pb,nblks,nSamples);
             % Block circular shift (Revserse)
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             Yb = circshift(Yb,-shift); % Bottom, Revserse            
             dldz_ = cat(1,Yt,Yb);            
             for iAngle = 1:nAngles
@@ -1661,11 +1657,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                         + dS_(:,iblk).*c_btm_(:,iblk,:);
                     c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:) ...
                         + dC_(:,iblk).*c_btm_(:,iblk,:);
-                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]);
-                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_top_iblk = c_top_iblk_;
+                    c_btm_iblk = c_btm_iblk_;
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);                                        
                     % Block circular shift
-                    dldz_iblk = dldz_(:,:,iblk);
+                    dldz_iblk = reshape(dldz_(:,:,iblk,:),pt+pb,1,nSamples)                    ;
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1718,10 +1714,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Bottom';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             angles = randn(nAngles,nblks);
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -1735,17 +1731,14 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             %
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             % Block circular shift (Revserse)
             Yb = circshift(Yb,-shift); % Bottom, Revserse
-            %
-            Yt = permute(Yt,[1 3 2]);
-            Yb = permute(Yb,[1 3 2]);
             % C-S Block butterfly (Transpose)
             C_ =  cos(angles);
             S_ = -sin(angles); % Inverted
@@ -1753,26 +1746,26 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zb = zeros(size(Yb),'like',Yb);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,iblk,iSample) =  C_(:,iblk).*Yt(:,iblk,iSample) ...
-                        + S_(:,iblk).*Yb(:,iblk,iSample);
-                    Zb(:,iblk,iSample) = -S_(:,iblk).*Yt(:,iblk,iSample) ...
-                        + C_(:,iblk).*Yb(:,iblk,iSample);
+                    Zt(:,:,iblk,iSample)=  C_(:,iblk).*Yt(:,:,iblk,iSample)...
+                        + S_(:,iblk).*Yb(:,:,iblk,iSample);
+                    Zb(:,:,iblk,iSample)= -S_(:,iblk).*Yt(:,:,iblk,iSample)...
+                        + C_(:,iblk).*Yb(:,:,iblk,iSample);
                 end
             end
-            Yt = ipermute(Zt,[1 3 2]);
-            Yb = ipermute(Zb,[1 3 2]);
+            Yt = Zt;
+            Yb = Zb;
             expctddLdX = cat(1,Yt,Yb);
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % C-S differential
-            c_top_ = permute(c_top,[1 3 2]);
-            c_btm_ = permute(c_btm,[1 3 2]);
+            c_top_ = reshape(c_top,pt,nblks,nSamples);
+            c_btm_ = reshape(c_btm,pb,nblks,nSamples);
             % Block circular shift (Revserse)
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             Yb = circshift(Yb,-shift); % Bottom, Revserse
             dldz_ = cat(1,Yt,Yb);
             for iAngle = 1:nAngles
@@ -1785,11 +1778,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                         + dS_(:,iblk).*c_btm_(:,iblk,:);
                     c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:) ...
                         + dC_(:,iblk).*c_btm_(:,iblk,:);
-                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]);
-                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_top_iblk = reshape(c_top_iblk_,pt,1,1,nSamples);
+                    c_btm_iblk = reshape(c_btm_iblk_,pb,1,1,nSamples);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);
                     % Block circular shift
-                    dldz_iblk = dldz_(:,:,iblk);
+                    dldz_iblk = dldz_(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end
@@ -1842,10 +1835,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             nAngles = nChsTotal/2;            
             target_ = 'Top';
             mode_ = 'Synthesis';
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             angles = randn(nAngles,nblks);
-            X = randn(nChsTotal,nSamples,nblks,datatype);            
-            dLdZ = randn(nChsTotal,nSamples,nblks,datatype);
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);            
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
             if usegpu
                 X = gpuArray(X);
                 dLdZ = gpuArray(dLdZ);
@@ -1859,16 +1852,14 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             else
                 shift = [ 0 0 0 ]; 
             end
-            % nChsTotal x nSamples x nBlks
+            % nChs x 1 x nBlks x nSamples
             pt = ceil(nChsTotal/2);
             pb = floor(nChsTotal/2);
             %
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             % Block circular shift (Revserse)
             Yt = circshift(Yt,-shift); % Top, Revserse
-            Yt = permute(Yt,[1 3 2]);
-            Yb = permute(Yb,[1 3 2]);
             % C-S Block butterfly (Transpose)
             C_ =  cos(angles);
             S_ = -sin(angles); % Inverted
@@ -1876,26 +1867,26 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             Zb = zeros(size(Yb),'like',Yb);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,iblk,iSample) =  C_(:,iblk).*Yt(:,iblk,iSample) ...
-                        + S_(:,iblk).*Yb(:,iblk,iSample);
-                    Zb(:,iblk,iSample) = -S_(:,iblk).*Yt(:,iblk,iSample) ...
-                        + C_(:,iblk).*Yb(:,iblk,iSample);
+                    Zt(:,:,iblk,iSample)=  C_(:,iblk).*Yt(:,:,iblk,iSample)...
+                        + S_(:,iblk).*Yb(:,:,iblk,iSample);
+                    Zb(:,:,iblk,iSample)= -S_(:,iblk).*Yt(:,:,iblk,iSample)...
+                        + C_(:,iblk).*Yb(:,:,iblk,iSample);
                 end
             end
-            Yt = ipermute(Zt,[1 3 2]);
-            Yb = ipermute(Zb,[1 3 2]);
+            Yt = Zt;
+            Yb = Zb;
             expctddLdX = cat(1,Yt,Yb);
             
             % dLdWi = <dLdZ,(dVdWi)X>
             expctddLdW = zeros(nAngles,nblks,datatype);
-            c_top = X(1:pt,:,:);
-            c_btm = X(pt+1:pt+pb,:,:);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
             % C-S differential
-            c_top_ = permute(c_top,[1 3 2]);
-            c_btm_ = permute(c_btm,[1 3 2]);
+            c_top_ = reshape(c_top,pt,nblks,nSamples);
+            c_btm_ = reshape(c_btm,pb,nblks,nSamples);
             % Block circular shift (Revserse)
-            Yt = dLdZ(1:pt,:,:);
-            Yb = dLdZ(pt+1:pt+pb,:,:);
+            Yt = dLdZ(1:pt,:,:,:);
+            Yb = dLdZ(pt+1:pt+pb,:,:,:);
             Yt = circshift(Yt,-shift); % Bottom, Revserse
             dldz_ = cat(1,Yt,Yb);
             for iAngle = 1:nAngles
@@ -1908,11 +1899,11 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                         + dS_(:,iblk).*c_btm_(:,iblk,:);
                     c_btm_iblk_ = -dS_(:,iblk).*c_top_(:,iblk,:) ...
                         + dC_(:,iblk).*c_btm_(:,iblk,:);
-                    c_top_iblk = ipermute(c_top_iblk_,[1 3 2]);
-                    c_btm_iblk = ipermute(c_btm_iblk_,[1 3 2]);
+                    c_top_iblk = reshape(c_top_iblk_,pt,1,1,nSamples);
+                    c_btm_iblk = reshape(c_btm_iblk_,pb,1,1,nSamples);
                     c_iblk = cat(1,c_top_iblk,c_btm_iblk);
                     % Block circular shift
-                    dldz_iblk = dldz_(:,:,iblk);
+                    dldz_iblk = dldz_(:,:,iblk,:);
                     expctddLdW(iAngle,iblk) = sum(dldz_iblk.*c_iblk,'all');
                 end
             end

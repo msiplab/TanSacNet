@@ -2,10 +2,10 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
     %LSUNFINALFULLROTATION1DLAYER
     %
     %   コンポーネント別に入力(nComponents=1のみサポート):
-    %      nChs x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     %   コンポーネント別に出力(nComponents=1のみサポート):
-    %      nChs x nSamples x nBlks
+    %      nChs x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -99,30 +99,27 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
             %           
             % Layer forward function for prediction goes here.
             
-            nSamples = size(X,2);            
+            nSamples = size(X,4);            
             nblks = size(X,3);    
-            nChsTotal = sum(layer.PrivateNumberOfChannels);
+            %nChsTotal = sum(layer.PrivateNumberOfChannels);
             if layer.isUpdateRequested
                 layer = layer.updateParameters();
             end
             %
             V0T_ = layer.V0T;
-            Y = permute(X,[1 3 2]);
-            Z_ = zeros(nChsTotal,nblks,nSamples,'like',Y);
+            Y = X;
             for iSample = 1:nSamples
+                Y_iSample = Y(:,:,:,iSample);
                 if isgpuarray(X)
-                    Y_iSample = permute(Y(:,:,iSample),[1 4 2 3]);
-                    Z_iSample = pagefun(@mtimes,V0T_,Y_iSample);
-                    Z_(:,:,iSample) = ipermute(Z_iSample,[1 4 2 3]);
+                    Y_iSample = pagefun(@mtimes,V0T_,Y_iSample);
                 else
                     for iblk = 1:nblks
-                        Z_(:,iblk,iSample) = V0T_(:,:,iblk)*Y(:,iblk,iSample);
+                        Y_iSample(:,:,iblk) = V0T_(:,:,iblk)*Y_iSample(:,:,iblk);
                     end
                 end
+                Y(:,:,:,iSample) = Y_iSample;
             end
-            Z = ipermute(reshape(Z_,nChsTotal,nblks,nSamples),...
-                [1 3 2]);
-
+            Z = Y;
         end
         
         function [dLdX, dLdW] = backward(layer, X, ~, dLdZ, ~)
@@ -142,7 +139,7 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             %import tansacnet.lsun.get_fcn_orthmtxgen_diff
             
-            nSamples = size(dLdZ,2);
+            nSamples = size(dLdZ,4);
             nblks = size(dLdZ,3);            
             nChsTotal = sum(layer.PrivateNumberOfChannels);            
             %{
@@ -169,38 +166,39 @@ classdef lsunFinalFullRotation1dLayer < nnet.layer.Layer %#codegen
             
             % Layer backward function goes here.
             % dLdX = dZdX x dLdZ
-            adldz_ = permute(dLdZ,[1 3 2]);
-            cdLd_ = reshape(adldz_,nChsTotal,nblks,nSamples);
+            adldz_ = dLdZ;
+            cdLd_ = adldz_;
             for iSample = 1:nSamples
+                cdLd_iSample = cdLd_(:,:,:,iSample);                
                 if isgpuarray(X)
-                    cdLd_iSample = permute(cdLd_(:,:,iSample),[1 4 2 3]);
                     cdLd_iSample = pagefun(@mtimes,V0,cdLd_iSample);
-                    cdLd_(:,:,iSample) = ipermute(cdLd_iSample,[1 4 2 3]);
                 else
                     for iblk = 1:nblks
-                        cdLd_(:,iblk,iSample) = V0(:,:,iblk)*cdLd_(:,iblk,iSample);
+                        cdLd_iSample(:,:,iblk) = V0(:,:,iblk)*cdLd_iSample(:,:,iblk);
                     end
                 end
+                cdLd_(:,:,:,iSample) = cdLd_iSample;
+                
             end
-            dLdX = ipermute(cdLd_,[1 3 2]);
+            dLdX = cdLd_;
             
             % dLdWi = <dLdZ,(dVdWi)X>
             fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles);            
             dLdW = zeros(nAngles,nblks,'like',dLdZ);
-            dldz_ = permute(dLdZ,[1 3 2]);
-            c_ = permute(X,[1 3 2]);
+            dldz_ = dLdZ;
+            c_ = X;
             for iAngle = uint32(1:nAngles)
                 [dV0,dV0Pst,dV0Pre] = fcn_orthmtxgen_diff(angles,mus,iAngle,dV0Pst,dV0Pre);
                 dV0_T = permute(dV0,[2 1 3]);
                 if isgpuarray(X)
-                    c_ext = permute(c_,[1 4 2 3]); % idx 1 iblk iSample
+                    c_ext = c_; % idx 1 iblk iSample
                     d_ext = pagefun(@mtimes,dV0_T,c_ext); % idx 1 iblk iSample
-                    d_ = ipermute(d_ext,[1 4 2 3]);
-                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_,d_),[1 3]);
+                    d_ = d_ext;
+                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_,d_),[1 4]);
                 else
                     for iblk = 1:nblks
-                        dldz_iblk = squeeze(dldz_(:,iblk,:));
-                        c_iblk = squeeze(c_(:,iblk,:));
+                        dldz_iblk = squeeze(dldz_(:,:,iblk,:));
+                        c_iblk = squeeze(c_(:,:,iblk,:));
                         d_iblk = zeros(size(c_iblk),'like',c_iblk);
                         for iSample = 1:nSamples
                             d_iblk(:,iSample) = dV0_T(:,:,iblk)*c_iblk(:,iSample);

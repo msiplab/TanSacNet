@@ -1,12 +1,12 @@
 classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
     %LSUNCHANNELCONCATENATION1DLAYER
     %
-    %   ２コンポーネント出力(nComponents=2のみサポート): "CBT"
-    %      1 x nSamples x nBlks
-    %      (nChsTotal-1) x nSamples x nBlks
+    %   ２コンポーネント出力(nComponents=2のみサポート):
+    %      1 x 1 x nBlks x nSamples 
+    %      (nChsTotal-1) x 1 x nBlks x nSamples
     %
     %   １コンポーネント入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChsTotal x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -84,10 +84,8 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             
             % Layer forward function for prediction goes here.
-            %dLdX1 = dLdZ(:,:,1,:);
-            %dLdX2 = dLdZ(:,:,2:end,:);
-            dLdXac = dLdZ(2:end,:,:);
-            dLdXdc = dLdZ(1,:,:);
+            dLdXac = dLdZ(2:end,:,:,:);
+            dLdXdc = dLdZ(1,:,:,:);
         end
     end
     

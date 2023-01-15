@@ -1,14 +1,12 @@
 classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
     %NSOLTCHANNELSEPARATION1DLAYERTESTCASE
     %
-    %  TODO: フォーマット変更 nChs x 1 x nBlks x nSamples
-    %
     %   １コンポーネント入力(nComponents=1のみサポート):
-    %      nChsTotal x nSamples x nBlks
+    %      nChsTotal x 1 x nBlks x nSamples
     %
     %   ２コンポーネント出力(nComponents=2のみサポート): 
-    %      1 x nSamples x nBlks
-    %      (nChsTotal-1) x nSamples x nBlks
+    %      1 x 1 x nBlks x nSamples
+    %      (nChsTotal-1) x 1 x nBlks x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -35,9 +33,9 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
         function finalCheck(~)
             import tansacnet.lsun.*
             layer = lsunChannelSeparation1dLayer();
-            fprintf("\n --- Check layer for 1-D sequences ---\n");
-            checkLayer(layer,[4 8 4],...
-                'ObservationDimension',2,...
+            fprintf("\n --- Check layer for 1-D images ---\n");
+            checkLayer(layer,[4 1 4 8],...
+                'ObservationDimension',4,...
                 'CheckCodegenCompatibility',false) %true)
         end
 
@@ -73,16 +71,14 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = batch;
             nChsTotal = sum(nchs);
-            % nChsTotal x nSamples x nBlks
-            X = randn(nChsTotal,nSamples,nblks,datatype);
+            % nChsTotal x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
             
             % Expected values
-            % nBlks x (nChsTotal-1) x nSamples 
-            %expctdZ2 = X(:,2:end,:);
-            expctdZac = X(2:end,:,:);
-            % nBlks x 1 x nSamples
-            %expctdZ1 = X(:,1,:);
-            expctdZdc = X(1,:,:);
+            % (nChsTotal-1) x 1 x nBlks x nSamples 
+            expctdZac = X(2:end,:,:,:);
+            % 1 x 1 x nBlks x nSamples
+            expctdZdc = X(1,:,:,:);
             
             % Instantiation of target class
             import tansacnet.lsun.*
@@ -110,14 +106,13 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
             % Parameters
             nSamples = batch;
             nChsTotal = sum(nchs);
-            % (nChsTotal-1) x nBlks x nSamples  
+            % (nChsTotal-1) x 1 x nBlks x nSamples  
             dLdZac = randn(nChsTotal-1,nblks,nSamples,datatype);
-            % 1 x nBlks x nSamples 
+            % 1 x 1 x nBlks x nSamples 
             dLdZdc = randn(1,nblks,nSamples,datatype);
             
             % Expected values
-            % nChsTotal x nSamples x nBlks
-            %expctddLdX = cat(1,dLdZ1,dLdZ2);
+            % nChsTotal x 1 x nBlks x nSamples
             expctddLdX = cat(1,dLdZdc,dLdZac);
             
             % Instantiation of target class
