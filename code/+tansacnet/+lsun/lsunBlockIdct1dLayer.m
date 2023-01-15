@@ -1,11 +1,11 @@
 classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
     %NSOLTBLOCKIDCT1DLAYER
     %
-    %   コンポーネント別に入力:
-    %      nDecs x nSamples x nBlks 
+    %   入力:
+    %      Stride x nSamples x nBlks
     %
     %   ベクトル配列をブロック配列にして出力:
-    %      nComponents x nSamples x (Stride(1)xnBlks) 
+    %      (Stride x nBlks) x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -49,7 +49,7 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             layer.Description = "Block IDCT of size " ...
                 + layer.Stride;
             layer.Type = '';
-            layer.NumInputs = p.Results.NumberOfComponents;
+            layer.NumInputs = 1; %p.Results.NumberOfComponents;
             layer.NumOutputs = 1;
             
             dec = layer.Stride;
@@ -63,7 +63,7 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             
         end
         
-        function Z = predict(layer, varargin)
+        function Z = predict(layer, X) %varargin)
             % Forward input data through the layer at prediction time and
             % output the result.
             %
@@ -75,34 +75,26 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             %import tansacnet.utility.Direction
             
             % Layer forward function for prediction goes here.
-            nComponents = layer.NumInputs;
-            decFactor = layer.Stride;
+            %nComponents = layer.NumInputs;
+            stride = layer.Stride;
             C_T = layer.C.';
             %
-            X = varargin{1};
+            %X = varargin{1};
             nSamples = size(X,2);
             nBlks = size(X,3);
-            seqlen = decFactor*nBlks;
-            Z = zeros(nComponents,nSamples,seqlen,'like',X);
+            seqlen = stride*nBlks;
             %
-            for iComponent = 1:nComponents
-                X = varargin{iComponent};
-                if isgpuarray(X)
-                    arrayY = pagefun(@mtimes,C_T,X);
-                else
-                    arrayY = C_T*reshape(X,decFactor,[]);
-                end
-                Z(iComponent,:,:) = reshape(...
-                    permute(reshape(arrayY,decFactor,nSamples,[]),[2 1 3]),...
-                    1,nSamples,[]);
-            end
+            arrayY = C_T*reshape(X,stride,[]);
+            Z = reshape(...
+                    permute(reshape(arrayY,stride,nSamples,nBlks),[1 3 2]),...
+                    seqlen,nSamples);
             if isdlarray(X)
-                Z = dlarray(Z,'CTB');
+                Z = dlarray(Z,"TB");
             end
             
         end
         
-        function varargout = backward(layer,varargin)
+        function dLdX = backward(layer,varargin)
             % function through the layer.
             %
             % Inputs:
@@ -118,33 +110,21 @@ classdef lsunBlockIdct1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             %import tansacnet.utility.Direction
             
-            nComponents = layer.NumInputs;
+            %nComponents = layer.NumInputs;
             dLdZ = varargin{layer.NumInputs+layer.NumOutputs+1};
-            varargout = cell(1,nComponents);
+            %varargout = cell(1,nComponents);
             
             % Layer forward function for prediction goes here.
-            decFactor = layer.Stride;
+            stride = layer.Stride;
             %
             C_ = layer.C;
             %
             nSamples = size(dLdZ,2);            
-            seqlen = size(dLdZ,3);
-            nBlks = seqlen/decFactor;
-            
-            for iComponent = 1:nComponents
-
-                arrayX = permute(reshape(dLdZ(iComponent,:,:),...
-                    nSamples,decFactor,nBlks),[2 1 3]);
-
-                if isgpuarray(dLdZ)
-                    varargout{iComponent} = ...
-                        pagefun(@mtimes,C_,arrayX);
-                else
-                    varargout{iComponent} = reshape(...
-                        C_*reshape(arrayX,decFactor,[]),...
-                        decFactor,nSamples,nBlks);
-                end
-            end
+            seqlen = size(dLdZ,1);
+            nBlks = seqlen/stride;
+            %
+            dLdX = permute(reshape(C_*reshape(dLdZ,stride,[]),...
+                stride,nBlks,nSamples),[1 3 2]);
         end
     end
     
