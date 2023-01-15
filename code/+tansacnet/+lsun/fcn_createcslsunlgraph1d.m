@@ -22,7 +22,7 @@ end
 import tansacnet.lsun.*
 p = inputParser;
 addParameter(p,'InputSize',32)
-addParameter(p,'NumberOfComponents',1)
+%addParameter(p,'NumberOfComponents',1)
 addParameter(p,'Stride',1)
 addParameter(p,'OverlappingFactor',1)
 %addParameter(p,'NumberOfLevels',1);
@@ -33,7 +33,7 @@ addParameter(p,'AppendInOutLayers',true);
 parse(p,varargin{:})
 
 % Layer constructor function goes here.
-nComponents = p.Results.NumberOfComponents;
+nComponents = 1; %p.Results.NumberOfComponents;
 inputSize = [1 p.Results.InputSize nComponents];
 stride = p.Results.Stride;
 ovlpFactor = p.Results.OverlappingFactor;
@@ -121,21 +121,21 @@ for iLv = 1:nLevels
         for iOrderV = 2:2:ovlpFactor-1
             analysisLayers{iLv,iCmp} = [ analysisLayers{iLv,iCmp}
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV-1) 'rb'],...
-                'Stride',stride,'Direction','Right','TargetChannels','Bottom')
+                'Stride',stride,'Direction','Right','TargetChannels','Bottom','Mode','Analysis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV-1)],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',-1)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis') %,'Mus',-1)
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV) 'lt'],...
-                'Stride',stride,'Direction','Left','TargetChannels','Top')
+                'Stride',stride,'Direction','Left','TargetChannels','Top','Mode','Analysis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV)],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis')
                 ];
             synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV-1) 'rb~'],...
-                'Stride',stride,'Direction','Left','TargetChannels','Bottom')
+                'Stride',stride,'Direction','Left','TargetChannels','Bottom','Mode','Synthesis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV-1) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',-1)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis') %,'Mus',-1)
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV) 'lt~'],...
-                'Stride',stride,'Direction','Right','TargetChannels','Top')
+                'Stride',stride,'Direction','Right','TargetChannels','Top','Mode','Synthesis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV) '~'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis')
                 ];
@@ -395,8 +395,8 @@ if isAnalyzer && isSynthesizer
     end
     if isapndinout
         lsunLgraph = lsunLgraph.addLayers(...
-            regressionLayer('Name',[prefix 'Image output']));
-        lsunLgraph = lsunLgraph.connectLayers('Lv1_Out',[prefix 'Image output']);
+            regressionLayer('Name',[prefix 'Seq. output']));
+        lsunLgraph = lsunLgraph.connectLayers('Lv1_Out',[prefix 'Seq. output']);
     end
 end
 end
