@@ -122,27 +122,27 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
 
             Y = X;
             Zt = zeros(pt,1,nblks,nSamples,'like',Y);
-            Zb = zeros(pb,1,nblks,nSamples,'like',Y);            
+            Zb = zeros(pb,1,nblks,nSamples,'like',Y);
             for iSample = 1:nSamples
-                if isgpuarray(X) 
-                    Yt_iSample = Y(1:pt,:,:,iSample);
-                    Yb_iSample = Y(pt+1:pt+pb,:,:,iSample);
+                Yt_iSample = Y(1:pt,:,:,iSample);
+                Yb_iSample = Y(pt+1:pt+pb,:,:,iSample);
+                if isgpuarray(X)
                     Zt_iSample = pagefun(@mtimes,W_,Yt_iSample);
                     Zb_iSample = pagefun(@mtimes,U_,Yb_iSample);
-                    Zt(:,:,:,iSample) = Zt_iSample;
-                    Zb(:,:,:,iSample) = Zb_iSample;
                 else
+                    Zt_iSample = zeros(size(Yt_iSample),'like',Yt_iSample);
+                    Zb_iSample = zeros(size(Yb_iSample),'like',Yb_iSample);
                     for iblk = 1:nblks
-                        Zt(:,:,iblk,iSample) = W_(:,:,iblk)*Y(1:pt,:,iblk,iSample);
-                        Zb(:,:,iblk,iSample) = U_(:,:,iblk)*Y(pt+1:pt+pb,:,iblk,iSample);
+                        Zt_iSample(:,:,iblk) = W_(:,:,iblk)*Yt_iSample(:,:,iblk);
+                        Zb_iSample(:,:,iblk) = U_(:,:,iblk)*Yb_iSample(:,:,iblk);
                     end
                 end
+                Zt(:,:,:,iSample) = Zt_iSample;
+                Zb(:,:,:,iSample) = Zb_iSample;
             end
-            Y(1:pt,:,:,:) = Zt;
-            Y(pt+1:pt+pb,:,:,:) = Zb;
-            Z = Y;
+            Z = cat(1,Zt,Zb);
         end
-        
+
         function [dLdX, dLdW] = backward(layer, X, ~, dLdZ, ~)
             % (Optional) Backward propagate the derivative of the loss  
             % function through the layer.

@@ -176,18 +176,18 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 UnT = permute(genU.step(anglesU,mus),[2 1 3]);
             end
             Y = X;
-            Yt = Y(1:pt,:,:,:);
-            Yb = Y(pt+1:pt+pb,:,:,:);
+            Yt = reshape(Y(1:pt,:,:,:),pt,nblks,nSamples);
+            Yb = reshape(Y(pt+1:pt+pb,:,:,:),pb,nblks,nSamples);
             Zt = zeros(size(Yt),'like',Yt);
             Zb = zeros(size(Yb),'like',Yb);
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,:,iblk,iSample) = WnT(:,:,iblk)*Yt(:,:,iblk,iSample);
-                    Zb(:,:,iblk,iSample) = UnT(:,:,iblk)*Yb(:,:,iblk,iSample);
+                    Zt(:,iblk,iSample) = WnT(:,:,iblk)*Yt(:,iblk,iSample);
+                    Zb(:,iblk,iSample) = UnT(:,:,iblk)*Yb(:,iblk,iSample);
                 end
             end
-            Y(1:pt,:,:,:) = Zt;
-            Y(pt+1:pt+pb,:,:,:) = Zb;
+            Y(1:pt,:,:,:) = reshape(Zt,pt,1,nblks,nSamples);
+            Y(pt+1:pt+pb,:,:,:) = reshape(Zb,pb,1,nblks,nSamples);
             expctdZ = Y;
             
             % Instantiation of target class
@@ -254,18 +254,18 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 Un = genU.step(anglesU,mus);
             end
             Y = X;
-            Yt = Y(1:pt,:,:,:);
-            Yb = Y(pt+1:pt+pb,:,:,:);
+            Yt = reshape(Y(1:pt,:,:,:),pt,nblks,nSamples);
+            Yb = reshape(Y(pt+1:pt+pb,:,:,:),pb,nblks,nSamples);
             Zt = zeros(size(Yt),'like',Yt);
             Zb = zeros(size(Yb),'like',Yb);
             for iSample=1:nSamples
                 for iblk = 1:nblks
-                    Zt(:,:,iblk,iSample) = Wn(:,:,iblk)*Yt(:,:,iblk,iSample);
-                    Zb(:,:,iblk,iSample) = Un(:,:,iblk)*Yb(:,:,iblk,iSample);
+                    Zt(:,iblk,iSample) = Wn(:,:,iblk)*Yt(:,iblk,iSample);
+                    Zb(:,iblk,iSample) = Un(:,:,iblk)*Yb(:,iblk,iSample);
                 end
             end            
-            Y(1:pt,:,:,:) = Zt;
-            Y(pt+1:pt+pb,:,:,:) = Zb;
+            Y(1:pt,:,:,:) = reshape(Zt,pt,1,nblks,nSamples);
+            Y(pt+1:pt+pb,:,:,:) = reshape(Zb,pb,1,nblks,nSamples);
             expctdZ = Y;
             expctdDescription = "Analysis LSUN intermediate full rotation " ...
                 + "(pt,pb) = (" ...
@@ -346,16 +346,16 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             end
             %
             adLd_ = dLdZ;
-            cdLd_top = adLd_(1:pt,:,:,:);
-            cdLd_btm = adLd_(pt+1:pt+pb,:,:,:);
+            cdLd_top = reshape(adLd_(1:pt,:,:,:),pt,nblks,nSamples);
+            cdLd_btm = reshape(adLd_(pt+1:pt+pb,:,:,:),pb,nblks,nSamples);
             for iSample = 1:nSamples
                 for iblk = 1:nblks
-                    cdLd_top(:,:,iblk,iSample) = Wn(:,:,iblk)*cdLd_top(:,:,iblk,iSample);
-                    cdLd_btm(:,:,iblk,iSample) = Un(:,:,iblk)*cdLd_btm(:,:,iblk,iSample);
+                    cdLd_top(:,iblk,iSample) = Wn(:,:,iblk)*cdLd_top(:,iblk,iSample);
+                    cdLd_btm(:,iblk,iSample) = Un(:,:,iblk)*cdLd_btm(:,iblk,iSample);
                 end
             end
-            adLd_(1:pt,:,:,:) = cdLd_top;
-            adLd_(pt+1:pt+pb,:,:,:) = cdLd_btm;
+            adLd_(1:pt,:,:,:) = reshape(cdLd_top,pt,1,nblks,nSamples);
+            adLd_(pt+1:pt+pb,:,:,:) = reshape(cdLd_btm,pb,1,nblks,nSamples);
             expctddLdX = adLd_;
             
             % dLdWi = <dLdZ,(dVdWi)X>

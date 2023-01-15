@@ -34,7 +34,7 @@ parse(p,varargin{:})
 
 % Layer constructor function goes here.
 nComponents = p.Results.NumberOfComponents;
-inputSize = [p.Results.InputSize nComponents];
+inputSize = [1 p.Results.InputSize nComponents];
 stride = p.Results.Stride;
 ovlpFactor = p.Results.OverlappingFactor;
 nLevels = 1; %p.Results.NumberOfLevels;
@@ -76,7 +76,7 @@ if ~all(mod(ovlpFactor,2))
 end
 
 %%
-nBlocks = inputSize(1)/stride;
+nBlocks = inputSize(2)/stride;
 if mod(nBlocks,1)
     error('%d : Input size should be multiple of stride.')
 end
@@ -161,7 +161,7 @@ if isAnalyzer
     strLv = sprintf('Lv%0d_',iLv);
     if isapndinout
         lsunLgraph = lsunLgraph.addLayers(...
-            [ sequenceInputLayer(inputSize(1),...
+            [ imageInputLayer(inputSize,...
             'Name',[prefix 'Seq. input'],...
             'Normalization','none'),...
             lsunIdentityLayer(...
@@ -356,11 +356,12 @@ end
 if ~isAnalyzer
     for iLv = 1:nLevels
         strLv = sprintf('Lv%0d_',iLv);
-        inputSubSize(1) = inputSize(1)/(stride.^iLv);
-        %inputSubSize(2) = nComponents*(sum(nChannels)-1);
+        inputSubSize(1) = sum(nChannels)-1;
+        inputSubSize(2) = 1;
+        inputSubSize(3) = inputSize(2)/(stride.^iLv);
         if isapndinout
             lsunLgraph = lsunLgraph.addLayers(...
-                sequenceInputLayer(inputSubSize(1),...
+                imageInputLayer(inputSubSize,...
                 'Name',[prefix  strLv 'Ac feature input'],...
                 'Normalization','none'));
             lsunLgraph = lsunLgraph.connectLayers(...
@@ -368,11 +369,12 @@ if ~isAnalyzer
         end
     end
     strLv = sprintf('Lv%0d_',nLevels);
-    inputSubSize(1) = inputSize(1)/(stride.^nLevels);
-    %inputSubSize(2) = nComponents;
+    inputSubSize(1) = 1;
+    inputSubSize(2) = 1;
+    inputSubSize(3) = inputSize(2)/(stride.^nLevels);
     if isapndinout
         lsunLgraph = lsunLgraph.addLayers(...
-            sequenceInputLayer(inputSubSize(1),...
+            imageInputLayer(inputSubSize,...
             'Name',[prefix  strLv 'Dc feature input'],...
             'Normalization','none'));
         if iLv == nLevels
