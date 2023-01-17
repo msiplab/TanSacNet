@@ -118,26 +118,27 @@ for iLv = 1:nLevels
         strCmp = sprintf('Cmp%0d_',iCmp);
        
         % Atom extension 
+        mus_ = cat(1,ones(stride/2,nBlocks),-ones(stride/2,nBlocks)); % 初期化で非重複変換に縮退させるため
         for iOrderV = 2:2:ovlpFactor-1
             analysisLayers{iLv,iCmp} = [ analysisLayers{iLv,iCmp}
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV-1) 'rb'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Right','TargetChannels','Bottom','Mode','Analysis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV-1)],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis') %,'Mus',-1)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',mus_)
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV) 'lt'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Left','TargetChannels','Top','Mode','Analysis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV)],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis')
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',mus_)
                 ];
             synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV-1) 'rb~'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Left','TargetChannels','Bottom','Mode','Synthesis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV-1) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis') %,'Mus',-1)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',mus_)
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV) 'lt~'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Right','TargetChannels','Top','Mode','Synthesis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis')
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',mus_)
                 ];
         end
         
