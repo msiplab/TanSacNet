@@ -29,7 +29,7 @@ parts of your network.
 
 ## Requirements
  
- * MATLAB R2022b is recommended.
+ * MATLAB R2022b/R2023b is recommended.
  * Signal Processing Toolbox
  * Image Processing Toolbox
  * Optimization Toolbox
