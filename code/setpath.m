@@ -23,7 +23,7 @@ if  exist('./+tansacnet/','dir') == 7
     addpath(fullfile(getenv(envname),'.'))
     %
     sdirmexcodes = fullfile(getenv(envname),'mexcodes');
-    if isMexCodesAvailable
+    if isMexCodesAvailable && exist(sdirmexcodes,"dir")
         addpath(sdirmexcodes)
     elseif strfind(path,sdirmexcodes)  %#ok
         rmpath(sdirmexcodes)
