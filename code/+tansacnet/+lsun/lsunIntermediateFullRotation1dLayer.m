@@ -190,7 +190,7 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             dUnPre = repmat(eye(pb,'like',Un_),[1 1 nblks]);            
             
             %
-            dLdX = dLdZ;
+            dLdX = cast(dLdZ,'like',X);
             %cdLd_low = reshape(dLdZ(pt+1:pt+pb,:,:,:),pb,nrows*ncols,nSamples);
             if strcmp(layer.Mode,'Analysis')
                 W_ = permute(Wn_,[2 1 3]);
