@@ -90,6 +90,14 @@ synthesislgraph = fcn_cpparamsana2syn(synthesislgraph,analysislgraph);
 synthesislgraph = fcn_cpparamsana2syn_csax_(synthesislgraph,analysislgraph);
 synthesisnet = dlnetwork(synthesislgraph);
 %Confirmation of the adjoint relationship (complete reconstruction).
+nLearnables = height(synthesisnet.Learnables);
+for iLearnable = 1:nLearnables
+    synthesisnet.Learnables.Value(iLearnable) = ...
+        cellfun(@(x) double(x), ...
+        synthesisnet.Learnables.Value(iLearnable),'UniformOutput',false);
+end
+
+%
 x = rand([1 nX 1 nT],'double');
 dlx = dlarray(x,"SSCB"); % Deep learning array (SSCB)
 [dls{1:2}] = analysisnet.predict(dlx);
