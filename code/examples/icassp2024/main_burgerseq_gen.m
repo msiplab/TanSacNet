@@ -1,6 +1,6 @@
-function main_burgerseq_gen(filename)
+function main_burgerseq_gen(filename,nu)
 mu = 1;                 % advection coefficient (fixed at 1)
-nu = 0.05;              % Viscosity coefficient (corresponding to ν in the differential equation)
+%nu = 0.05;              % Viscosity coefficient (corresponding to ν in the differential equation)
 % Spatial Mesh
 L_x = 10;               % Maximum value in space direction
 dx = 0.1;
@@ -22,7 +22,7 @@ u0 = exp(-(X-3).^2/2);
 opt = odeset('MaxStep',5000);
 [~,DataT] = ode45(@(t,u) burg_system(u,t,k,mu,nu),T,u0,opt);
 
-save(filename,"T","X","DataT","dt","dx")
+save(filename+"nu_"+replace(num2str(nu),'.','_'),"T","X","DataT","dt","dx","nu")
 
 end
 
