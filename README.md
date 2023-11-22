@@ -19,13 +19,17 @@ parts of your network.
 
 ## Package structure
                
-           tansacnet -+- testcase -+- lsun
-                      |            |
-                      |            +- utility 
+           tansacnet -+- results
                       |
-                      +- lsun
+                      +- data
                       |
-                      +- utility       
+                      +- code -+- testcase -+- lsun
+                               |            |
+                               |            +- utility 
+                               |
+                               +- lsun
+                               |
+                               +- utility       
 
 ## Requirements
  
