@@ -13,7 +13,7 @@ This package is developed for
 of sampling embedded manifold of image and volumetric data as a set of 
 tangent space bases.
 
-We have prepared custom layer classes with Deep Learning Toolbox. 
+We have prepared custom layer classes with the Deep Learning Toolbox. 
 It is easy to incorporate them into flexible configurations and 
 parts of your network.
 
@@ -23,13 +23,15 @@ parts of your network.
                       |
                       +- data
                       |
-                      +- code -+- testcase -+- lsun
-                               |            |
-                               |            +- utility 
+                      +- code -+- examples -+- ...
                                |
-                               +- lsun
-                               |
-                               +- utility       
+                               +- tansacnet -+- testcase -+- lsun
+                                             |            |
+                                             |            +- utility 
+                                             |
+                                             +- lsun
+                                             |
+                                             +- utility       
 
 ## Requirements
  
@@ -38,7 +40,7 @@ parts of your network.
  * Image Processing Toolbox
  * Optimization Toolbox
 
-## Recomendation
+## Recommendation
  
  * Deep Learning Toolbox
  * Global Optimization Toolbox 
@@ -48,7 +50,7 @@ parts of your network.
 
 ## Brief introduction
  
-1. Change current directory to directory 'code' on MATLAB.
+1. Change the current directory to directory 'code' on MATLAB.
     
         >> cd code
 
@@ -61,8 +63,8 @@ parts of your network.
         >> mybuild
 
 4. Several example codes are found under the second layer directory 
-   'examples' of this package. Change current directory to one under 
-   the second layer directiory 'examples' and execute an M-file of 
+   'examples' of this package. Change the current directory to one under 
+   the second layer directory 'examples' and executes an M-file of 
    which name begins with 'main,' such as
  
         >> main_xxxx
