@@ -278,7 +278,8 @@ if nargout > 5
 
     % Reconstruction
     x0 = X(:,1);
-    R = real(fcn_timeevoldmd(x0,Vals,Vecs,nFrames));  % Take real only for numerical error correction
+    %R = real(fcn_timeevoldmd(x0,Vals,Vecs,nFrames));  % Take real only for numerical error correction
+    R = fcn_timeevoldmdwA(x0,A,nFrames);
 
     % Rendering
     if islsun
