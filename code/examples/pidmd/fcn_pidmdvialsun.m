@@ -25,6 +25,7 @@ if islsun
         options.sgdmomentum = 0.9;
         options.sgddecay = 0.01;
         options.initialLearnRate = 1e-4;
+        options.lineLossTrain = [];
     end
 else
     options = [];
@@ -125,13 +126,6 @@ if islsun
     end
 
     %% Configuration
-    %figure
-    %lineLossTrain = animatedline('Color',[0.85 0.325 0.098]);
-    %ylim([0 inf])
-    %xlabel("Iteration")
-    %ylabel("Loss")
-    %grid on
-
     velocity = [];
     iteration = options.sgditeration; % 0.01
     momentum = options.sgdmomentum; % 0.9;
@@ -140,6 +134,10 @@ if islsun
 
     %% Loop over epochs.
     %start = tic;
+    if ~isempty(options.lineLossTrain)
+        %D = duration(0,0,toc(start),'Format','hh:mm:ss');
+        clearpoints(options.lineLossTrain)
+    end
     for epoch = 1:maxEpochs
 
         % Shuffle data.
@@ -163,10 +161,12 @@ if islsun
             [trainnet,velocity] = sgdmupdate(trainnet,gradients,velocity,learnRate,momentum);
 
             % Display the training progress.
-            %D = duration(0,0,toc(start),'Format','hh:mm:ss');
-            %addpoints(lineLossTrain,iteration,loss)
-            %title("Epoch: " + epoch + ", Elapsed: " + string(D))
-            %drawnow
+            if ~isempty(options.lineLossTrain)
+                %D = duration(0,0,toc(start),'Format','hh:mm:ss');
+                addpoints(options.lineLossTrain,iteration,loss)
+                title("Epoch: " + epoch) % + ", Elapsed: " + string(D))
+                drawnow
+            end
         end
     end
 
@@ -275,11 +275,11 @@ if nargout > 5
 
     % Reconstruction
     x0 = X(:,1);
-    size(x0)
     R = real(fcn_timeevoldmd(x0,Vals,Vecs,nFrames));  % Take real only for numerical error correction
-    
-    % LSUN decoding
+
+    % Rendering
     if islsun
+        % LSUN decoding
         disp("LSUN decoding ...")
         rt = synthesizer_(R);
         rt = rt(1:nrows,1:ncols,:);
@@ -353,6 +353,7 @@ for iFrame = 1:nFrames
 end
 end
 
+%% Extract stride
 function stride = extractstride(lsun)
 import tansacnet.lsun.*
 
