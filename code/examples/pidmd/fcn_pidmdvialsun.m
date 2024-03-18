@@ -17,7 +17,7 @@ if islsun
         options.stride = [4 4];
         options.ovlpFactor = [5 5];
         options.nCoefs = 2;
-        options.maxEpochs = 2; %4;
+        options.maxEpochs = 4;
         options.miniBatchSize = 5;
         options.stdInitAng = 1e-6;
         options.noDcLeakage = false;
@@ -26,6 +26,7 @@ if islsun
         options.sgddecay = 0.01;
         options.initialLearnRate = 1e-4;
         options.lineLossTrain = [];
+        options.useGPU = true;
     end
 else
     options = [];
@@ -117,7 +118,7 @@ if islsun
         'MiniBatchFcn',@preprocessMiniBatch,...
         'MiniBatchFormat','SSCB',...
         'OutputCast','double',...
-        'OutputEnvironment','gpu');
+        'OutputEnvironment','auto');
     shuffle(mbq)
     dlX = next(mbq);
     trainnet = dlnetwork(analysislgraph,dlX);
@@ -253,7 +254,9 @@ if islsun
 
     %% piDMD w/ POD mode truncation via LSUN
     % Project X and Y onto the LSUN feature space
-    obsData = gpuArray(obsData);
+    if options.useGPU
+        obsData = gpuArray(obsData);
+    end
     dataMatrix = analyzer_(obsData);
 
 else % w/o LSUN
