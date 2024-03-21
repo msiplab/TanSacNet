@@ -84,6 +84,7 @@ if islsun
     %% Parameter optimization and approximation
     % Create analysis layerGraph
     analysislgraph = layerGraph(analysisnet);
+    clear analysisnet
 
     % Coefficient masking
     nChsTotal = prod(stride);
@@ -125,6 +126,7 @@ if islsun
     if ~trainnet.Initialized
         warnign("Not initialized")
     end
+    clear analysislgraph
 
     %% Configuration
     velocity = [];
@@ -192,6 +194,7 @@ if islsun
     trainlgraph = layerGraph(trainnet);
     lsunsyn4predict = fcn_cpparamsana2syn(lsunsyn4predict,trainlgraph);
     lsunana4predict = fcn_cpparamssyn2ana(lsunana4predict,lsunsyn4predict);
+    clear trainlgraph
     %
 
     %% Assemble analyzer
@@ -240,6 +243,7 @@ if islsun
     %% Define the LSUN analyzer and synthesizer
     analysislsun4predict = assembleNetwork(lsunana4predict);
     synthesislsun4predict = assembleNetwork(lsunsyn4predict);
+    clear lsunana4predict lsunsyn4predict
 
     nLayers = height(analysislsun4predict.Layers);
     for iLayer = 1:nLayers
