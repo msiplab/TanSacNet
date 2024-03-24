@@ -27,6 +27,7 @@ if islsun
         options.initialLearnRate = 1e-4;
         options.lineLossTrain = [];
         options.useGPU = true;
+        options.outputEnvironment = 'auto';
     end
 else
     options = [];
@@ -58,6 +59,7 @@ if islsun
     nCoefs = options.nCoefs;
     miniBatchSize = options.miniBatchSize;
     maxEpochs = options.maxEpochs;
+    outputEnvironment = options.outputEnvironment;
 
     %% Pad zeros to make the size multiples of nDecs.
     obsData = padarray(obsData,[szy szx]-[nrows ncols],0,'post');
@@ -119,7 +121,7 @@ if islsun
         'MiniBatchFcn',@preprocessMiniBatch,...
         'MiniBatchFormat','SSCB',...
         'OutputCast','double',...
-        'OutputEnvironment','auto');
+        'OutputEnvironment',outputEnvironment);
     shuffle(mbq)
     dlX = next(mbq);
     trainnet = dlnetwork(analysislgraph,dlX);
