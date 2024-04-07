@@ -42,7 +42,7 @@ if license('checkout','matlab_coder') % Coder is available
         %
         % build mex
         codegenskip = false;
-        if license('checkout','gpu_coder')
+        if license('checkout','gpu_coder') && useGpuArray
             cfg = coder.gpuConfig('mex');
         elseif strcmp(device,'cpu')
             cfg = coder.config('mex');
