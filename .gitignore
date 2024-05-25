@@ -1,1 +1,8 @@
 # List of untracked files to ignore
+/code/codegen/
+/code/mexcodes/
+!/code/mexcodes/.emptyfolder
+/data/
+!/data/.datafolder
+/results/
+!/results/.resultsfolder
