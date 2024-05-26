@@ -9,7 +9,7 @@ class LsunBlockDct2dLayer(nn.Module):
     LSUNBLOCKDCT2DLAYER
     
        ベクトル配列をブロック配列を入力:
-          nSamples x nComponents x (Stride(1)xnRows) x (Stride(2)xnCols) 
+          nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols) 
     
        コンポーネント別に出力(nComponents):
           nSamples x nDecs x nRows x nCols 

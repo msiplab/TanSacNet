@@ -1,4 +1,3 @@
-
 import itertools
 import unittest
 from parameterized import parameterized
@@ -12,7 +11,7 @@ from lsunBlockDct2dLayer import LsunBlockDct2dLayer
 from lsunUtility import Direction
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
-datatype = [ torch.float, torch.double ]
+datatype = [ torch.float32, torch.float64 ]
 height = [ 8, 16, 32 ]
 width = [ 8, 16, 32 ]
 isdevicetest = True
