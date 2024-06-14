@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
 
-nchs = [ [3, 3], [4, 4] ]
+nchs = [ [3, 3], [4, 4], [32, 32] ]
 datatype = [ torch.float32, torch.float64 ]
 nrows = [ 4, 8, 16 ]
 ncols = [ 4, 8, 16 ]
@@ -13,12 +13,14 @@ batch = [ 1, 8 ]
 
 class LsunChannelConcatenation2dLayerTestCase(unittest.TestCase):
     """
-    ２コンポーネント入力(nComponents=2のみサポート):
-       nSamples x  nRows x nCols x (nChsTotal-1)    
-       nSamples x nRows x nCols
+    LSUNCHANNELCONCATENATION2DLAYERTESTCASE
 
-    １コンポーネント出力(nComponents=1のみサポート):
-       nSamples x nRows x nCols x nChsTotal
+        ２コンポーネント入力(nComponents=2のみサポート):
+            nSamples x  nRows x nCols x (nChsTotal-1)    
+            nSamples x nRows x nCols
+
+        １コンポーネント出力(nComponents=1のみサポート):
+        nSamples x nRows x nCols x nChsTotal
 
     Requirements: Python 3.10/11.x, PyTorch 2.3.x
 
