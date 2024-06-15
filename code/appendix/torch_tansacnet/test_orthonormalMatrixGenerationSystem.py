@@ -32,7 +32,8 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         rtol,atol = 1e-5,1e-8 
 
         # Expected values
-        coefExpctd = torch.tensor([
+        coefExpctd = torch.zeros(1,2,2)
+        coefExpctd[0] = torch.tensor([
             [ 1., 0. ],
             [ 0., 1. ] ])
         
@@ -51,7 +52,8 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         rtol,atol = 1e-5,1e-8
 
         # Expected values
-        coefExpctd = torch.tensor([
+        coefExpctd = torch.zeros(1,2,2)
+        coefExpctd[0] = torch.tensor([
             [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
             [ math.sin(math.pi/4),  math.cos(math.pi/4) ] ])
         
@@ -63,6 +65,30 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             coefActual = omgs(math.pi/4,1)
 
         # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
+    # Test for default construction
+    def testConstructorWithAnglesMultiple(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        coefExpctd = torch.zeros(2,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
+            [ math.sin(math.pi/4),  math.cos(math.pi/4) ] ])
+        coefExpctd[1] = torch.tensor([
+            [ math.cos(math.pi/6), -math.sin(math.pi/6) ],
+            [ math.sin(math.pi/6),  math.cos(math.pi/6) ] ])
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem()
+            
+        # Actual values
+        with torch.no_grad():
+            angles = torch.tensor([ [math.pi/4], [math.pi/6] ])
+            coefActual = omgs(angles,1)
+
+        # Evaluation            
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
 if __name__ == '__main__':

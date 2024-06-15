@@ -48,12 +48,14 @@ class OrthonormalMatrixGenerationSystem:
 
         # Number of angles
         if isinstance(angles, int) or isinstance(angles, float):
-            angles = torch.tensor([angles],dtype=self.dtype) 
+            angle_ = angles
+            angles = torch.zeros(1,1,dtype=self.dtype)
+            angles[0,0] = angle_
         elif not torch.is_tensor(angles):
             angles = torch.tensor(angles,dtype=self.dtype)
         else:
             angles = angles.to(dtype=self.dtype) 
-        nAngles = len(angles)
+        nAngles = angles.size(1)
 
         # Number of dimensions
         if not hasattr(self, 'number_of_dimensions'):
@@ -74,25 +76,28 @@ class OrthonormalMatrixGenerationSystem:
     
     def stepNormal_(self, angles): #, mus, index_pd_angle):
         nDims = self.number_of_dimensions
-        #matrix = 
-        #nMatrices = 1 # angles.shape[1]
-        #matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (1, 1, nMatrices))
-        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device)        
-        iAng = 0
-        iMtx = 0
-        for iTop in range(nDims - 1):
-            vt = matrix[iTop, :] #, iMtx]
-            for iBtm in range(iTop + 1, nDims):
-                angle = angles[iAng] #, iMtx]
-                #if iAng == index_pd_angle:
-                #    angle = angle + torch.pi / 2
-                vb = matrix[iBtm, :] #, iMtx]
-                vt, vb = rot_(vt, vb, angle)
-                #if iAng == index_pd_angle:
-                #   matrix[:, :, iMtx] = torch.zeros_like(matrix[:, :, iMtx])
-                matrix[iBtm, :] = vb #, iMtx] = vb
-                iAng += 1
-            matrix[iTop, :] = vt #, iMtx] = vt
+        nMatrices = angles.shape[0]
+        matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+        # 
+        for iMtx in range(nMatrices):
+            iAng = 0
+            matrix_iMtx = matrix[iMtx]
+            angles_iMtx = angles[iMtx]
+            for iTop in range(nDims - 1):
+                vt = matrix_iMtx[iTop, :]
+                for iBtm in range(iTop + 1, nDims):
+                    angle = angles_iMtx[iAng]
+                    #if iAng == index_pd_angle:
+                    #    angle = angle + torch.pi / 2
+                    vb = matrix_iMtx[iBtm, :]
+                    vt, vb = rot_(vt, vb, angle)
+                    #if iAng == index_pd_angle:
+                    #   matrix[:, :, iMtx] = torch.zeros_like(matrix[:, :, iMtx])
+                    matrix_iMtx[iBtm, :] = vb
+                    iAng += 1
+                matrix_iMtx[iTop, :] = vt
+            matrix[iMtx] = matrix_iMtx
+
         return matrix
 
     """
