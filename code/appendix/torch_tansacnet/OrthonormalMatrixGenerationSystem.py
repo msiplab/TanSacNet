@@ -1,6 +1,17 @@
 import torch
 import math
 
+def rot_(vt, vb, angle):
+    """ Planar rotation """
+    c = torch.cos(angle)
+    s = torch.sin(angle)
+    u = s * (vt + vb)
+    vt = (c + s) * vt
+    vb = (c - s) * vb
+    vt = vt - u
+    vb = vb + u
+    return vt, vb
+
 class OrthonormalMatrixGenerationSystem:
     """
     ORTHONORMALMATRIXGENERATIONSYSTEM Orthonormal matrix generator
@@ -45,7 +56,9 @@ class OrthonormalMatrixGenerationSystem:
         nAngles = len(angles)
 
         # Number of dimensions
-        nDims = int(1+math.sqrt(1+8*nAngles)/2)
+        if not hasattr(self, 'number_of_dimensions'):
+            self.number_of_dimensions = int(1+math.sqrt(1+8*nAngles)/2)
+        nDims = self.number_of_dimensions
 
         # Setup of mus, which is send to the same device with angles
         if isinstance(mus, int) or isinstance(mus, float):
@@ -55,9 +68,32 @@ class OrthonormalMatrixGenerationSystem:
         else:
             mus = mus.to(dtype=self.dtype,device=angles.device) 
 
-        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device)
+        matrix = self.stepNormal_(angles) #, mus, index_pd_angle)
         
         return matrix.clone()
+    
+    def stepNormal_(self, angles): #, mus, index_pd_angle):
+        nDims = self.number_of_dimensions
+        #matrix = 
+        #nMatrices = 1 # angles.shape[1]
+        #matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (1, 1, nMatrices))
+        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device)        
+        iAng = 0
+        iMtx = 0
+        for iTop in range(nDims - 1):
+            vt = matrix[iTop, :] #, iMtx]
+            for iBtm in range(iTop + 1, nDims):
+                angle = angles[iAng] #, iMtx]
+                #if iAng == index_pd_angle:
+                #    angle = angle + torch.pi / 2
+                vb = matrix[iBtm, :] #, iMtx]
+                vt, vb = rot_(vt, vb, angle)
+                #if iAng == index_pd_angle:
+                #   matrix[:, :, iMtx] = torch.zeros_like(matrix[:, :, iMtx])
+                matrix[iBtm, :] = vb #, iMtx] = vb
+                iAng += 1
+            matrix[iTop, :] = vt #, iMtx] = vt
+        return matrix
 
     """
     def stepNormal_(self, angles, mus, index_pd_angle):
