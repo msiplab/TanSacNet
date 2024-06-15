@@ -13,18 +13,18 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
     """
     ORTHONORMALMATRIXGENERATIONSYSTEMTESTCASE Test case for OrthonormalMatrixGenerationSystem
     
-     Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
-     Copyright (c) 2024, Shogo MURAMATSU
+    Copyright (c) 2024, Shogo MURAMATSU
     
-     All rights reserved.
+    All rights reserved.
     
-     Contact address: Shogo MURAMATSU,
+    Contact address: Shogo MURAMATSU,
                     Faculty of Engineering, Niigata University,
                     8050 2-no-cho Ikarashi, Nishi-ku,
                     Niigata, 950-2181, JAPAN
     
-     http://www.eng.niigata-u.ac.jp/~msiplab/
+    http://www.eng.niigata-u.ac.jp/~msiplab/
     """
 
     # Test for default construction

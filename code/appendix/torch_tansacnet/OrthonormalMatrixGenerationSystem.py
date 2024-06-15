@@ -5,18 +5,18 @@ class OrthonormalMatrixGenerationSystem:
     """
     ORTHONORMALMATRIXGENERATIONSYSTEM Orthonormal matrix generator
     
-     Requirements: Python 3.10/10.x
-    %
-    % Copyright (c) 2024, Shogo MURAMATSU
-    %
-    % All rights reserved.
-    %
-    % Contact address: Shogo MURAMATSU,
-    %                Faculty of Engineering, Niigata University,
-    %                8050 2-no-cho Ikarashi, Nishi-ku,
-    %                Niigata, 950-2181, JAPAN
-    %
-    % http://www.eng.niigata-u.ac.jp/~msiplab/
+    Requirements: Python 3.10/10.x, PyTorch 2.3.x
+    
+    Copyright (c) 2024, Shogo MURAMATSU
+    
+    All rights reserved.
+    
+    Contact address: Shogo MURAMATSU,
+                    Faculty of Engineering, Niigata University,
+                    8050 2-no-cho Ikarashi, Nishi-ku,
+                    Niigata, 950-2181, JAPAN
+    
+    http://www.eng.niigata-u.ac.jp/~msiplab/
     """
 
     def __init__(self,
@@ -158,7 +158,7 @@ class OrthonormalMatrixGenerationSystem:
         vb = vb + u
         return vt, vb
     """
-    
+
 """
 classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
     %ORTHONORMALMATRIXGENERATIONSYSTEM Orthonormal matrix generator
