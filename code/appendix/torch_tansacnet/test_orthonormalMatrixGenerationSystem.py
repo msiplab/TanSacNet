@@ -152,33 +152,35 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
+    # Test for set angle
+    def testConstructionWithAnglesAndMusMultiple(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        coefExpctd = torch.zeros(2,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
+            [ -math.sin(math.pi/4), -math.cos(math.pi/4) ] ])
+        coefExpctd[1] = torch.tensor([
+            [ -math.cos(math.pi/6), math.sin(math.pi/6) ],
+            [ math.sin(math.pi/6), math.cos(math.pi/6) ] ])
+        
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            angles = [ [math.pi/4], [math.pi/6] ]
+            mus = [ [1,-1], [-1,1] ]
+            coefActual = omgs(angles=angles,mus=mus)
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
 if __name__ == '__main__':
     unittest.main()
     
 """
-        function testConstructorWithMusMultiple(testCase)
-            
-            % Expected values
-            coefExpctd(:,:,1) = [
-                1 0 ;
-                0 -1 ];
-            coefExpctd(:,:,2) = [
-                -1 0 ;
-                0 1 ];
-
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            mus = [  1 -1 ;
-                    -1  1 ];
-            coefActual = step(testCase.omgs,[],mus);            
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-            
-        end
 
         function testConstructorWithAnglesAndMusMultiple(testCase)
             
