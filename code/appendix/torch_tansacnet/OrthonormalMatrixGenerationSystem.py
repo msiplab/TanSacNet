@@ -46,6 +46,8 @@ class OrthonormalMatrixGenerationSystem:
         """
 
         # Number of angles
+        if isinstance(angles,list) and len(angles) == 0:
+            angles = 0
         if isinstance(angles, int) or isinstance(angles, float):
             angle_ = angles
             angles = torch.zeros(1,1,dtype=self.dtype)
