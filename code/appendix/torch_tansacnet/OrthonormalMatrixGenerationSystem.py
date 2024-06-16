@@ -203,18 +203,7 @@ class OrthonormalMatrixGenerationSystem:
                     matrix[:, :, iMtx] = mus[:, iMtx] * matrix[:, :, iMtx]
             self.nextangle += 1
         return matrix
-
-    @staticmethod
-    def rot_(vt, vb, angle):
-        c = torch.cos(angle)
-        s = torch.sin(angle)
-        u = s * (vt + vb)
-        vt = (c + s) * vt
-        vb = (c - s) * vb
-        vt = vt - u
-        vb = vb + u
-        return vt, vb
-    """
+"""
 
 """
 classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen

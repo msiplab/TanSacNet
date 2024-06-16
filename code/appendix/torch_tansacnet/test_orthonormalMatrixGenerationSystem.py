@@ -251,31 +251,31 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
+    # Test for set angle
+    @parameterized.expand(itertools.product(nblks))
+    def test2x2Multiple(self,nblks):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        normExpctd = torch.ones(nblks,2)
+
+        # Instantiation of target class
+        angs = 2*math.pi*torch.rand(nblks,1)
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            matrices = omgs(angles=angs,mus=1)
+            normActual = torch.linalg.vector_norm(matrices,ord=2,dim=2)
+
+        # Evaluation
+        message = "normActual=" + str(normActual) + " differs from 1"
+        self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
+
 if __name__ == '__main__':
     unittest.main()
     
 """
-        % Test for set angle
-        function test2x2Multiple(testCase,nblks)
-
-            % Expected values
-            normExpctd = ones(1,2,nblks);
-
-            % Instantiation of target class
-            angs = 2*pi*rand(1,nblks);
-            import tansacnet.utility.*
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-
-            % Actual values
-            matrices = step(testCase.omgs,angs,1);
-            normActual = vecnorm(matrices,2,1);
-
-            % Evaluation
-            message = ...
-                sprintf('normActual=%g differs from 1',normActual);
-            testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
-
-        end
 
         % Test for set angle
         function test4x4(testCase)
