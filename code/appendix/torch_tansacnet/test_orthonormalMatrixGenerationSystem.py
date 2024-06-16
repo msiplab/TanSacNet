@@ -152,7 +152,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
-    # Test for set angle
+    # Test for set angle and mus 
     def testConstructionWithAnglesAndMusMultiple(self):
         rtol,atol = 1e-5,1e-8
 
@@ -211,7 +211,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
 
-    # Test for set angle
+    # Test for set angle for multiple blocks
     def testSetAnglesMultiple(self):
         rtol,atol = 1e-5,1e-8
 
@@ -251,7 +251,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
-    # Test for set angle
+    # Test for generation of multiple matrices in 2x2 blocks
     @parameterized.expand(itertools.product(nblks))
     def test2x2Multiple(self,nblks):
         rtol,atol = 1e-5,1e-8
@@ -272,7 +272,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "normActual=" + str(normActual) + " differs from 1"
         self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
+    # Test for generation of single matrix in 4x4 block
     def test4x4(self):
         rtol,atol = 1e-5,1e-8
 
@@ -292,7 +292,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "normActual=" + str(normActual) + " differs from 1"            
         self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
+    # Test for generation of multiple matrices in 4x4 blocks
     @parameterized.expand(itertools.product(nblks))
     def test4x4Multiple(self,nblks):
         rtol,atol = 1e-5,1e-8
@@ -313,7 +313,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "normActual=" + str(normActual) + " differs from 1"
         self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
+    # Test for generation of single matrix in 8x8 block
     def test8x8(self):
         rtol,atol = 1e-5,1e-8
 
@@ -332,7 +332,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "normActual=" + str(normActual) + " differs from 1"
         self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
     
-    # Test for set angle
+    # Test for generation of multiple matrices in 8x8 blocks
     @parameterized.expand(itertools.product(nblks))
     def test8x8Multiple(self,nblks):
         rtol, atol = 1e-5, 1e-8
@@ -353,7 +353,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "normActual=" + str(normActual) + " differs from 1"
         self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
+    # Test for reduction of rotational dimension in single block of size 4x4
     def test4x4red(self):
         rtol,atol = 1e-5,1e-8
 
@@ -376,7 +376,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "ltActual=" + str(ltActual) + " differs from 1"
         self.assertTrue(torch.allclose(ltActual,ltExpctd,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
+    # Test for reduction of rotational dimension in multiple blocks of size 4x4
     @parameterized.expand(itertools.product(nblks))
     def test4x4redMultiple(self,nblks):
         rtol,atol = 1e-5,1e-8
@@ -399,8 +399,8 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "ltActual=" + str(ltActual) + " differs from 1"
         self.assertTrue(torch.allclose(ltActual,ltExpctd,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
-    def testPartialDifference(self):
+    # Test for reduction of rotational dimension in single block of size 8x8
+    def test8x8red(self):
         rtol,atol = 1e-5,1e-8
 
         # Expected values
@@ -422,7 +422,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "ltActual=" + str(ltActual) + " differs from 1"
         self.assertTrue(torch.allclose(ltActual,ltExpcted,rtol=rtol,atol=atol), message)
 
-    # Test for set angle
+    # Test for reduction of rotational dimension in multiple blocks  of size 8x8
     @parameterized.expand(itertools.product(nblks))
     def test8x8redMultiple(self,nblks):
         rtol,atol = 1e-5,1e-8
