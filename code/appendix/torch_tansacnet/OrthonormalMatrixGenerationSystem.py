@@ -47,7 +47,17 @@ class OrthonormalMatrixGenerationSystem:
 
         # Number of angles
         if isinstance(angles,list) and len(angles) == 0:
-            angles = 0
+            if isinstance(mus, int) or isinstance(mus, float):
+                nMatrices_ = 1
+                nDims_ = 1
+            elif not torch.is_tensor(mus):
+                nMatrices_ = len(mus)
+                nDims_ = len(mus[0])
+            else:
+                nMatrices_ = mus.size(0)
+                nDims_ = mus.size(1)
+            nAngles_ = int(nDims_*(nDims_-1)/2)
+            angles = torch.zeros(nMatrices_,nAngles_)   
         if isinstance(angles, int) or isinstance(angles, float):
             angle_ = angles
             angles = torch.zeros(1,1,dtype=self.dtype)
@@ -74,6 +84,7 @@ class OrthonormalMatrixGenerationSystem:
         else:
             mus = mus.to(dtype=self.dtype,device=angles.device) 
 
+        # 
         matrix = self.stepNormal_(angles,mus) #, mus, index_pd_angle)
         
         return matrix.clone()
