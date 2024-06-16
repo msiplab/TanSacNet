@@ -91,33 +91,29 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation            
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
+    # Test for default construction
+    def testConstructorWithAnglesAndMus(self):    
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        coefExpctd = torch.zeros(1,2,2)        
+        coefExpctd = torch.tensor([
+            [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
+            [ -math.sin(math.pi/4), -math.cos(math.pi/4) ] ])
+        
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem()            
+
+        # Actual values
+        coefActual = omgs(math.pi/4,torch.tensor([ [1,-1] ]))
+            
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
 if __name__ == '__main__':
     unittest.main()
     
 """
-
-        % Test for default construction
-        function testConstructorWithAnglesMultiple(testCase)
-            
-            % Expected values
-            coefExpctd(:,:,1) = [
-                cos(pi/4) -sin(pi/4) ;
-                sin(pi/4)  cos(pi/4) ];
-            coefExpctd(:,:,2) = [
-                cos(pi/6) -sin(pi/6) ;
-                sin(pi/6)  cos(pi/6) ];
-
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            angles = [pi/4 pi/6];
-            coefActual = step(testCase.omgs,angles,1);
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-        end 
         
         % Test for default construction
         function testConstructorWithAnglesAndMus(testCase)

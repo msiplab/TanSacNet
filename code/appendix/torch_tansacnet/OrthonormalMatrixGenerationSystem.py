@@ -33,7 +33,6 @@ class OrthonormalMatrixGenerationSystem:
     def __init__(self,
                  dtype=torch.get_default_dtype(),
                  partial_difference=False):
-        
         super(OrthonormalMatrixGenerationSystem, self).__init__()
         self.dtype = dtype
         self.partial_difference = partial_difference
@@ -56,6 +55,7 @@ class OrthonormalMatrixGenerationSystem:
         else:
             angles = angles.to(dtype=self.dtype) 
         nAngles = angles.size(1)
+        nMatrices = angles.size(0)
 
         # Number of dimensions
         if not hasattr(self, 'number_of_dimensions'):
@@ -64,25 +64,28 @@ class OrthonormalMatrixGenerationSystem:
 
         # Setup of mus, which is send to the same device with angles
         if isinstance(mus, int) or isinstance(mus, float):
-            mus = mus * torch.ones(nDims,dtype=self.dtype,device=angles.device)
+            mu_ = mus
+            mus = torch.ones(nMatrices,nDims,dtype=self.dtype,device=angles.device)
+            mus = mu_ * mus
         elif not torch.is_tensor(mus): #isinstance(mus, list):
             mus = torch.tensor(mus,dtype=self.dtype,device=angles.device)
         else:
             mus = mus.to(dtype=self.dtype,device=angles.device) 
 
-        matrix = self.stepNormal_(angles) #, mus, index_pd_angle)
+        matrix = self.stepNormal_(angles,mus) #, mus, index_pd_angle)
         
         return matrix.clone()
     
-    def stepNormal_(self, angles): #, mus, index_pd_angle):
+    def stepNormal_(self, angles, mus): # index_pd_angle):
         nDims = self.number_of_dimensions
-        nMatrices = angles.shape[0]
+        nMatrices = angles.size(0)
         matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
         # 
         for iMtx in range(nMatrices):
             iAng = 0
             matrix_iMtx = matrix[iMtx]
             angles_iMtx = angles[iMtx]
+            mus_iMtx = mus[iMtx]
             for iTop in range(nDims - 1):
                 vt = matrix_iMtx[iTop, :]
                 for iBtm in range(iTop + 1, nDims):
@@ -96,7 +99,7 @@ class OrthonormalMatrixGenerationSystem:
                     matrix_iMtx[iBtm, :] = vb
                     iAng += 1
                 matrix_iMtx[iTop, :] = vt
-            matrix[iMtx] = matrix_iMtx
+            matrix[iMtx] = mus_iMtx.view(-1,1) * matrix_iMtx
 
         return matrix
 
