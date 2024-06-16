@@ -313,143 +313,139 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "normActual=" + str(normActual) + " differs from 1"
         self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
 
-if __name__ == '__main__':
-    unittest.main()
+    # Test for set angle
+    def test8x8(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        normExpctd = torch.ones(1,8)
+
+        # Instantiation of target class
+        angs = 2*math.pi*torch.rand(1,28)
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            normActual = torch.linalg.vector_norm(omgs(angles=angs,mus=1),ord=2,dim=2)  
+
+        # Evaluation
+        message = "normActual=" + str(normActual) + " differs from 1"
+        self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
     
-"""
-        % Test for set angle
-        function test8x8(testCase)
-            
-            % Expected values
-            normExpctd = 1;
-            
-            % Instantiation of target class
-            ang = 2*pi*rand(28,1);
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            normActual = norm(step(testCase.omgs,ang,1)*[1 0 0 0 0 0 0 0].');
-            
-            % Evaluation
-            message = ...
-                sprintf('normActual=%g differs from 1',normActual);
-            testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
-        end
+    # Test for set angle
+    @parameterized.expand(itertools.product(nblks))
+    def test8x8Multiple(self,nblks):
+        rtol, atol = 1e-5, 1e-8
 
-        % Test for set angle
-        function test8x8Multiple(testCase,nblks)
+        # Expected values
+        normExpctd = torch.ones(nblks,8)
 
-            % Expected values
-            normExpctd = ones(1,8,nblks);
+        # Instantiation of target class
+        angs = 2*math.pi*torch.rand(nblks,28)
+        omgs = OrthonormalMatrixGenerationSystem()
 
-            % Instantiation of target class
-            ang = 2*pi*rand(28,nblks);
-            import tansacnet.utility.*
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
+        # Actual values
+        with torch.no_grad():
+            matrices = omgs(angles=angs,mus=1)
+            normActual = torch.linalg.vector_norm(matrices,ord=2,dim=1)
 
-            % Actual values
-            matrices = step(testCase.omgs,ang,1);
-            normActual = vecnorm(matrices,2,1);
+        # Evaluation
+        message = "normActual=" + str(normActual) + " differs from 1"
+        self.assertTrue(torch.allclose(normActual,normExpctd,rtol=rtol,atol=atol), message)
 
-            % Evaluation
-            message = ...
-                sprintf('normActual=%g differs from 1',normActual);
-            testCase.verifyEqual(normActual,normExpctd,'RelTol',1e-15,message);
-        end
+    # Test for set angle
+    def test4x4red(self):
+        rtol,atol = 1e-5,1e-8
 
-        % Test for set angle
-        function test4x4red(testCase)
-            
-            % Expected values
-            ltExpctd = 1;
-            
-            % Instantiation of target class
-            ang = 2*pi*rand(6,1);
-            nSize = 4;
-            ang(1:nSize-1,1) = zeros(nSize-1,1);
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            matrix = step(testCase.omgs,ang,1);
-            ltActual = matrix(1,1);
-            
-            % Evaluation
-            message = ...
-                sprintf('ltActual=%g differs from 1',ltActual);
-            testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
-        end
-
-        % Test for set angle
-        function test4x4redMultiple(testCase,nblks)
-            
-            % Expected values
-            ltExpctd = ones(1,1,nblks);
-            
-            % Instantiation of target class
-            angs = 2*pi*rand(6,nblks);
-            nSize = 4;
-            angs(1:nSize-1,:) = zeros(nSize-1,nblks);
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            matrix = step(testCase.omgs,angs,1);
-            ltActual = matrix(1,1,:);
-            
-            % Evaluation
-            message = ...
-                sprintf('ltActual=%g differs from 1',ltActual);
-            testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
-        end
-
-        % Test for set angle
-        function test8x8red(testCase)
-            
-            % Expected values
-            ltExpctd = 1;
-            
-            % Instantiation of target class
-            ang = 2*pi*rand(28,1);
-            nSize = 8;
-            ang(1:nSize-1,1) = zeros(nSize-1,1);
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            matrix = step(testCase.omgs,ang,1);
-            ltActual = matrix(1,1);
-            
-            % Evaluation
-            message = ...
-                sprintf('ltActual=%g differs from 1',ltActual);
-            testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
-        end
+        # Expected values
+        ltExpctd = torch.tensor([ 1. ])
         
-        % Test for set angle
-        function test8x8redMultiple(testCase,nblks)
-            
-            % Expected values
-            ltExpctd = ones(1,1,nblks);
-            
-            % Instantiation of target class
-            angs = 2*pi*rand(28,nblks);
-            nSize = 8;
-            angs(1:nSize-1,:) = zeros(nSize-1,nblks);
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            matrix = step(testCase.omgs,angs,1);
-            ltActual = matrix(1,1,:);
-            
-            % Evaluation
-            message = ...
-                sprintf('ltActual=%g differs from 1',ltActual);
-            testCase.verifyEqual(ltActual,ltExpctd,'RelTol',1e-15,message);
-        end
+        # Instantiation of target class
+        angs = 2*math.pi*torch.rand(1,6)
+        nSize = 4
+        angs[0,0:nSize-1] = 0
+        omgs = OrthonormalMatrixGenerationSystem()
 
+        # Actual values
+        with torch.no_grad():
+            matrices = omgs(angles=angs,mus=1)
+            matrix = matrices[0]
+            ltActual = matrix[0,0]
+
+        # Evaluation
+        message = "ltActual=" + str(ltActual) + " differs from 1"
+        self.assertTrue(torch.allclose(ltActual,ltExpctd,rtol=rtol,atol=atol), message)
+
+    # Test for set angle
+    @parameterized.expand(itertools.product(nblks))
+    def test4x4redMultiple(self,nblks):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        ltExpctd = torch.ones(nblks,1)
+
+        # Instantiation of target class
+        angs = 2*math.pi*torch.rand(nblks,6)
+        nSize = 4
+        angs[:,0:nSize-1] = 0
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            matrices = omgs(angles=angs,mus=1)
+            ltActual = matrices[:,0,0]
+
+        # Evaluation
+        message = "ltActual=" + str(ltActual) + " differs from 1"
+        self.assertTrue(torch.allclose(ltActual,ltExpctd,rtol=rtol,atol=atol), message)
+
+    # Test for set angle
+    def testPartialDifference(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        ltExpcted = torch.tensor([ 1. ])
+
+        # Instantiation of target class
+        ang = 2*math.pi*torch.rand(1,28)
+        nSize = 8
+        ang[0,0:nSize-1] = 0
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            matrices = omgs(angles=ang,mus=1)
+            matrix = matrices[0]
+            ltActual = matrix[0,0]
+
+        # Evaluation
+        message = "ltActual=" + str(ltActual) + " differs from 1"
+        self.assertTrue(torch.allclose(ltActual,ltExpcted,rtol=rtol,atol=atol), message)
+
+    # Test for set angle
+    @parameterized.expand(itertools.product(nblks))
+    def test8x8redMultiple(self,nblks):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        ltExpcted = torch.ones(nblks,1)
+
+        # Instantiation of target class
+        angs = 2*math.pi*torch.rand(nblks,28)
+        nSize = 8
+        angs[:,0:nSize-1] = 0
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            matrices = omgs(angles=angs,mus=1)
+            ltActual = matrices[:,0,0]
+
+        # Evaluation
+        message = "ltActual=" + str(ltActual) + " differs from 1"
+        self.assertTrue(torch.allclose(ltActual,ltExpcted,rtol=rtol,atol=atol), message)
+
+"""      
         % Test for set angle
         function testPartialDifference(testCase)
             
@@ -1646,3 +1642,6 @@ if __name__ == '__main__':
     end
 end
 """
+
+if __name__ == '__main__':
+    unittest.main()
