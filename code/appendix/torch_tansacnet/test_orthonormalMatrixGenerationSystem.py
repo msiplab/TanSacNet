@@ -177,105 +177,84 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
 
+
+    # Test for set angle
+    def testSetAngles(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        coefExpctd = torch.zeros(1,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ 1., 0. ],
+            [ 0., 1. ] ])
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            coefActual = omgs(angles=0,mus=1)
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
+        # Expected values
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
+            [ math.sin(math.pi/4),  math.cos(math.pi/4) ] ])
+        
+        # Actual values
+        with torch.no_grad():
+            coefActual = omgs(angles=math.pi/4,mus=1)
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
+
+    # Test for set angle
+    def testSetAnglesMultiple(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Expected values
+        coefExpctd = torch.zeros(2,2,2)
+        coefExpctd[0] = torch.tensor([ 
+            [ 1.0, 0.0  ],
+            [ 0.0, 1.0 ] ])
+        coefExpctd[1] = torch.tensor([ 
+            [ 1.0, 0.0  ],
+            [ 0.0, 1.0 ] ])
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem()
+
+        # Actual values
+        with torch.no_grad():
+            angles = [ [0], [0] ]
+            coefActual = omgs(angles=angles,mus=1)
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
+        # Expected values
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
+            [ math.sin(math.pi/4),  math.cos(math.pi/4) ] ])
+        coefExpctd[1] = torch.tensor([
+            [ math.cos(math.pi/6), -math.sin(math.pi/6) ],
+            [ math.sin(math.pi/6),  math.cos(math.pi/6) ] ])
+
+        # Actual values
+        with torch.no_grad():
+            angles = [ [math.pi/4], [math.pi/6] ]
+            coefActual = omgs(angles=angles,mus=1)
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
 if __name__ == '__main__':
     unittest.main()
     
 """
-
-        function testConstructorWithAnglesAndMusMultiple(testCase)
-            
-            % Expected values
-            coefExpctd(:,:,1) = [
-                cos(pi/4) -sin(pi/4) ;
-                -sin(pi/4) -cos(pi/4) ];
-            coefExpctd(:,:,2) = [
-                -cos(pi/6) sin(pi/6) ;
-                sin(pi/6) cos(pi/6) ];
-
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            angles = [pi/4 pi/6];
-            mus = [  1 -1 ;
-                    -1  1 ];
-            coefActual = step(testCase.omgs,angles,mus);            
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-            
-        end
-
-        % Test for set angle
-        function testSetAngles(testCase)
-            
-            % Expected values
-            coefExpctd = [
-                1 0 ;
-                0 1 ];
-            
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-            
-            % Actual values
-            coefActual = step(testCase.omgs,0,1);
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-            
-            % Expected values
-            coefExpctd = [
-                cos(pi/4) -sin(pi/4) ;
-                sin(pi/4)  cos(pi/4) ];
-            
-            % Actual values
-            coefActual = step(testCase.omgs,pi/4,1);
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-        end
-
-        % Test for set angle
-        function testSetAnglesMultiple(testCase)
-
-            % Expected values
-            coefExpctd(:,:,1) = [
-                1 0 ;
-                0 1 ];
-            coefExpctd(:,:,2) = [
-                1 0;
-                0 1 ];            
-
-            % Instantiation of target class
-            import tansacnet.utility.*
-            testCase.omgs = OrthonormalMatrixGenerationSystem();
-
-            % Actual values
-            angles = [0 0];
-            coefActual = step(testCase.omgs,angles,1);
-
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-
-            % Expected values
-            coefExpctd(:,:,1) = [
-                cos(pi/4) -sin(pi/4) ;
-                sin(pi/4)  cos(pi/4) ];
-            coefExpctd(:,:,2) = [
-                cos(pi/6) -sin(pi/6) ;
-                sin(pi/6)  cos(pi/6) ];
-
-
-            % Actual values
-            angles = [pi/4 pi/6];
-            coefActual = step(testCase.omgs,angles,1);
-
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
-        end
-
         % Test for set angle
         function test2x2Multiple(testCase,nblks)
 
