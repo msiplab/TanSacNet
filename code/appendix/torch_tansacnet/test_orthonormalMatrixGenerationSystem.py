@@ -445,26 +445,26 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         message = "ltActual=" + str(ltActual) + " differs from 1"
         self.assertTrue(torch.allclose(ltActual,ltExpcted,rtol=rtol,atol=atol), message)
 
+    # Test for partial difference 
+    def testPartialDifference(self):
+        rtol,atol = 1e-5,1e-6
+
+        # Expected values
+        coefExpctd = torch.zeros(1,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ 0., -1. ],
+            [ 1.,  0. ] ])
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
+
+        # Actual values
+        coefActual = omgs(angles=0,mus=1,index_pd_angle=0)
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+
 """      
-        % Test for set angle
-        function testPartialDifference(testCase)
-            
-            % Expected values
-            coefExpctd = [
-                0 -1 ;
-                1  0 ];
-            
-            % Instantiation of target class
-            import tansacnet.utility.*
-            testCase.omgs = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on');
-            
-            % Actual values
-            coefActual = step(testCase.omgs,0,1,1);
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'AbsTol',1e-10);
-        end
 
         % Test for set angle
         function testPartialDifferenceMultiple(testCase)

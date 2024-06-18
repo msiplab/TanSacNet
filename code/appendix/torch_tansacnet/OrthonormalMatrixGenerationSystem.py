@@ -85,11 +85,12 @@ class OrthonormalMatrixGenerationSystem:
             mus = mus.to(dtype=self.dtype,device=angles.device) 
 
         # 
-        matrix = self.stepNormal_(angles,mus) #, mus, index_pd_angle)
+        matrix = self.stepNormal_(angles,mus, index_pd_angle)
         
         return matrix.clone()
     
-    def stepNormal_(self, angles, mus): # index_pd_angle):
+    def stepNormal_(self, angles, mus, index_pd_angle):
+        is_pd = self.partial_difference
         nDims = self.number_of_dimensions
         nMatrices = angles.size(0)
         matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
@@ -103,12 +104,12 @@ class OrthonormalMatrixGenerationSystem:
                 vt = matrix_iMtx[iTop, :]
                 for iBtm in range(iTop + 1, nDims):
                     angle = angles_iMtx[iAng]
-                    #if iAng == index_pd_angle:
-                    #    angle = angle + torch.pi / 2
+                    if is_pd and iAng == index_pd_angle:
+                        angle = angle + torch.pi / 2.0
                     vb = matrix_iMtx[iBtm, :]
                     vt, vb = rot_(vt, vb, angle)
-                    #if iAng == index_pd_angle:
-                    #   matrix[:, :, iMtx] = torch.zeros_like(matrix[:, :, iMtx])
+                    if is_pd and iAng == index_pd_angle:
+                        matrix_iMtx = torch.zeros_like(matrix_iMtx)
                     matrix_iMtx[iBtm, :] = vb
                     iAng += 1
                 matrix_iMtx[iTop, :] = vt
