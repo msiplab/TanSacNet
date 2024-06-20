@@ -16,7 +16,7 @@ class OrthonormalMatrixGenerationSystem:
     """
     ORTHONORMALMATRIXGENERATIONSYSTEM Orthonormal matrix generator
     
-    Requirements: Python 3.10/10.x, PyTorch 2.3.x
+    Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
     Copyright (c) 2024, Shogo MURAMATSU
     
@@ -83,7 +83,16 @@ class OrthonormalMatrixGenerationSystem:
             mus = torch.tensor(mus,dtype=self.dtype,device=angles.device)
         else:
             mus = mus.to(dtype=self.dtype,device=angles.device) 
-
+        if mus.size(0) != nMatrices:
+            if mus.size(0) == 1:
+                mus = torch.tile(mus, (nMatrices,1))
+            else:
+                raise ValueError("The number of matrices must be the same between angles and mus.")
+        elif mus.size(1) != nDims:
+            if mus.size(1) == 1:
+                mus = torch.tile(mus, (1,nDims))
+            else:
+                raise ValueError("The number of dimensions must be the same between angles and mus.")
         # 
         matrix = self.stepNormal_(angles,mus, index_pd_angle)
         
