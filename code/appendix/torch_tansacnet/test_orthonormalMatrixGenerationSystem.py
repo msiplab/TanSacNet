@@ -1153,36 +1153,38 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
         self.assertEqual(nextangleActual,nextangleExpctd)        
-                
-        """
-        function testPartialDifferenceAngsInSequentialModeMultiple(testCase)
-  
-            % Configuratin
-            pdAng = 1;
-            
-            % Expected values
-            coefExpctd(:,:,1) = [
-                cos(pi/4+pi/2) -sin(pi/4+pi/2) ;
-                sin(pi/4+pi/2)  cos(pi/4+pi/2) ];
-            coefExpctd(:,:,2) = [
-                cos(pi/6+pi/2) -sin(pi/6+pi/2) ;
-                sin(pi/6+pi/2)  cos(pi/6+pi/2) ];            
-            
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','sequential');
-            
-            % Actual values
-            angs = [pi/4 pi/6];
-            step(testCase.omgs,angs,1,0);
-            coefActual = step(testCase.omgs,angs,1,pdAng);
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'AbsTol',1e-10);
-                   
-        end
 
+    # Test for partial difference with angles
+    def testPartialDifferenceWithAngsInSequentialModeMultiple(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Configuration
+        pdAng = 0
+
+        # Expected values
+        coefExpctd = torch.zeros(2,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4+math.pi/2), -math.sin(math.pi/4+math.pi/2) ],
+            [ math.sin(math.pi/4+math.pi/2),  math.cos(math.pi/4+math.pi/2) ] ])
+        coefExpctd[1] = torch.tensor([
+            [ math.cos(math.pi/6+math.pi/2), -math.sin(math.pi/6+math.pi/2) ],
+            [ math.sin(math.pi/6+math.pi/2),  math.cos(math.pi/6+math.pi/2) ] ])
+        nextangleExpctd = 1
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+
+        # Actual values
+        angs = [ [math.pi/4], [math.pi/6] ]
+        omgs(angles=angs,mus=1,index_pd_angle=None)
+        coefActual = omgs(angles=angs,mus=1,index_pd_angle=pdAng)
+        nextangleActual = omgs.nextangle
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+        self.assertEqual(nextangleActual,nextangleExpctd)
+
+        """
         %
         function testPartialDifferenceWithAnglesAndMusInSequentialMode(testCase)
              
