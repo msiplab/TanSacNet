@@ -32,10 +32,12 @@ class OrthonormalMatrixGenerationSystem:
 
     def __init__(self,
                  dtype=torch.get_default_dtype(),
-                 partial_difference=False):
+                 partial_difference=False,
+                 mode='normal'):
         super(OrthonormalMatrixGenerationSystem, self).__init__()
         self.dtype = dtype
         self.partial_difference = partial_difference
+        self.mode = mode
 
     def __call__(self,
                  angles=0, 
@@ -69,9 +71,13 @@ class OrthonormalMatrixGenerationSystem:
         nAngles = angles.size(1)
         nMatrices = angles.size(0)
 
-        # Number of dimensions
+        # Setup at the first call
         if not hasattr(self, 'number_of_dimensions'):
             self.number_of_dimensions = int(1+math.sqrt(1+8*nAngles)/2)
+        if self.mode == 'sequential' and not hasattr(self, 'nextangle'):
+            self.nextangle = 0
+        
+        # Number of dimensions
         nDims = self.number_of_dimensions
 
         # Setup of mus, which is send to the same device with angles
@@ -93,9 +99,15 @@ class OrthonormalMatrixGenerationSystem:
                 mus = torch.tile(mus, (1,nDims))
             else:
                 raise ValueError("The number of dimensions must be the same between angles and mus.")
-        # 
-        matrix = self.stepNormal_(angles,mus, index_pd_angle)
         
+        # Switch mode 
+        if self.partial_difference and self.mode == 'normal':
+            matrix = self.stepNormal_(angles, mus, index_pd_angle)
+        elif self.partial_difference and self.mode == 'sequential':
+            matrix = self.stepSequential_(angles, mus, index_pd_angle)
+        else:
+            matrix = self.stepNormal_(angles, mus, index_pd_angle=None)
+
         return matrix.clone()
     
     def stepNormal_(self, angles, mus, index_pd_angle):
@@ -126,94 +138,122 @@ class OrthonormalMatrixGenerationSystem:
 
         return matrix
 
-    """
-    def stepNormal_(self, angles, mus, index_pd_angle):
-        nDim_ = self.NumberOfDimensions
-        nMatrices_ = angles.shape[1]
-        matrix = torch.tile(torch.eye(nDim_), (1, 1, nMatrices_))
-        if mus.ndim == 1:
-            mus = mus[:, torch.newaxis]
-        for iMtx in range(nMatrices_):
-            iAng = 0
-            for iTop in range(nDim_ - 1):
-                vt = matrix[iTop, :, iMtx]
-                for iBtm in range(iTop + 1, nDim_):
-                    angle = angles[iAng, iMtx]
-                    if iAng == pdAng:
-                        angle = angle + torch.pi / 2
-                    vb = matrix[iBtm, :, iMtx]
-                    vt, vb = self.rot_(vt, vb, angle)
-                    if iAng == pdAng:
-                        matrix[:, :, iMtx] = torch.zeros_like(matrix[:, :, iMtx])
-                    matrix[iBtm, :, iMtx] = vb
-                    iAng += 1
-                matrix[iTop, :, iMtx] = vt
-            if mus.ndim == 2 or mus.size == 1:
-                matrix[:, :, iMtx] = mus * matrix[:, :, iMtx]
-            else:
-                matrix[:, :, iMtx] = mus[:, iMtx] * matrix[:, :, iMtx]
+    def stepSequential_(self, angles, mus, index_pd_angle):
+        # Check index_pd_angle
+        if index_pd_angle != None and index_pd_angle != self.nextangle:
+            raise ValueError("Unable to proceed sequential differentiation. Index = %d is expected, but %d was given." % (self.nextangle, index_pd_angle))
+        #
+        nDims = self.number_of_dimensions
+        nMatrices = angles.size(0)
+        matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+        if index_pd_angle == None: # Initialization 
+            self.matrixpst = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+            self.matrixpre = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+            for iMtx in range(nMatrices):
+                iAng = 0
+                matrixpst_iMtx = self.matrixpst[iMtx]
+                angles_iMtx = angles[iMtx]
+                mus_iMtx = mus[iMtx]
+                for iTop in range(nDims - 1):
+                    vt = matrixpst_iMtx[iTop, :]
+                    for iBtm in range(iTop + 1, nDims):
+                        angle = angles_iMtx[iAng]
+                        vb = matrixpst_iMtx[iBtm, :]
+                        vt, vb = rot_(vt, vb, angle)
+                        matrixpst_iMtx[iBtm, :] = vb
+                        iAng += 1
+                    matrixpst_iMtx[iTop, :] = vt
+                matrix[iMtx] = mus_iMtx.view(-1,1) * matrixpst_iMtx
+                self.matrixpst[iMtx] = matrixpst_iMtx
+            self.nextangle = 1
+    
         return matrix
 
-    def stepSequential_(self, angles, mus, pdAng):
-        if pdAng != self.nextangle:
-            raise ValueError("Unable to proceed sequential differentiation. Index = %d is expected, but %d was given." % (self.nextangle, pdAng))
-        nDim_ = self.NumberOfDimensions
-        nMatrices_ = angles.shape[1]
-        matrix = torch.tile(torch.eye(nDim_), (1, 1, nMatrices_))
-        if mus.ndim == 1:
-            mus = mus[:, torch.newaxis]
-        if pdAng < 1:
-            self.matrixpst = torch.tile(torch.eye(nDim_), (1, 1, nMatrices_))
-            self.matrixpre = torch.tile(torch.eye(nDim_), (1, 1, nMatrices_))
-            for iMtx in range(nMatrices_):
-                iAng = 0
-                for iTop in range(nDim_ - 1):
-                    vt = self.matrixpst[iTop, :, iMtx]
-                    for iBtm in range(iTop + 1, nDim_):
-                        angle = angles[iAng, iMtx]
-                        vb = self.matrixpst[iBtm, :, iMtx]
-                        vt, vb = self.rot_(vt, vb, angle)
-                        self.matrixpst[iBtm, :, iMtx] = vb
-                        iAng += 1
-                    self.matrixpst[iTop, :, iMtx] = vt
-                if mus.ndim == 2:
-                    matrix[:, :, iMtx] = mus * self.matrixpst[:, :, iMtx]
-                else:
-                    matrix[:, :, iMtx] = mus[:, iMtx] * self.matrixpst[:, :, iMtx]
-            self.nextangle = 1
-        else:
-            for iMtx in range(nMatrices_):
-                matrixrev = torch.eye(nDim_)
-                matrixdif = torch.zeros((nDim_, nDim_))
-                iAng = 0
-                for iTop in range(nDim_ - 1):
-                    rt = matrixrev[iTop, :]
-                    dt = torch.zeros(nDim_)
-                    dt[iTop] = 1
-                    for iBtm in range(iTop + 1, nDim_):
-                        if iAng == pdAng:
-                            angle = angles[iAng, iMtx]
-                            rb = matrixrev[iBtm, :]
-                            rt, rb = self.rot_(rt, rb, -angle)
-                            matrixrev[iTop, :] = rt
-                            matrixrev[iBtm, :] = rb
-                            db = torch.zeros(nDim_)
-                            db[iBtm] = 1
-                            dangle = angle + torch.pi / 2
-                            dt, db = self.rot_(dt, db, dangle)
-                            matrixdif[iTop, :] = dt
-                            matrixdif[iBtm, :] = db
-                            self.matrixpst[:, :, iMtx] = self.matrixpst[:, :, iMtx] @ matrixrev
-                            matrix[:, :, iMtx] = self.matrixpst[:, :, iMtx] @ matrixdif @ self.matrixpre[:, :, iMtx]
-                            self.matrixpre[:, :, iMtx] = matrixrev.T @ self.matrixpre[:, :, iMtx]
-                        iAng += 1
-                if mus.ndim == 2:
-                    matrix[:, :, iMtx] = mus * matrix[:, :, iMtx]
-                else:
-                    matrix[:, :, iMtx] = mus[:, iMtx] * matrix[:, :, iMtx]
-            self.nextangle += 1
-        return matrix
-"""
+    """
+        function matrix = stepSequential_(obj,angles,mus,pdAng)
+            % Check pdAng
+            if pdAng ~= obj.nextangle
+                error("Unable to proceed sequential differentiation. Index = %d is expected, but %d was given.", obj.nextangle, pdAng);
+            end
+            %
+            nDim_ = obj.NumberOfDimensions;
+            nMatrices_ = size(angles,2);
+            matrix = repmat(eye(nDim_),[1 1 nMatrices_]);
+            if isrow(mus)
+                mus = mus.';
+            end
+            if pdAng < 1 % Initialization
+                obj.matrixpst = repmat(eye(nDim_),[1 1 nMatrices_]);
+                obj.matrixpre = repmat(eye(nDim_),[1 1 nMatrices_]);
+                %
+                for iMtx = 1:nMatrices_
+                    iAng = 1;
+                    for iTop=1:nDim_-1
+                        vt = obj.matrixpst(iTop,:,iMtx);
+                        for iBtm=iTop+1:nDim_
+                            angle = angles(iAng,iMtx);
+                            vb = obj.matrixpst(iBtm,:,iMtx);
+                            [vt,vb] = obj.rot_(vt,vb,angle);
+                            obj.matrixpst(iBtm,:,iMtx) = vb;
+                            iAng = iAng + 1;
+                        end
+                        obj.matrixpst(iTop,:,iMtx) = vt;
+                    end
+                    if iscolumn(mus)
+                        matrix(:,:,iMtx) = mus.*obj.matrixpst(:,:,iMtx);
+                    else
+                        matrix(:,:,iMtx) = mus(:,iMtx).*obj.matrixpst(:,:,iMtx);
+                    end
+                end
+                obj.nextangle = uint32(1);
+            else % Sequential differentiation
+                %
+                %matrix = 1;
+                for iMtx = 1:nMatrices_
+                    matrixrev = eye(nDim_);
+                    matrixdif = zeros(nDim_);
+                    %
+                    iAng = 1;
+                    for iTop=1:nDim_-1
+                        rt = matrixrev(iTop,:);
+                        dt = zeros(1,nDim_);
+                        dt(iTop) = 1;
+                        for iBtm=iTop+1:nDim_
+                            if iAng == pdAng
+                                angle = angles(iAng,iMtx);
+                                %
+                                rb = matrixrev(iBtm,:);
+                                [rt,rb] = obj.rot_(rt,rb,-angle);
+                                matrixrev(iTop,:) = rt;
+                                matrixrev(iBtm,:) = rb;
+                                %
+                                db = zeros(1,nDim_);
+                                db(iBtm) = 1;
+                                dangle = angle + pi/2;
+                                [dt,db] = obj.rot_(dt,db,dangle);
+                                matrixdif(iTop,:) = dt;
+                                matrixdif(iBtm,:) = db;
+                                %
+                                obj.matrixpst(:,:,iMtx) = obj.matrixpst(:,:,iMtx)*matrixrev;
+                                matrix(:,:,iMtx) = obj.matrixpst(:,:,iMtx)*matrixdif*obj.matrixpre(:,:,iMtx);
+                                obj.matrixpre(:,:,iMtx) = matrixrev.'*obj.matrixpre(:,:,iMtx);
+                            end
+                            iAng = iAng + 1;
+                        end
+                    end
+                    if iscolumn(mus)
+                        matrix(:,:,iMtx) = mus.*matrix(:,:,iMtx);
+                    else
+                        matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);
+                    end                    
+                end
+                obj.nextangle = obj.nextangle + 1;
+            end
+        end
+    end
+
+    
+    """
 
 """
 classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
