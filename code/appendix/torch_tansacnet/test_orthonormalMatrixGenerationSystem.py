@@ -1159,6 +1159,7 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         rtol,atol = 1e-5,1e-8
 
         # Configuration
+        angs = [ [math.pi/4], [math.pi/6] ]
         pdAng = 0
 
         # Expected values
@@ -1175,7 +1176,6 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
-        angs = [ [math.pi/4], [math.pi/6] ]
         omgs(angles=angs,mus=1,index_pd_angle=None)
         coefActual = omgs(angles=angs,mus=1,index_pd_angle=pdAng)
         nextangleActual = omgs.nextangle
@@ -1184,112 +1184,121 @@ class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
         self.assertEqual(nextangleActual,nextangleExpctd)
 
+    # Test for partial difference with angles
+    def testPartialDifferenceWithAnglesAndMuesInSequentialMode(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Configuration
+        mus = [ [ 1, -1 ] ]        
+        pdAng = 0
+
+        # Expected values
+        coefExpctd = torch.zeros(1,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4+math.pi/2), -math.sin(math.pi/4+math.pi/2) ],
+            [ -math.sin(math.pi/4+math.pi/2),  -math.cos(math.pi/4+math.pi/2) ] ])
+        nextangleExpctd = 1
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+
+        # Actual values
+        omgs(angles=math.pi/4,mus=mus,index_pd_angle=None)
+        coefActual = omgs(angles=math.pi/4,mus=mus,index_pd_angle=pdAng)
+        nextangleActual = omgs.nextangle
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+        self.assertEqual(nextangleActual,nextangleExpctd)
+
+    # Test for partial difference with angles
+    def testPartialDifferenceWithAnglesAndMuesInSequentialModeMultiple(self):
+        rtol,atol = 1e-5,1e-8
+
+        # Configuration
+        mus = [ [ 1, -1 ] ]
+        angs = [ [math.pi/4], [math.pi/6] ]
+        pdAng = 0
+
+        # Expected values
+        coefExpctd = torch.zeros(2,2,2)
+        coefExpctd[0] = torch.tensor([
+            [ math.cos(math.pi/4+math.pi/2), -math.sin(math.pi/4+math.pi/2) ],
+            [ -math.sin(math.pi/4+math.pi/2),  -math.cos(math.pi/4+math.pi/2) ] ])
+        coefExpctd[1] = torch.tensor([
+            [ math.cos(math.pi/6+math.pi/2), -math.sin(math.pi/6+math.pi/2) ],
+            [ -math.sin(math.pi/6+math.pi/2),  -math.cos(math.pi/6+math.pi/2) ] ])
+        nextangleExpctd = 1
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+
+        # Actual values
+        omgs(angles=angs,mus=mus,index_pd_angle=None)
+        coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)        
+        nextangleActual = omgs.nextangle
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+        self.assertEqual(nextangleActual,nextangleExpctd)
+
+    # Test for partial difference with angles
+    def testPartialDifference4x4RandAngPdAng2InSequentialModeInitialization(self):
+        rtol,atol = 1e-5,1e-6
+
+        # Expected values
+        mus = [ [-1, 1, -1, 1] ]
+        angs = 2.*math.pi*torch.rand(1,6)
+        pdAng = 2
+        coefExpctd = torch.zeros(1,4,4)
+        coefExpctd[0] = torch.diag(torch.tensor(mus[0]).to(dtype=angs.dtype)) @ \
+            torch.tensor([
+                [ 1., 0., 0., 0. ],
+                [ 0., 1., 0., 0. ],
+                [ 0., 0., math.cos(angs[0,5]), -math.sin(angs[0,5]) ],
+                [ 0., 0., math.sin(angs[0,5]),  math.cos(angs[0,5]) ] ]) @ \
+            torch.tensor([
+                [ 1., 0., 0., 0. ],
+                [ 0., math.cos(angs[0,4]), 0., -math.sin(angs[0,4]) ],
+                [ 0., 0., 1., 0. ], 
+                [ 0., math.sin(angs[0,4]), 0., math.cos(angs[0,4]) ] ]) @ \
+            torch.tensor([
+                [ 1., 0., 0., 0. ],
+                [ 0., math.cos(angs[0,3]), -math.sin(angs[0,3]), 0. ],
+                [ 0., math.sin(angs[0,3]),  math.cos(angs[0,3]), 0. ],
+                [ 0., 0., 0., 1. ] ]) @ \
+            torch.tensor([
+                [ math.cos(angs[0,2]+math.pi/2), 0., 0., -math.sin(angs[0,2]+math.pi/2) ],
+                [ 0., 0., 0., 0. ],
+                [ 0., 0., 0., 0. ],
+                [ math.sin(angs[0,2]+math.pi/2), 0., 0.,  math.cos(angs[0,2]+math.pi/2) ] ]) @ \
+            torch.tensor([
+                [ math.cos(angs[0,1]), 0., -math.sin(angs[0,1]), 0. ],
+                [ 0., 1., 0., 0. ],
+                [ math.sin(angs[0,1]), 0.,  math.cos(angs[0,1]), 0. ],
+                [ 0., 0., 0., 1. ] ]) @ \
+            torch.tensor([
+                [ math.cos(angs[0,0]), -math.sin(angs[0,0]), 0., 0. ],
+                [ math.sin(angs[0,0]),  math.cos(angs[0,0]), 0., 0. ],
+                [ 0., 0., 1., 0. ],
+                [ 0., 0., 0., 1. ] ])
+        nextangleExpctd = pdAng + 1
+
+        # Instantiation of target class
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+
+        # Actual values
+        omgs(angles=angs,mus=mus,index_pd_angle=None)
+        for iAng in range(pdAng):
+            omgs(angles=angs,mus=mus,index_pd_angle=iAng) 
+        coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)            
+        nextangleActual = omgs.nextangle
+
+        # Evaluation
+        self.assertTrue(torch.allclose(coefActual,coefExpctd,rtol=rtol,atol=atol))
+        self.assertEqual(nextangleActual,nextangleExpctd)
+
         """
-        %
-        function testPartialDifferenceWithAnglesAndMusInSequentialMode(testCase)
-             
-            % Configuration
-            pdAng = 1;
-            
-            % Expected values
-            coefExpctd = [
-                cos(pi/4+pi/2) -sin(pi/4+pi/2) ;
-                -sin(pi/4+pi/2) -cos(pi/4+pi/2) ];
-            
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','sequential');
-            
-            % Actual values
-            step(testCase.omgs,pi/4,[ 1 -1 ],0);                        
-            coefActual = step(testCase.omgs,pi/4,[ 1 -1 ],pdAng);            
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'AbsTol',1e-10);
-            
-        end
-
-        %
-        function testPartialDifferenceWithAnglesAndMusInSequentialModeMultiple(testCase)
-             
-            % Configuration
-            pdAng = 1;
-            
-            % Expected values
-            coefExpctd(:,:,1) = [
-                cos(pi/4+pi/2) -sin(pi/4+pi/2) ;
-                -sin(pi/4+pi/2) -cos(pi/4+pi/2) ];
-            coefExpctd(:,:,2) = [
-                cos(pi/6+pi/2) -sin(pi/6+pi/2) ;
-                -sin(pi/6+pi/2) -cos(pi/6+pi/2) ];            
-            
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','sequential');
-            
-            % Actual values
-            angs = [pi/4 pi/6];
-            mus = [1 -1];
-            step(testCase.omgs,angs,mus,0);                        
-            coefActual = step(testCase.omgs,angs,mus,pdAng);            
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'AbsTol',1e-10);
-            
-        end       
-        
-        function testPartialDifference4x4RandAngPdAng3InSequentialMode(testCase)
-          
-            % Expected values
-            mus = [ -1 1 -1 1 ];
-            angs = 2*pi*rand(6,1);
-            pdAng = 3;
-            coefExpctd = ...
-                diag(mus) * ...
-               [ 1  0   0             0            ;
-                 0  1   0             0            ;
-                 0  0   cos(angs(6)) -sin(angs(6)) ;
-                 0  0   sin(angs(6))  cos(angs(6)) ] *...                                                                            
-               [ 1  0            0  0            ;
-                 0  cos(angs(5)) 0 -sin(angs(5)) ;
-                 0  0            1  0            ;
-                 0  sin(angs(5)) 0 cos(angs(5))  ] *...                                                            
-               [ 1  0             0            0 ;
-                 0  cos(angs(4)) -sin(angs(4)) 0 ;
-                 0  sin(angs(4))  cos(angs(4)) 0 ;
-                 0  0             0            1 ] *...                                            
-               [ cos(angs(3)+pi/2) 0 0 -sin(angs(3)+pi/2)  ; % Partial Diff.
-                 0            0 0  0             ;
-                 0            0 0  0             ;        
-                 sin(angs(3)+pi/2) 0 0  cos(angs(3)+pi/2) ] *...                            
-               [ cos(angs(2)) 0 -sin(angs(2)) 0  ;
-                 0            1  0            0  ; 
-                 sin(angs(2)) 0  cos(angs(2)) 0  ;
-                 0            0  0            1 ] *...            
-               [ cos(angs(1)) -sin(angs(1)) 0 0  ;
-                 sin(angs(1)) cos(angs(1))  0 0  ;
-                 0            0             1 0  ;
-                 0            0             0 1 ];
-            
-            % Instantiation of target class
-            import tansacnet.utility.*            
-            testCase.omgs = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','sequential');
-            
-            % Actual values
-            for iAng = 0:pdAng-1
-                testCase.omgs.step(angs,mus,iAng);            
-            end
-            coefActual = testCase.omgs.step(angs,mus,pdAng);            
-            
-            % Evaluation
-            testCase.verifyEqual(coefActual,coefExpctd,'AbsTol',1e-10);
-
-        end
-        
-        
         function testPartialDifference4x4RandAngPdAng3InSequentialModeMultiple(testCase,nblks)
           
             % Expected values
