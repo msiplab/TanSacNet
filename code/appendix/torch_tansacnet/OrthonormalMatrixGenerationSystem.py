@@ -165,95 +165,43 @@ class OrthonormalMatrixGenerationSystem:
                     matrixpst_iMtx[iTop, :] = vt
                 matrix[iMtx] = mus_iMtx.view(-1,1) * matrixpst_iMtx
                 self.matrixpst[iMtx] = matrixpst_iMtx
-            self.nextangle = 1
-    
+            self.nextangle = 0
+        else: # Sequential differentiation
+            for iMtx in range(nMatrices):
+                matrixrev = torch.eye(nDims,dtype=self.dtype,device=angles.device)
+                matrixdif = torch.zeros(nDims,nDims,dtype=self.dtype,device=angles.device)
+                iAng = 0
+                matrixpst_iMtx = self.matrixpst[iMtx]
+                matrixpre_iMtx = self.matrixpre[iMtx]
+                angles_iMtx = angles[iMtx]
+                mus_iMtx = mus[iMtx]
+                for iTop in range(nDims - 1):
+                    rt = matrixrev[iTop, :]
+                    dt = torch.zeros(nDims,dtype=self.dtype,device=angles.device)
+                    dt[iTop] = 1
+                    for iBtm in range(iTop + 1, nDims):
+                        if iAng == index_pd_angle:
+                            angle = angles_iMtx[iAng]
+                            rb = matrixrev[iBtm, :]
+                            rt, rb = rot_(rt, rb, -angle)
+                            matrixrev[iTop, :] = rt
+                            matrixrev[iBtm, :] = rb
+                            db = torch.zeros(nDims,dtype=self.dtype,device=angles.device)
+                            db[iBtm] = 1
+                            dangle = angle + torch.pi / 2.0
+                            dt, db = rot_(dt, db, dangle)
+                            matrixdif[iTop, :] = dt
+                            matrixdif[iBtm, :] = db
+                            matrixpst_iMtx = torch.matmul(matrixpst_iMtx, matrixrev)
+                            matrix[iMtx] = torch.matmul(torch.matmul(matrixpst_iMtx, matrixdif), matrixpre_iMtx)
+                            matrixpre_iMtx = torch.matmul(torch.transpose(matrixrev,0,1), matrixpre_iMtx)
+                        iAng += 1
+                matrix[iMtx] = mus_iMtx.view(-1,1) * matrix[iMtx]
+                self.matrixpre[iMtx] = matrixpre_iMtx
+                self.matrixpst[iMtx] = matrixpst_iMtx
+            self.nextangle += 1
+
         return matrix
-
-    """
-        function matrix = stepSequential_(obj,angles,mus,pdAng)
-            % Check pdAng
-            if pdAng ~= obj.nextangle
-                error("Unable to proceed sequential differentiation. Index = %d is expected, but %d was given.", obj.nextangle, pdAng);
-            end
-            %
-            nDim_ = obj.NumberOfDimensions;
-            nMatrices_ = size(angles,2);
-            matrix = repmat(eye(nDim_),[1 1 nMatrices_]);
-            if isrow(mus)
-                mus = mus.';
-            end
-            if pdAng < 1 % Initialization
-                obj.matrixpst = repmat(eye(nDim_),[1 1 nMatrices_]);
-                obj.matrixpre = repmat(eye(nDim_),[1 1 nMatrices_]);
-                %
-                for iMtx = 1:nMatrices_
-                    iAng = 1;
-                    for iTop=1:nDim_-1
-                        vt = obj.matrixpst(iTop,:,iMtx);
-                        for iBtm=iTop+1:nDim_
-                            angle = angles(iAng,iMtx);
-                            vb = obj.matrixpst(iBtm,:,iMtx);
-                            [vt,vb] = obj.rot_(vt,vb,angle);
-                            obj.matrixpst(iBtm,:,iMtx) = vb;
-                            iAng = iAng + 1;
-                        end
-                        obj.matrixpst(iTop,:,iMtx) = vt;
-                    end
-                    if iscolumn(mus)
-                        matrix(:,:,iMtx) = mus.*obj.matrixpst(:,:,iMtx);
-                    else
-                        matrix(:,:,iMtx) = mus(:,iMtx).*obj.matrixpst(:,:,iMtx);
-                    end
-                end
-                obj.nextangle = uint32(1);
-            else % Sequential differentiation
-                %
-                %matrix = 1;
-                for iMtx = 1:nMatrices_
-                    matrixrev = eye(nDim_);
-                    matrixdif = zeros(nDim_);
-                    %
-                    iAng = 1;
-                    for iTop=1:nDim_-1
-                        rt = matrixrev(iTop,:);
-                        dt = zeros(1,nDim_);
-                        dt(iTop) = 1;
-                        for iBtm=iTop+1:nDim_
-                            if iAng == pdAng
-                                angle = angles(iAng,iMtx);
-                                %
-                                rb = matrixrev(iBtm,:);
-                                [rt,rb] = obj.rot_(rt,rb,-angle);
-                                matrixrev(iTop,:) = rt;
-                                matrixrev(iBtm,:) = rb;
-                                %
-                                db = zeros(1,nDim_);
-                                db(iBtm) = 1;
-                                dangle = angle + pi/2;
-                                [dt,db] = obj.rot_(dt,db,dangle);
-                                matrixdif(iTop,:) = dt;
-                                matrixdif(iBtm,:) = db;
-                                %
-                                obj.matrixpst(:,:,iMtx) = obj.matrixpst(:,:,iMtx)*matrixrev;
-                                matrix(:,:,iMtx) = obj.matrixpst(:,:,iMtx)*matrixdif*obj.matrixpre(:,:,iMtx);
-                                obj.matrixpre(:,:,iMtx) = matrixrev.'*obj.matrixpre(:,:,iMtx);
-                            end
-                            iAng = iAng + 1;
-                        end
-                    end
-                    if iscolumn(mus)
-                        matrix(:,:,iMtx) = mus.*matrix(:,:,iMtx);
-                    else
-                        matrix(:,:,iMtx) = mus(:,iMtx).*matrix(:,:,iMtx);
-                    end                    
-                end
-                obj.nextangle = obj.nextangle + 1;
-            end
-        end
-    end
-
-    
-    """
 
 """
 classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
