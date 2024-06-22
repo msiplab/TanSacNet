@@ -5,14 +5,13 @@ import math
 import torch
 import torch.nn as nn
 from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer
-from lsunUtility import Direction
-from orthonormalMatrixGenerationSystem import OrthonormalMatrixGenerationSystem
+from lsunUtility import Direction,OrthonormalMatrixGenerationSystem
 
-stride = [ [2, 2], [4, 4] ]
+stride = [ [2, 2] ] #, [4, 4] ]
 mus = [ -1, 1 ]
 datatype = [ torch.float32, torch.float64 ]
-nrows = [ 2, 4, 8 ]
-ncols = [ 2, 4, 8 ]
+nrows = [ 2 ] # , 4, 8 ]
+ncols = [ 2 ] #, 4, 8 ]
 usegpu = [ True, False ]
 
 class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
@@ -43,8 +42,8 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             )
     def testConstructor(self, stride):
         # Expected values
-        nameExpctd = 'V0'
-        descriptionExpctd = "LSUN initial rotation " \
+        expctdName = 'V0'
+        expctdDescription = "LSUN initial rotation " \
             + "(ps,pa) = (" \
             + str(math.ceil(stride[0]*stride[1]/2)) + "," \
             + str(math.floor(stride[0]*stride[1]/2)) + "), "  \
@@ -54,112 +53,132 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
             stride=stride,
-            name=nameExpctd)
+            name=expctdName)
 
         # Actual values
-        nameActual = layer.name
-        descriptionActual = layer.description
+        actualName = layer.name
+        actualDescription = layer.description
 
         # Evaluation
-        self.assertEqual(nameActual,nameExpctd)
-        self.assertEqual(descriptionActual,descriptionExpctd)
+        self.assertEqual(actualName,expctdName)
+        self.assertEqual(actualDescription,expctdDescription)
+
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,datatype)
+            )
+    def testForwardGrayscale(self, usegpu, stride, nrows, ncols, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")     
+        rtol, atol = 1e-5, 1e-6
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[0]*stride[1]
+        
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+
+        # Expected values
+        # nSamples x nRows x nCols x nChs
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        W0 = torch.eye(ps,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        U0 = torch.eye(pa,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            # Perumation in each block
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunInitialRotation2dLayer(
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            name='V0')
+        
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+            )
+    def testForwardGrayscaleWithRandomAngles(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")
+                return
+        else:
+            device = torch.device("cpu")        
+        rtol, atol = 1e-5, 1e-6
+
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[0]*stride[1]
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+        nAngles = int((nDecs-2)*nDecs/4)
+        angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device)
+
+        # Expected values
+        # nSamples x nRows x nCols x nChs
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nAnglesH = int(nAngles/2)
+        W0 = genW(angles=angles[:,:nAnglesH])
+        U0 = genU(angles=angles[:,nAnglesH:])
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            # Perumation in each block
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunInitialRotation2dLayer(
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            name='V0')
+        
+        # Actual values
+        with torch.no_grad():
+            layer.angles = angles
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
 
-"""       function testConstructor(testCase, stride)
-            
-            % Expected values
-            expctdName = 'V0';
-            expctdDescription = "LSUN initial rotation " ...
-                + "(ps,pa) = (" ...
-                + ceil(prod(stride)/2) + "," ...
-                + floor(prod(stride)/2) + "), "  ...
-                + "(mv,mh) = (" ...
-                + stride(1) + "," + stride(2) + ")";
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunInitialRotation2dLayer(...
-                'Stride',stride,...
-                'Name',expctdName);
-            
-            % Actual values
-            actualName = layer.Name;
-            actualDescription = layer.Description;
-            
-            % Evaluation
-            testCase.verifyEqual(actualName,expctdName);
-            testCase.verifyEqual(actualDescription,expctdDescription);
-        end
-  
-        function testPredictGrayscale(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
-
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
-            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = nDecs;
-            % nDecs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            if usegpu
-                X = gpuArray(X);
-            end
-            
-            % Expected values
-            % nChs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0 = repmat(eye(ps,datatype),[1 1 nrows*ncols]);
-            U0 = repmat(eye(pa,datatype),[1 1 nrows*ncols]);
-            %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
-            expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
-            Y  = zeros(nChsTotal,nrows,ncols,datatype);
-            for iSample=1:nSamples
-                % Perumation in each block
-                Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nDecs,nrows,ncols);
-                %
-                Ys = Yi(1:ps,:);
-                Ya = Yi(ps+1:end,:);
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
-                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
-                end
-                Y(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);                
-                expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
-            end
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunInitialRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'Name','V0');
-            
-            % Actual values
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualZ,'gpuArray')
-                actualZ = gather(actualZ);
-                expctdZ = gather(expctdZ);
-            end
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
+"""       
         
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)

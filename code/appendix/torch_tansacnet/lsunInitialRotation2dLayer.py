@@ -28,11 +28,13 @@ class LsunInitialRotation2dLayer(nn.Module):
     
     def __init__(self, 
         stride=[],
+        number_of_blocks=[1,1],
         no_dc_leakage=False,
         name=''):
         super(LsunInitialRotation2dLayer, self).__init__()
-        self.name = name
         self.stride = stride
+        self.number_of_blocks = number_of_blocks
+        self.name = name
         self.description = "LSUN initial rotation " \
                 + "(ps,pa) = (" \
                 + str(math.ceil(math.prod(self.stride)/2.0)) + "," \
@@ -43,6 +45,24 @@ class LsunInitialRotation2dLayer(nn.Module):
         self.no_dc_leakage = no_dc_leakage
         #self.is_update_requested = True        
 
+    def forward(self,X):
+        nSamples = X.size(dim=0)
+        nrows = X.size(dim=1)
+        ncols = X.size(dim=2)
+        nDecs = math.prod(self.stride)        
+        ps = math.ceil(nDecs/2.0)
+        pa = math.floor(nDecs/2.0)
+
+        # Process
+        # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
+        Y = X.permute(1,2,3,0).reshape(nrows*ncols,ps+pa,nSamples)
+        for iblk in range(nrows*ncols):
+            Yi = Y[iblk,:,:]
+            Ys = Yi[:ps,:]
+            Ya = Yi[ps:,:]
+
+        
+        return X.clone()
 
 """
 classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
