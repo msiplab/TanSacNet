@@ -7,11 +7,11 @@ import torch.nn as nn
 from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer
 from lsunUtility import Direction,OrthonormalMatrixGenerationSystem
 
-stride = [ [2, 2] ] #, [4, 4] ]
+stride = [ [2, 2] , [4, 4] ]
 mus = [ -1, 1 ]
 datatype = [ torch.float32, torch.float64 ]
-nrows = [ 2 ] # , 4, 8 ]
-ncols = [ 2 ] #, 4, 8 ]
+nrows = [ 2, 4, 8 ]
+ncols = [ 2, 4, 8 ]
 usegpu = [ True, False ]
 
 class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
@@ -116,7 +116,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertIsInstance(actualZ,torch.Tensor)
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+"""
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
@@ -178,7 +178,6 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
 
-"""       
         
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
