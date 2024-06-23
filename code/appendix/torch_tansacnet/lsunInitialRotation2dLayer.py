@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from lsunUtility import OrthonormalMatrixGenerationSystem
 
 class LsunInitialRotation2dLayer(nn.Module):
     """
@@ -27,14 +28,19 @@ class LsunInitialRotation2dLayer(nn.Module):
     """
     
     def __init__(self, 
+        dtype=torch.get_default_dtype(),
         stride=[],
         number_of_blocks=[1,1],
         no_dc_leakage=False,
         name=''):
         super(LsunInitialRotation2dLayer, self).__init__()
+        self.dtype = dtype
         self.stride = stride
         self.number_of_blocks = number_of_blocks
         self.name = name
+        self.mus = None
+        self.angles = None
+        self.no_dc_leakage = no_dc_leakage        
         self.description = "LSUN initial rotation " \
                 + "(ps,pa) = (" \
                 + str(math.ceil(math.prod(self.stride)/2.0)) + "," \
@@ -42,8 +48,12 @@ class LsunInitialRotation2dLayer(nn.Module):
                 + "(mv,mh) = (" \
                 + str(self.stride[0]) + "," \
                 + str(self.stride[1]) + ")"
-        self.no_dc_leakage = no_dc_leakage
-        #self.is_update_requested = True        
+        
+        # Orthonormal matrix generation systems 
+        self.genOM = OrthonormalMatrixGenerationSystem(dtype=self.dtype)
+
+        # Update parameters
+        self.update_parameters()
 
     def forward(self,X):
         nSamples = X.size(dim=0)
@@ -53,16 +63,57 @@ class LsunInitialRotation2dLayer(nn.Module):
         ps = math.ceil(nDecs/2.0)
         pa = math.floor(nDecs/2.0)
 
+        # Update parameters
+        if self.is_update_requested:
+            self.number_of_blocks = [ nrows, ncols ]
+            self.update_parameters()
+        W0 = self.W0
+        U0 = self.U0
+
         # Process
         # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
         Y = X.permute(1,2,3,0).reshape(nrows*ncols,ps+pa,nSamples)
         for iblk in range(nrows*ncols):
-            Yi = Y[iblk,:,:]
-            Ys = Yi[:ps,:]
-            Ya = Yi[ps:,:]
+            Yb = Y[iblk,:,:]
+            if self.W0 is None:
+                Ys = Yb[:ps,:]
+            else:
+                W0b = W0[iblk,:,:]
+                Ys = W0b @ Yb[:ps,:]
+            if self.U0 is None:
+                Ya = Yb[ps:,:]
+            else:
+                U0b = U0[iblk,:,:]
+                Ya = U0b @ Yb[ps:,:]
+            Y[iblk,:,:] = torch.cat((Ys,Ya),0).view(nDecs,nSamples)
+        # (nRows x nCols) x nChs x nSamples -> nSamples x nRows x nCols x nChs
+        Z = Y.reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
+        return Z
+    
+    @property
+    def angles(self):
+        return self.__angles
 
+    @angles.setter
+    def angles(self, angles):
+        nBlocks = math.prod(self.number_of_blocks)
+        nDecs = math.prod(self.stride)
+        nAngles = (nDecs-2)*nDecs//4
+        self.__angles = angles
+        self.is_update_requested = True
         
-        return X.clone()
+    def update_parameters(self):
+        angles = self.__angles
+        if angles is None:
+            self.W0 = None
+            self.U0 = None
+        else:
+            nAngles = angles.size(1)
+            anglesW = angles[:,:nAngles//2]
+            anglesU = angles[:,nAngles//2:]
+            self.W0 = self.genOM(angles=anglesW)
+            self.U0 = self.genOM(angles=anglesU)
+        self.is_update_requested = False
 
 """
 classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen

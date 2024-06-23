@@ -104,6 +104,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
+            dtype=datatype,
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
@@ -148,10 +149,9 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
         nAnglesH = int(nAngles/2)
-        W0 = genW(angles=angles[:,:nAnglesH],mus=1) 
-"""
-        W0 = genW(angles=angles[:,:nAnglesH])
+        W0 = genW(angles=angles[:,:nAnglesH]) 
         U0 = genU(angles=angles[:,nAnglesH:])
+
         expctdZ = torch.zeros_like(X)
         for iSample in range(nSamples):
             # Perumation in each block
@@ -166,6 +166,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
+            dtype=datatype,
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
@@ -180,7 +181,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
-
+"""
         
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
