@@ -116,7 +116,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertIsInstance(actualZ,torch.Tensor)
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-"""
+
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
@@ -137,16 +137,19 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Parameters
         nSamples = 8
         nDecs = stride[0]*stride[1]
-        # nSamples x nRows x nCols x nChs
+
+        # nSamples x nRows x nCols x nDecs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
         nAngles = int((nDecs-2)*nDecs/4)
-        angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device)
+        angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device) 
 
         # Expected values
-        # nSamples x nRows x nCols x nChs
+        # nSamples x nRows x nCols x nDecs
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
         nAnglesH = int(nAngles/2)
+        W0 = genW(angles=angles[:,:nAnglesH],mus=1) 
+"""
         W0 = genW(angles=angles[:,:nAnglesH])
         U0 = genU(angles=angles[:,nAnglesH:])
         expctdZ = torch.zeros_like(X)

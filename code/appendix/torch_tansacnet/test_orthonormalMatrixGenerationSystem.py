@@ -5,13 +5,13 @@ import torch
 import torch.nn as nn
 import math
 from random import *
-from lsunUtility import MultipleOrthonormalMatrixGenerationSystem
+from lsunUtility import OrthonormalMatrixGenerationSystem
 
 nblks = [ 1, 2, 4 ]
 
-class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
+class OrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
     """
-    MULTIPLEORTHONORMALMATRIXGENERATIONSYSTEMTESTCASE Test case for MultipleOrthonormalMatrixGenerationSystem
+    ORTHONORMALMATRIXGENERATIONSYSTEMTESTCASE Test case for OrthonormalMatrixGenerationSystem
     
     Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
@@ -38,7 +38,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0., 1. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -58,7 +58,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ math.sin(math.pi/4),  math.cos(math.pi/4) ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -81,7 +81,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ math.sin(math.pi/6),  math.cos(math.pi/6) ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
             
         # Actual values
         with torch.no_grad():
@@ -102,7 +102,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ -math.sin(math.pi/4), -math.cos(math.pi/4) ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()            
+        omgs = OrthonormalMatrixGenerationSystem()            
 
         # Actual values
         coefActual = omgs(angles=math.pi/4,mus=[ [1,-1] ])
@@ -121,7 +121,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0., -1. ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()            
+        omgs = OrthonormalMatrixGenerationSystem()            
             
         # Actual values
         coefActual = omgs(angles=[],mus=[ [1,-1] ])
@@ -143,7 +143,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0., 1. ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values            
         mus = [ [1,-1], [-1,1] ]
@@ -166,7 +166,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ math.sin(math.pi/6), math.cos(math.pi/6) ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -189,7 +189,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0., 1. ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -225,7 +225,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0.0, 1.0 ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -261,7 +261,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
 
         # Instantiation of target class
         angs = 2*math.pi*torch.rand(nblks,1)
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -281,7 +281,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
 
         # Instantiation of target class
         angs = 2*math.pi*torch.rand(1,6)
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -302,7 +302,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
 
         # Instantiation of target class
         angs = 2*math.pi*torch.rand(nblks,6)            
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -322,7 +322,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
 
         # Instantiation of target class
         angs = 2*math.pi*torch.rand(1,28)
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -342,7 +342,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
 
         # Instantiation of target class
         angs = 2*math.pi*torch.rand(nblks,28)
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -364,7 +364,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs = 2*math.pi*torch.rand(1,6)
         nSize = 4
         angs[0,0:nSize-1] = 0
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -388,7 +388,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs = 2*math.pi*torch.rand(nblks,6)
         nSize = 4
         angs[:,0:nSize-1] = 0
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -410,7 +410,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         ang = 2*math.pi*torch.rand(1,28)
         nSize = 8
         ang[0,0:nSize-1] = 0
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -434,7 +434,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs = 2*math.pi*torch.rand(nblks,28)
         nSize = 8
         angs[:,0:nSize-1] = 0
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -456,7 +456,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 1.,  0. ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=0,mus=1,index_pd_angle=0)
@@ -478,7 +478,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 1.,  0. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         angles = [ [0], [0] ]
@@ -499,7 +499,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ math.sin(math.pi/4+math.pi/2),  math.cos(math.pi/4+math.pi/2)]])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=math.pi/4,mus=1,index_pd_angle=0)
@@ -521,7 +521,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ math.sin(math.pi/6+math.pi/2),  math.cos(math.pi/6+math.pi/2)]])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         angles = [ [math.pi/4], [math.pi/6] ]
@@ -541,7 +541,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ -math.sin(math.pi/4+math.pi/2), -math.cos(math.pi/4+math.pi/2)] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=math.pi/4,mus=[ [1,-1] ],index_pd_angle=0)
@@ -563,7 +563,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ math.sin(math.pi/6+math.pi/2), math.cos(math.pi/6+math.pi/2)] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         angles = [ [math.pi/4], [math.pi/6] ]
@@ -583,7 +583,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 1.,  0. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=0,mus=1,index_pd_angle=0)
@@ -616,7 +616,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 1.,  0. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         angles = [ [0], [0] ]
@@ -682,7 +682,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                 [ 0., 0., 0., 1. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem()
+        omgs = OrthonormalMatrixGenerationSystem()
 
         # Actual values
         with torch.no_grad():
@@ -733,7 +733,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                 [ 0., 0., 0., 1. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)
@@ -785,7 +785,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                     [ 0., 0., 0., 1. ] ])
             
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)
@@ -835,7 +835,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                 [ 0., 0., 0., 1. ] ])
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)
@@ -887,7 +887,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                     [ 0., 0., 0., 1. ] ])
             
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)
@@ -943,7 +943,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                 [ 0., 0., 0., 1. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)
@@ -1002,7 +1002,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
                     [ 0., 0., 0., 1. ] ])
             
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs,mus=mus,index_pd_angle=pdAng)
@@ -1022,12 +1022,12 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs1[0,pdAng] += delta
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=False)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=False)
         coefExpctd = 1./delta * \
             ( omgs(angles=angs1,mus=1) - omgs(angles=angs0,mus=1) )
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs0,mus=1,index_pd_angle=pdAng)
@@ -1049,12 +1049,12 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs1[:,pdAng] += delta
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=False)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=False)
         coefExpctd = 1./delta * \
             ( omgs(angles=angs1,mus=1) - omgs(angles=angs0,mus=1) )
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True)
 
         # Actual values
         coefActual = omgs(angles=angs0,mus=1,index_pd_angle=pdAng)
@@ -1073,7 +1073,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0., -1. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         coefActual = omgs(angles=0,mus=-1,index_pd_angle=None)
@@ -1095,7 +1095,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
             [ 0., -1. ] ])
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         coefActual = omgs(angles=0,mus=-1,index_pd_angle=None)
@@ -1118,7 +1118,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = 0
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         coefActual = omgs(angles=math.pi/4,mus=1,index_pd_angle=pdAng)
@@ -1143,7 +1143,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = 1        
         
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=math.pi/4,mus=1,index_pd_angle=None)
@@ -1173,7 +1173,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=1,index_pd_angle=None)
@@ -1200,7 +1200,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=math.pi/4,mus=mus,index_pd_angle=None)
@@ -1231,7 +1231,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1285,7 +1285,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = pdAng + 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1344,7 +1344,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = pdAng + 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1400,7 +1400,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = pdAng + 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1459,7 +1459,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = pdAng + 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1522,7 +1522,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = pdAng + 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1588,7 +1588,7 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         nextangleExpctd = pdAng + 1
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs,mus=mus,index_pd_angle=None)
@@ -1613,11 +1613,11 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs1[0,pdAng] = angs1[0,pdAng] + delta
     
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=False)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=False)
         coefExpctd = 1./delta * ( omgs(angles=angs1,mus=1) - omgs(angles=angs0,mus=1) )
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs0,mus=1,index_pd_angle=None)        
@@ -1641,11 +1641,11 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs1[:,pdAng] = angs1[:,pdAng] + delta
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=False)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=False)
         coefExpctd = 1./delta * ( omgs(angles=angs1,mus=1) - omgs(angles=angs0,mus=1) )
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs0,mus=1,index_pd_angle=None)
@@ -1670,11 +1670,11 @@ class MultipleOrthonormalMatrixGenerationSystemTestCase(unittest.TestCase):
         angs1[:,pdAng] = angs1[:,pdAng] + delta
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=False)
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=False)
         coefExpctd = 1./delta * ( omgs(angles=angs1,mus=mus) - omgs(angles=angs0,mus=mus) )
 
         # Instantiation of target class
-        omgs = MultipleOrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
+        omgs = OrthonormalMatrixGenerationSystem(partial_difference=True,mode='sequential')
 
         # Actual values
         omgs(angles=angs0,mus=mus,index_pd_angle=None)
