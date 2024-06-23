@@ -119,9 +119,9 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+            itertools.product(usegpu,stride,nrows,ncols,datatype)
             )
-    def testForwardGrayscaleWithRandomAngles(self, usegpu, stride, nrows, ncols, mus, datatype):
+    def testForwardGrayscaleWithRandomAngles(self, usegpu, stride, nrows, ncols, datatype):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -181,82 +181,79 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
-"""
-        
-        function testPredictGrayscaleWithRandomAngles(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
-            
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = nDecs;
-            % nDecs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-            end            
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+            )
+    def testForwardGrayscaleWithRandomAnglesNoDcLeackage(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")
+                return
+        else:
+            device = torch.device("cpu")        
+        rtol, atol = 1e-5, 1e-6
 
-            % Expected values
-            % nChs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0 = genW.step(angles(1:size(angles,1)/2,:),1);
-            U0 = genU.step(angles(size(angles,1)/2+1:end,:),1);
-            %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
-            expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
-            Y  = zeros(nChsTotal,nrows,ncols,datatype);
-            for iSample=1:nSamples
-                % Perumation in each block
-                Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nDecs,nrows,ncols);
-                %
-                Ys = Yi(1:ps,:);
-                Ya = Yi(ps+1:end,:);
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
-                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
-                end
-                Y(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);
-                expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
-            end
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunInitialRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'Name','V0');
-            
-            % Actual values
-            layer.Angles = angles;
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualZ,'gpuArray')
-                actualZ = gather(actualZ);
-                expctdZ = gather(expctdZ);
-            end    
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[0]*stride[1]
+
+        # nSamples x nRows x nCols x nDecs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+        nAngles = int((nDecs-2)*nDecs/4)
+        angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device) 
+
+        # Expected values
+        # nSamples x nRows x nCols x nDecs
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nAnglesH = int(nAngles/2)
+        anglesNoDc = angles.clone()
+        anglesNoDc[:,:(ps-1)] = 0
+        
+        musW = mus*torch.ones(nrows*ncols,ps,dtype=datatype,device=device)
+        musW[:,0] = 1
+        musU = mus*torch.ones(nrows*ncols,pa,dtype=datatype,device=device)
+        W0 = genW(angles=anglesNoDc[:,:nAnglesH],mus=musW)
+        U0 = genU(angles=anglesNoDc[:,nAnglesH:],mus=musU)
+
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            # Perumation in each block
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunInitialRotation2dLayer(
+            dtype=datatype,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            no_dc_leakage=True,
+            name='V0')
+        
+        # Actual values
+        with torch.no_grad():
+            layer.mus = mus
+            layer.angles = angles
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        message = 'usegpu=%s, stride=%s, nrows=%d, ncols=%d, mus=%f, datatype=%s' % (usegpu,stride,nrows,ncols,mus,datatype)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
+
+"""
        
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)

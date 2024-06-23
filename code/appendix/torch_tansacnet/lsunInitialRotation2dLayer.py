@@ -96,23 +96,47 @@ class LsunInitialRotation2dLayer(nn.Module):
 
     @angles.setter
     def angles(self, angles):
+        #nBlocks = math.prod(self.number_of_blocks)
+        #nDecs = math.prod(self.stride)
+        #nAngles = (nDecs-2)*nDecs//4
+        self.__angles = angles
+        self.is_update_requested = True
+
+    @property
+    def mus(self):
+        return self.__mus
+    
+    @mus.setter
+    def mus(self, mus):
         nBlocks = math.prod(self.number_of_blocks)
         nDecs = math.prod(self.stride)
-        nAngles = (nDecs-2)*nDecs//4
-        self.__angles = angles
+        if mus is None:
+            mus = torch.ones(nBlocks,nDecs,dtype=self.dtype)
+        elif isinstance(mus, int) or isinstance(mus, float):
+            mus = mus*torch.ones(nBlocks,nDecs,dtype=self.dtype)
+        self.__mus = mus
         self.is_update_requested = True
         
     def update_parameters(self):
         angles = self.__angles
+        mus = self.__mus
         if angles is None:
             self.W0 = None
             self.U0 = None
         else:
+            ps = int(math.ceil(math.prod(self.stride)/2.0))
+            if self.no_dc_leakage:
+                mus[:,0] = 1.0
+                self.__mus = mus
+                angles[:,:(ps-1)] = 0.0
+                self.__angles = angles
             nAngles = angles.size(1)
             anglesW = angles[:,:nAngles//2]
             anglesU = angles[:,nAngles//2:]
-            self.W0 = self.genOM(angles=anglesW)
-            self.U0 = self.genOM(angles=anglesU)
+            musW = mus[:,:ps]
+            musU = mus[:,ps:]       
+            self.W0 = self.genOM(angles=anglesW,mus=musW)
+            self.U0 = self.genOM(angles=anglesU,mus=musU)
         self.is_update_requested = False
 
 """
