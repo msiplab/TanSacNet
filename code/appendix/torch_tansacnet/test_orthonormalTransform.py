@@ -5,11 +5,10 @@ import torch
 import torch.nn as nn
 import math
 from random import *
-from orthonormalTransform import OrthonormalTransform
+from orthonormalTransform import OrthonormalTransform, SingleOrthonormalMatrixGenerationSystem
 from lsunLayerExceptions import InvalidMode, InvalidMus
-from lsunUtility import OrthonormalMatrixGenerationSystem
 
-datatype = [ torch.float, torch.double ]
+datatype = [ torch.float32, torch.float64 ]
 ncols = [ 1, 2, 4 ]
 npoints = [ 1, 2, 3, 4, 5, 6 ]
 mode = [ 'Analysis', 'Synthesis' ]
@@ -1330,7 +1329,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         #X = X.to(device)
         dLdZ = torch.randn(nPoints,ncols,dtype=datatype)   
         dLdZ = dLdZ.to(device)     
-        omgs = OrthonormalMatrixGenerationSystem(
+        omgs = SingleOrthonormalMatrixGenerationSystem(
                 dtype=datatype,
                 partial_difference=False
             )
@@ -1390,7 +1389,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         #X = X.to(device)
         dLdZ = torch.randn(nPoints,ncols,dtype=datatype)        
         dLdZ = dLdZ.to(device)
-        omgs = OrthonormalMatrixGenerationSystem(
+        omgs = SingleOrthonormalMatrixGenerationSystem(
                 dtype=datatype,
                 partial_difference=False
             )
