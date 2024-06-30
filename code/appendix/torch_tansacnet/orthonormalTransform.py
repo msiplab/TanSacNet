@@ -5,6 +5,57 @@ import math
 #import numpy as np
 from lsunLayerExceptions import InvalidMode, InvalidMus
 
+class SetOfOrthonormalTransforms(nn.Module):
+    """
+    SETOFORTHONORMALTRANSFORMS
+    
+    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+
+    Copyright (c) 2024, Shogo MURAMATSU
+
+    All rights reserved.
+
+    Contact address: Shogo MURAMATSU,
+        Faculty of Engineering, Niigata University,
+        8050 2-no-cho Ikarashi, Nishi-ku,
+        Niigata, 950-2181, JAPAN
+
+        http://www.eng.niigata-u.ac.jp/~msiplab/
+    """
+
+    def __init__(self,
+        n=2,
+        nblks=1,
+        mus=1,
+        mode='Analysis',
+        dtype=torch.get_default_dtype(),
+        device=torch.device("cpu")):
+        super(SetOfOrthonormalTransforms, self).__init__()
+        self.dtype = dtype
+        self.nPoints = n
+        self.device = device
+                
+        # Mode
+        if mode in {'Analysis','Synthesis'}:
+            self.__mode = mode
+        else:
+            raise InvalidMode(
+                '%s : Mode should be either of Analysis or Synthesis'\
+                % str(mode)
+            )
+        
+        # Angles
+        nAngs = int(n*(n-1)/2)
+        self.angles = nn.Parameter(torch.zeros(nblks,nAngs,dtype=self.dtype,device=self.device))
+
+    def forward(self, X):
+        return X.clone()
+    
+    @property
+    def mode(self):
+        return self.__mode 
+
+
 class OrthonormalTransform(nn.Module):
     """
     ORTHONORMALTRANSFORM

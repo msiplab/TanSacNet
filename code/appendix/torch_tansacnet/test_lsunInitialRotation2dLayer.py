@@ -253,87 +253,117 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         message = 'usegpu=%s, stride=%s, nrows=%d, ncols=%d, mus=%f, datatype=%s' % (usegpu,stride,nrows,ncols,mus,datatype)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
 
-"""
-       
-        function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
-                usegpu, stride, nrows, ncols, mus, datatype)
-            
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end    
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = nDecs;
-            % nDecs x nRows x nCols x nDecs x nSamples
-            %X = randn(nrows,ncols,nDecs,nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-            end   
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,datatype)
+            )
+    def testBackwardGrayscale(self, usegpu, stride, nrows, ncols, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-5, 1e-6
 
-            % Expected values
-            % nChs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            anglesNoDc = angles;
-            anglesNoDc(1:ps-1,:)=zeros(ps-1,nrows*ncols);
-            musW = mus*ones(ps,nrows*ncols);
-            musW(1,1:end) = 1;
-            musU = mus*ones(pa,nrows*ncols);
-            W0 = genW.step(anglesNoDc(1:size(angles,1)/2,:),musW);
-            U0 = genU.step(anglesNoDc(size(angles,1)/2+1:end,:),musU);
-            %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
-            expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
-            Y  = zeros(nChsTotal,nrows,ncols,datatype);
-            for iSample=1:nSamples
-                % Perumation in each block
-                Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nDecs,nrows*ncols);
-                %
-                Ys = Yi(1:ps,:);
-                Ya = Yi(ps+1:end,:);
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
-                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
-                end
-                Y(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y(ps+1:end,:,:) = reshape(Ya,pa,nrows,ncols);                
-                expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
-            end
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunInitialRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'NoDcLeakage',true,...
-                'Name','V0');
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True)
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[0]*stride[1]
+        nAnglesH = int((nDecs-2)*nDecs/8)
+        anglesW = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
+        anglesU = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
+        mus = 1
+
+        # nSamples x nRows x nCols x nDecs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)        
+        dLdZ = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+
+        # Expected values
+        # nSamples x nRows x nCols x nDecs
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        W0T = genW(angles=anglesW,mus=mus,index_pd_angle=None).transpose(1,2)
+        U0T = genU(angles=anglesU,mus=mus,index_pd_angle=None).transpose(1,2)
+        Y = dLdZ.clone()
+        expctddLdX = [ [] for idx in range(nSamples) ] 
+        for iSample in range(nSamples):
+            Yi = Y[iSample,:,:,:]
+            Ys = Yi[:,:,:ps].view(-1,ps)
+            Ya = Yi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
+            Zsai = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            expctddLdX[iSample] = Zsai
+        
+        # dLdWi = <dLdZ,(dVdWi)X>
+        dldw_ = torch.zeros(nrows*ncols,2*nAnglesH,dtype=datatype,device=device)
+        dldz_= dLdZ.clone()
+        dldz_upp = dldz_[:,:,:,:ps].view(nSamples,nrows*ncols,ps)
+        dldz_low = dldz_[:,:,:,ps:].view(nSamples,nrows*ncols,pa)
+        a_ = X.clone()
+        c_upp = a_[:,:,:,:ps].view(nSamples,nrows*ncols,ps)
+        c_low = a_[:,:,:,ps:].view(nSamples,nrows*ncols,pa)
+        for iAngle in range(nAnglesH):
+            dW0 = genW(angles=anglesW,mus=mus,index_pd_angle=iAngle)
+            dU0 = genU(angles=anglesU,mus=mus,index_pd_angle=iAngle)
+            for iblk in range(nrows*ncols):
+                dldz_upp_iblk = dldz_upp[:,iblk,:] # nSamples x ps
+                dldz_low_iblk = dldz_low[:,iblk,:] # nSamples x pa
+                c_upp_iblk = c_upp[:,iblk,:] # nSamples x ps
+                c_low_iblk = c_low[:,iblk,:] # nSamples x ps
+                d_upp_iblk = torch.zeros_like(c_upp_iblk)
+                d_low_iblk = torch.zeros_like(c_low_iblk)
+                for iSample in range(nSamples):
+                    d_upp_iblk[iSample,:] = dW0[iblk,:,:ps] @ c_upp_iblk[iSample,:]
+                    d_low_iblk[iSample,:] = dU0[iblk,:,:pa] @ c_low_iblk[iSample,:]
+                dldw_[iblk,iAngle] = torch.dot(dldz_upp_iblk.reshape(-1),d_upp_iblk.reshape(-1))
+                dldw_[iblk,nAnglesH+iAngle] = torch.dot(dldz_low_iblk.reshape(-1),d_low_iblk.reshape(-1))
+        expctddLdW = dldw_
+        
+        # Instantiation of target class
+        layer = LsunInitialRotation2dLayer(
+            dtype=datatype,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            name='V0')
+        #layer.orthTransW0.angles.data = anglesW
+        #layer.orthTransW0.mus = mus
+        #layer.orthTransU0.angles.data = anglesU
+        #layer.orthTransU0.mus = mus
+        #layer = layer.to(device)
+
+        # Actual values
+        #torch.autograd.set_detect_anomaly(True) 
+        #Z = layer.forward(X)
+        #layer.zero_grad()
+        #Z.backward(dLdZ)
+        #actualdLdX = layer.X.grad
+        
+""" 
             
             % Actual values
-            layer.Mus = mus;
-            layer.Angles = angles;
-            actualZ = layer.predict(X);
+            [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
             if usegpu
-                testCase.verifyClass(actualZ,'gpuArray')
-                actualZ = gather(actualZ);
-                expctdZ = gather(expctdZ);
-            end 
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
+                testCase.verifyClass(actualdLdX,'gpuArray')
+                actualdLdX = gather(actualdLdX);
+                expctddLdX = gather(expctddLdX);
+                testCase.verifyClass(actualdLdW,'gpuArray')
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);
+            end
+            testCase.verifyInstanceOf(actualdLdX,datatype);
+            testCase.verifyInstanceOf(actualdLdW,datatype);
+            testCase.verifyThat(actualdLdX,...
+                IsEqualTo(expctddLdX,'Within',tolObj));
+            testCase.verifyThat(actualdLdW,...
+                IsEqualTo(expctddLdW,'Within',tolObj));
             
         end
 

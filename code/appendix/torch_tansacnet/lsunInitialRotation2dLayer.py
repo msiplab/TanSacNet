@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from lsunUtility import OrthonormalMatrixGenerationSystem
+#from orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunInitialRotation2dLayer(nn.Module):
     """
@@ -41,16 +42,22 @@ class LsunInitialRotation2dLayer(nn.Module):
         self.mus = None
         self.angles = None
         self.no_dc_leakage = no_dc_leakage        
+        ps = math.ceil(math.prod(self.stride)/2.0)
+        pa = math.floor(math.prod(self.stride)/2.0)
         self.description = "LSUN initial rotation " \
                 + "(ps,pa) = (" \
-                + str(math.ceil(math.prod(self.stride)/2.0)) + "," \
-                + str(math.floor(math.prod(self.stride)/2.0)) + "), "  \
+                + str(ps) + "," \
+                + str(pa) + "), "  \
                 + "(mv,mh) = (" \
                 + str(self.stride[0]) + "," \
                 + str(self.stride[1]) + ")"
         
         # Orthonormal matrix generation systems 
         self.genOM = OrthonormalMatrixGenerationSystem(dtype=self.dtype)
+        #self.orthTransW0 = SetOfOrthonormalTransforms(number_of_blocks=self.number_of_blocks,n=ps,mode='Analysis') 
+        #self.orthTransU0 = SetOfOrthonormalTransforms(number_of_blocks=self.number_of_blocks,n=pa,mode='Analysis') 
+        #self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles)
+        #self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles)
 
         # Update parameters
         self.update_parameters()
