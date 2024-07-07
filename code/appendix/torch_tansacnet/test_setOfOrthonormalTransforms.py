@@ -408,84 +408,103 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
-
-    """
-    
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def test4x4(self,datatype,ncols,mode):
-        rtol,atol = 1e-5,1e-8 
+    def test4x4(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
         expctdNorm = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=4,mode=mode)
-        #target.angles.data = torch.randn(6,dtype=datatype)
-        target.angles = nn.init.normal_(target.angles)
+        target = SetOfOrthonormalTransforms(n=4,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
 
         # Actual values
-        unitvec = torch.randn(4,ncols,dtype=datatype)
-        unitvec /= unitvec.norm()
-        with torch.no_grad():        
-            actualNorm = target.forward(unitvec).norm() #.numpy()
+        unitvec = torch.randn(nblks,4,nsamples,dtype=datatype,device=device)
+        unitvec /= torch.linalg.vector_norm(unitvec,dim=1).unsqueeze(dim=1)
+        with torch.no_grad():
+            actualNorm = torch.linalg.vector_norm(target.forward(unitvec),dim=1)
 
         # Evaluation
-        message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
-        #self.assertTrue(np.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
-        self.assertTrue(torch.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
+        self.assertTrue(torch.allclose(actualNorm,expctdNorm,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def test8x8(self,datatype,ncols,mode):
-        rtol,atol = 1e-5,1e-8 
-        
+    def test8x8(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
+
         # Expected values
         expctdNorm = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=8,mode=mode)
-        target.angles.data = torch.randn(28,dtype=datatype)
+        target = SetOfOrthonormalTransforms(n=8,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
 
         # Actual values
-        unitvec = torch.randn(8,ncols,dtype=datatype)
-        unitvec /= unitvec.norm()
-        with torch.no_grad():        
-            actualNorm = target.forward(unitvec).norm() #.numpy()
+        unitvec = torch.randn(nblks,8,nsamples,dtype=datatype,device=device)
+        unitvec /= torch.linalg.vector_norm(unitvec,dim=1).unsqueeze(dim=1)
+        with torch.no_grad():
+            actualNorm = torch.linalg.vector_norm(target.forward(unitvec),dim=1)
 
         # Evaluation
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
-        #self.assertTrue(np.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
-        self.assertTrue(torch.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)                
-
+        self.assertTrue(torch.allclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,npoints,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,npoints,usegpu))
     )
-    def testNxN(self,datatype,ncols,npoints,mode):
-        rtol,atol = 1e-5,1e-8 
-        
+    def testNxN(self,datatype,nblks,nsamples,mode,npoints,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
+
         # Expected values
         expctdNorm = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
         nAngles = int(npoints*(npoints-1)/2)
-        target = OrthonormalTransform(n=npoints,mode=mode)
-        target.angles.data = torch.randn(nAngles,dtype=datatype)
+        target = SetOfOrthonormalTransforms(n=npoints,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
 
         # Actual values
-        unitvec = torch.randn(npoints,ncols,dtype=datatype)
-        unitvec /= unitvec.norm()
-        with torch.no_grad():        
-            actualNorm = target.forward(unitvec).norm() #.numpy()
+        unitvec = torch.randn(nblks,npoints,nsamples,dtype=datatype,device=device)
+        unitvec /= torch.linalg.vector_norm(unitvec,dim=1).unsqueeze(dim=1)
+        with torch.no_grad():
+            actualNorm = torch.linalg.vector_norm(target.forward(unitvec),dim=1)
 
         # Evaluation
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
-        #self.assertTrue(np.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
-        self.assertTrue(torch.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)                
+        self.assertTrue(torch.allclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)
 
+    """   
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
     )
