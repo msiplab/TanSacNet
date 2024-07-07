@@ -26,7 +26,6 @@ class SetOfOrthonormalTransforms(nn.Module):
     def __init__(self,
         n=2,
         nblks=1,
-        mus=1,
         mode='Analysis',
         dtype=torch.get_default_dtype(),
         device=torch.device("cpu")):
@@ -45,16 +44,23 @@ class SetOfOrthonormalTransforms(nn.Module):
             )
         
         # Angles
-        nAngs = int(n*(n-1)/2)
-        self.angles = nn.Parameter(torch.zeros(nblks,nAngs,dtype=self.dtype,device=self.device))
+        #nAngs = int(n*(n-1)/2)
+        #self.angles = torch.zeros(nblks,nAngs,dtype=self.dtype,device=self.device)
+
+        # OrthonormalTransforms
+        self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mus=1,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
 
     def forward(self, X):
-        return X.clone()
+        Z = torch.zeros_like(X)
+        for iblk, layer in enumerate(self.orthonormalTransforms):
+           X_iblk = X[iblk]
+           Z_iblk = layer(X_iblk)
+           Z[iblk] = Z_iblk
+        return Z
     
     @property
     def mode(self):
         return self.__mode 
-
 
 class OrthonormalTransform(nn.Module):
     """
