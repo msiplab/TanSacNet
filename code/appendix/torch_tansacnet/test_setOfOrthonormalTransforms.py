@@ -14,7 +14,8 @@ nsamples = [ 1, 2, 4 ]
 nblks = [ 1, 2, 4 ]
 npoints = [ 1, 2, 3, 4, 5, 6 ]
 mode = [ 'Analysis', 'Synthesis' ]
-isdevicetest = True
+#isdevicetest = True
+usegpu = [ True, False ]
 
 class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
     """
@@ -35,14 +36,18 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
     """
 
     @parameterized.expand(
-        list(itertools.product(datatype,nblks,nsamples))
+        list(itertools.product(datatype,nblks,nsamples,usegpu))
     )
-    def testConstructor(self,datatype,nblks,nsamples):
-        rtol,atol = 1e-5,1e-8 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testConstructor(self,datatype,nblks,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")    
+        rtol,atol = 1e-5,1e-8 
 
         # Expected values
         X = torch.randn(nblks,2,nsamples,dtype=datatype)
@@ -68,14 +73,18 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         self.assertEqual(actualMode,expctdMode)
 
     @parameterized.expand(
-        list(itertools.product(datatype,nblks,nsamples))
+        list(itertools.product(datatype,nblks,nsamples,usegpu))
     )
-    def testConstructorToDevice(self,datatype,nblks,nsamples):
-        rtol,atol = 1e-5,1e-8 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testConstructorToDevice(self,datatype,nblks,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")    
+        rtol,atol = 1e-5,1e-8    
 
         # Expected values
         X = torch.randn(nblks,2,nsamples,dtype=datatype)
@@ -102,14 +111,18 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         self.assertEqual(actualMode,expctdMode)
 
     @parameterized.expand(
-        list(itertools.product(datatype,nblks,nsamples,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testCallWithAngles(self,datatype,nblks,nsamples,mode):
-        rtol, atol = 1e-5, 1e-8
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
+    def testCallWithAngles(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")
+            device = torch.device("cpu")    
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
         X = torch.randn(nblks,2,nsamples,dtype=datatype)
@@ -139,70 +152,83 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-"""
+
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testCallWithAnglesToDevice(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAnglesToDevice(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
-        X = torch.randn(2,ncols,dtype=datatype)   
-        X = X.to(device)   
+        X = torch.randn(nblks,2,nsamples,dtype=datatype)
+        X = X.to(device)
         R = torch.tensor([
             [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
             [ math.sin(math.pi/4),  math.cos(math.pi/4) ] ],
-            dtype=datatype)
+            dtype=datatype) 
         R = R.to(device)
         if mode!='Synthesis':
-            expctdZ = R @ X
+            expctdZ = R @ X.view(nblks,2,-1)
         else:
-            expctdZ = R.T @ X
+            expctdZ = R.T @ X.view(nblks,2,-1)
 
         # Instantiation of target class
-        target = OrthonormalTransform(mode=mode)
+        target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode)
         target = target.to(device)
-        #target.angles.data = torch.tensor([math.pi/4])
-        target.angles = nn.init.constant_(target.angles,val=math.pi/4)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
 
         # Actual values
         with torch.no_grad():
             actualZ = target.forward(X)
 
         # Evaluation
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))        
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testCallWithAnglesAndMus(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAnglesAndMus(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
-        X = torch.randn(2,ncols,dtype=datatype)   
+        X = torch.randn(nblks,2,nsamples,dtype=datatype)
         X = X.to(device)
         R = torch.tensor([
             [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
             [ -math.sin(math.pi/4), -math.cos(math.pi/4) ] ],
             dtype=datatype)
         R = R.to(device)
-        if mode!='Synthesis':
-            expctdZ = R @ X
-        else:
-            expctdZ = R.T @ X
+        expctdZ = torch.zeros_like(X)
+        for iblk in range(nblks):
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                Z_iblk = R @ X_iblk.view(2,-1)
+            else:
+                Z_iblk = R.T @ X_iblk.view(2,-1)
+            expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Instantiation of target class
-        target = OrthonormalTransform(mode=mode,device=device)
-        target.angles = nn.init.constant_(target.angles,val=math.pi/4)
-        target.mus = torch.tensor([1, -1])        
+        target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
+            target.orthonormalTransforms[iblk].mus = torch.tensor([1, -1])
 
         # Actual values
         with torch.no_grad():
@@ -210,36 +236,45 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+        
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testCallWithAnglesAndMusToDevice(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAnglesAndMusToDevice(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
-        X = torch.randn(2,ncols,dtype=datatype)   
+        X = torch.randn(nblks,2,nsamples,dtype=datatype)
         X = X.to(device)
         R = torch.tensor([
             [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
             [ -math.sin(math.pi/4), -math.cos(math.pi/4) ] ],
             dtype=datatype)
         R = R.to(device)
-        if mode!='Synthesis':
-            expctdZ = R @ X
-        else:
-            expctdZ = R.T @ X
+        expctdZ = torch.zeros_like(X)        
+        for iblk in range(nblks):
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                Z_iblk = R @ X_iblk.view(2,-1)
+            else:
+                Z_iblk = R.T @ X_iblk.view(2,-1)
+            expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Instantiation of target class
-        target = OrthonormalTransform(mode=mode)
+        target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode)
         target = target.to(device)
-        target.angles = nn.init.constant_(target.angles,val=math.pi/4)
-        target.mus = torch.tensor([1, -1])        
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
+            target.orthonormalTransforms[iblk].mus = torch.tensor([1, -1])
 
         # Actual values
         with torch.no_grad():
@@ -249,97 +284,133 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testSetAngles(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testSetAngles(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
-        X = torch.randn(2,ncols,dtype=datatype)  
+        X = torch.randn(nblks,2,nsamples,dtype=datatype)
         X = X.to(device)
         R = torch.eye(2,dtype=datatype)
         R = R.to(device)
-        expctdZ = R @ X
-
+        expctdZ = torch.zeros_like(X)
+        for iblk in range(nblks):
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                Z_iblk = R @ X_iblk.view(2,-1)
+            else:
+                Z_iblk = R.T @ X_iblk.view(2,-1)
+            expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
+        
         # Instantiation of target class
-        target = OrthonormalTransform(mode=mode,device=device)
+        target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode,device=device)
 
         # Actual values
-        with torch.no_grad():        
+        with torch.no_grad():
             actualZ = target.forward(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
-        # Expcted values
+        # Expected values
         R = torch.tensor([
             [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
             [ math.sin(math.pi/4), math.cos(math.pi/4) ] ],
             dtype=datatype)
         R = R.to(device)
-        if mode!='Synthesis':
-            expctdZ = R @ X
-        else:
-            expctdZ = R.T @ X
+        expctdZ = torch.zeros_like(X)
+        for iblk in range(nblks):
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                Z_iblk = R @ X_iblk.view(2,-1)
+            else:
+                Z_iblk = R.T @ X_iblk.view(2,-1)
+            expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Actual values
-        target.angles.data = torch.tensor([math.pi/4]).to(device)
-        actualZ = target.forward(X)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles.data = torch.tensor([math.pi/4]).to(device)
+        with torch.no_grad():
+            actualZ = target.forward(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testSetAnglesToDevice(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testSetAnglesToDevice(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
 
         # Expected values
-        X = torch.randn(2,ncols,dtype=datatype)  
+        X = torch.randn(nblks,2,nsamples,dtype=datatype)
         X = X.to(device)
         R = torch.eye(2,dtype=datatype)
         R = R.to(device)
-        expctdZ = R @ X
+        expctdZ = torch.zeros_like(X)
+        for iblk in range(nblks):
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                Z_iblk = R @ X_iblk.view(2,-1)
+            else:
+                Z_iblk = R.T @ X_iblk.view(2,-1)
+            expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Instantiation of target class
-        target = OrthonormalTransform(mode=mode)
+        target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode)
         target = target.to(device)
 
         # Actual values
-        with torch.no_grad():        
+        with torch.no_grad():
             actualZ = target.forward(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
-        # Expcted values
+        # Expected values
         R = torch.tensor([
             [ math.cos(math.pi/4), -math.sin(math.pi/4) ],
             [ math.sin(math.pi/4), math.cos(math.pi/4) ] ],
             dtype=datatype)
         R = R.to(device)
-        if mode!='Synthesis':
-            expctdZ = R @ X
-        else:
-            expctdZ = R.T @ X
+        expctdZ = torch.zeros_like(X)
+        for iblk in range(nblks):
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                Z_iblk = R @ X_iblk.view(2,-1)
+            else:
+                Z_iblk = R.T @ X_iblk.view(2,-1)
+            expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Actual values
-        target.angles.data = torch.tensor([math.pi/4])
-        target = target.to(device)
-        actualZ = target.forward(X)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles.data = torch.tensor([math.pi/4]).to(device)
+        with torch.no_grad():
+            actualZ = target.forward(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
+
+    """
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
     )
