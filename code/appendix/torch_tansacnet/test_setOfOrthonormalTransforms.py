@@ -489,7 +489,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         expctdNorm = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
-        nAngles = int(npoints*(npoints-1)/2)
+        #nAngles = int(npoints*(npoints-1)/2)
         target = SetOfOrthonormalTransforms(n=npoints,nblks=nblks,mode=mode,device=device)
         for iblk in range(nblks):
             target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
@@ -504,93 +504,117 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
         self.assertTrue(torch.allclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)
 
-    """   
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,mode,usegpu))
     )
-    def test4x4red(self,datatype,ncols,mode):
-        rtol,atol = 1e-5,1e-8 
-        
+    def test4x4red(self,datatype,nblks,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
+
         # Configuration
         nPoints = 4
-        nAngles = int(nPoints*(nPoints-1)/2)
+        #nAngles = int(nPoints*(nPoints-1)/2)
 
         # Expected values
         expctdLeftTop = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,mode=mode)
-        #target.angles.data = 2*math.pi*torch.rand(nAngles,dtype=datatype)
-        target.angles = nn.init.uniform_(target.angles,a=0.0,b=2*math.pi)
-        target.angles.data[:nPoints-1] = torch.zeros(nPoints-1)
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.uniform_(target.orthonormalTransforms[iblk].angles,a=0.0,b=2*math.pi)
+            target.orthonormalTransforms[iblk].angles.data[:nPoints-1] = torch.zeros(nPoints-1)
 
         # Actual values
-        with torch.no_grad():       
-            matrix = target.forward(torch.eye(nPoints,dtype=datatype))
-        actualLeftTop = matrix[0,0] #.numpy()
-        
+        X = torch.eye(nPoints,dtype=datatype,device=device).repeat(nblks,1,1)
+        with torch.no_grad():
+            Z = target.forward(X)
+        actualLeftTop = Z[:,0,0]
+
         # Evaluation
-        message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
-        #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
-        self.assertTrue(torch.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)                
+        message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )
+        self.assertTrue(torch.allclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,nblks,mode,usegpu))
     )
-    def test8x8red(self,datatype,ncols,mode):
-        rtol,atol = 1e-5,1e-8 
-        
+    def test8x8red(self,datatype,nblks,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
+
         # Configuration
         nPoints = 8
-        nAngles = int(nPoints*(nPoints-1)/2)
+        #nAngles = int(nPoints*(nPoints-1)/2)
 
         # Expected values
         expctdLeftTop = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,mode=mode)
-        #target.angles.data = 2*math.pi*torch.rand(nAngles,dtype=datatype)
-        target.angles = nn.init.uniform_(target.angles,a=0.0,b=2*math.pi)
-        target.angles.data[:nPoints-1] = torch.zeros(nPoints-1)
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.uniform_(target.orthonormalTransforms[iblk].angles,a=0.0,b=2*math.pi)
+            target.orthonormalTransforms[iblk].angles.data[:nPoints-1] = torch.zeros(nPoints-1)
 
         # Actual values
-        with torch.no_grad():       
-            matrix = target.forward(torch.eye(nPoints,dtype=datatype))
-        actualLeftTop = matrix[0,0] #.numpy()
-        
+        X = torch.eye(nPoints,dtype=datatype,device=device).repeat(nblks,1,1)
+        with torch.no_grad():
+            Z = target.forward(X)
+        actualLeftTop = Z[:,0,0]
+
         # Evaluation
-        message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
-        #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)
-        self.assertTrue(torch.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
+        message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )
+        self.assertTrue(torch.allclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,npoints,mode))
+        list(itertools.product(datatype,nblks,npoints,mode,usegpu))
     )
-    def testNxNred(self,datatype,ncols,npoints,mode):
-        rtol,atol = 1e-5,1e-8 
-        
+    def testNxNred(self,datatype,nblks,npoints,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-4, 1e-7
+
         # Configuration
-        nAngles = int(npoints*(npoints-1)/2)
+        #nAngles = int(npoints*(npoints-1)/2)
 
         # Expected values
         expctdLeftTop = torch.tensor(1.,dtype=datatype)
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=npoints,mode=mode)
-        target.angles = nn.init.uniform_(target.angles,a=0.0,b=2*math.pi)
-        target.angles.data[:npoints-1] = torch.zeros(npoints-1)
+        target = SetOfOrthonormalTransforms(n=npoints,nblks=nblks,mode=mode,device=device)
+        for iblk in range(nblks):
+            target.orthonormalTransforms[iblk].angles = nn.init.uniform_(target.orthonormalTransforms[iblk].angles,a=0.0,b=2*math.pi)
+            target.orthonormalTransforms[iblk].angles.data[:npoints-1] = torch.zeros(npoints-1)
 
         # Actual values
-        with torch.no_grad():       
-            matrix = target.forward(torch.eye(npoints,dtype=datatype))
-        actualLeftTop = matrix[0,0] #.numpy()
-        
-        # Evaluation
-        message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
-        #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
-        self.assertTrue(torch.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)                
-    
+        X = torch.eye(npoints,dtype=datatype,device=device).repeat(nblks,1,1)
+        with torch.no_grad():
+            Z = target.forward(X)
+        actualLeftTop = Z[:,0,0]
 
+        # Evaluation
+        message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )
+        self.assertTrue(torch.allclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)
+
+    """            
     @parameterized.expand(
         list(itertools.product(datatype,mode))
     )
