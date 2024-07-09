@@ -643,7 +643,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             dtype=datatype,device=device)
         dRdW = dRdW.to(device)
         expctddLdX = torch.zeros_like(X)
-        expctddLdW = torch.zeros(nblks,2,dtype=datatype,device=device)        
+        expctddLdW = torch.zeros(nblks,nPoints,dtype=datatype,device=device)        
         for iblk in range(nblks):
             dLdZ_iblk = dLdZ[iblk,:,:]
             X_iblk = X[iblk,:,:]
@@ -672,101 +672,64 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         for iblk in range(nblks):
             self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
 
-    """            
     @parameterized.expand(
-        list(itertools.product(datatype,mode))
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
     )
-    def testBackward(self,datatype,mode):
-        rtol,atol = 1e-5,1e-8 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackwardMultiSamples(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-5,1e-8
 
         # Configuration
-        ncols = 1
         nPoints = 2
+        nAngles = int(nPoints*(nPoints-1)/2)
 
         # Expected values
-        X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)     
-        #X = X.to(device)   
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)
-        dLdZ = dLdZ.to(device)
-        R = torch.eye(nPoints,dtype=datatype)
-        R = R.to(device)
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)     
+        dLdZ = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        R = torch.eye(nPoints,dtype=datatype,device=device)
         dRdW = torch.tensor([
-            [ 0., -1.],
-            [ 1., 0.] ],
+            [ 0., -1. ],
+            [ 1., 0. ] ],
             dtype=datatype)
         dRdW = dRdW.to(device)
-        if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = dLdZ.T @ dRdW @ X 
-        else:
-            expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = dLdZ.T @ dRdW.T @ X             
+        expctddLdX = torch.zeros_like(X)
+        expctddLdW = torch.zeros(nblks,nPoints,dtype=datatype,device=device)        
+        for iblk in range(nblks):
+            dLdZ_iblk = dLdZ[iblk,:,:]
+            X_iblk = X[iblk,:,:]
+            if mode!='Synthesis':
+                dLdX_iblk = R.T @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW @ X_iblk))
+            else:
+                dLdX_iblk = R @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW.T @ X_iblk))
+            expctddLdX[iblk,:,:] = dLdX_iblk
+            expctddLdW[iblk,:] = dLdW_iblk.view(-1)
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,dtype=datatype,device=device,mode=mode)
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
 
         # Actual values
-        torch.autograd.set_detect_anomaly(True)        
+        torch.autograd.set_detect_anomaly(True)
         Z = target.forward(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = target.angles.grad
-    
+        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
-        self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
-        
-    @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
-    )
-    def testBackwardMultiColumns(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        else:
-            device = torch.device("cpu")
+        for iblk in range(nblks):
+            self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
 
-        # Configuration
-        nPoints = 2
-
-        # Expected values
-        X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)     
-        #X = X.to(device)   
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)
-        dLdZ = dLdZ.to(device)
-        R = torch.eye(nPoints,dtype=datatype)
-        R = R.to(device)
-        dRdW = torch.tensor([
-            [ 0., -1.],
-            [ 1., 0.] ],
-            dtype=datatype)
-        dRdW = dRdW.to(device)
-        if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW @ X))
-        else:
-            expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))
-
-        # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,dtype=datatype,device=device,mode=mode)
-
-        # Actual values
-        torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
-        target.zero_grad()        
-        Z.backward(dLdZ)
-        actualdLdX = X.grad
-        actualdLdW = target.angles.grad
-    
-        # Evaluation
-        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
-        self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
+    """           
 
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
