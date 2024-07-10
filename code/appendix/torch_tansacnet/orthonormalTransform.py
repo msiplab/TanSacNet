@@ -45,7 +45,10 @@ class SetOfOrthonormalTransforms(nn.Module):
         
         # Angles
         nAngs = int(n*(n-1)/2)
-        self.__angles = torch.zeros(nblks,nAngs,dtype=self.dtype,device=self.device)
+        self.__angles = torch.empty(nblks,nAngs,dtype=self.dtype,device=self.device)
+
+        # Mus
+        self.__mus = torch.empty(nblks,n,dtype=self.dtype,device=self.device)
 
         # OrthonormalTransforms
         self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mus=1,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
@@ -63,6 +66,26 @@ class SetOfOrthonormalTransforms(nn.Module):
         return self.__mode 
     
     @property
+    def mus(self):
+        for iblk in range(len(self.orthonormalTransforms)):
+            self.__mus[iblk] = self.orthonormalTransforms[iblk].mus
+        return self.__mus
+    
+    @mus.setter
+    def mus(self,mus):
+        if torch.is_tensor(mus):
+            self.__mus = mus.to(dtype=self.dtype,device=self.device)
+        else:
+            self.__mus = torch.tensor(mus,dtype=self.dtype,device=self.device)
+        if self.__mus.size(0) != len(self.orthonormalTransforms):
+            raise InvalidMus(
+                '%s : The number of mus should be equal to the number of blocks'\
+                % str(self.__mus)
+            )
+        for iblk in range(len(self.orthonormalTransforms)):
+            self.orthonormalTransforms[iblk].mus = self.__mus[iblk]
+
+    @property
     def angles(self):
         for iblk in range(len(self.orthonormalTransforms)):
             self.__angles[iblk] = self.orthonormalTransforms[iblk].angles.data
@@ -74,8 +97,13 @@ class SetOfOrthonormalTransforms(nn.Module):
             self.__angles = angles.to(dtype=self.dtype,device=self.device)
         else:
             self.__angles = torch.tensor(angles,dtype=self.dtype,device=self.device)
-        for iblk in range(self.__angles.size(0)):
-            self.orthonormalTransforms[iblk].angles.data = self.__angles[iblk]
+        if self.__angles.size(0) != len(self.orthonormalTransforms):
+            raise InvalidMus(
+                '%s : The number of angles should be equal to the number of blocks'\
+                % str(self.__angles)
+            )
+        for iblk in range(len(self.orthonormalTransforms)):
+            self.orthonormalTransforms[iblk].angles.data = self.__angles[iblk]         
 
 class OrthonormalTransform(nn.Module):
     """
