@@ -62,7 +62,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
         actualNTrxs = len(target.orthonormalTransforms)
         actualMode = target.mode
         
@@ -100,7 +100,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
         actualNTrxs = len(target.orthonormalTransforms)
         actualMode = target.mode
         
@@ -148,7 +148,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -188,7 +188,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -232,7 +232,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -278,7 +278,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -316,7 +316,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -340,7 +340,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         for iblk in range(nblks):
             target.orthonormalTransforms[iblk].angles.data = torch.tensor([math.pi/4]).to(device)
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -379,7 +379,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -403,7 +403,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         for iblk in range(nblks):
             target.orthonormalTransforms[iblk].angles.data = torch.tensor([math.pi/4]).to(device)
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -434,7 +434,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         unitvec = torch.randn(nblks,4,nsamples,dtype=datatype,device=device)
         unitvec /= torch.linalg.vector_norm(unitvec,dim=1).unsqueeze(dim=1)
         with torch.no_grad():
-            actualNorm = torch.linalg.vector_norm(target.forward(unitvec),dim=1)
+            actualNorm = torch.linalg.vector_norm(target(unitvec),dim=1)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualNorm,expctdNorm,rtol=rtol,atol=atol))
@@ -465,7 +465,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         unitvec = torch.randn(nblks,8,nsamples,dtype=datatype,device=device)
         unitvec /= torch.linalg.vector_norm(unitvec,dim=1).unsqueeze(dim=1)
         with torch.no_grad():
-            actualNorm = torch.linalg.vector_norm(target.forward(unitvec),dim=1)
+            actualNorm = torch.linalg.vector_norm(target(unitvec),dim=1)
 
         # Evaluation
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
@@ -498,7 +498,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         unitvec = torch.randn(nblks,npoints,nsamples,dtype=datatype,device=device)
         unitvec /= torch.linalg.vector_norm(unitvec,dim=1).unsqueeze(dim=1)
         with torch.no_grad():
-            actualNorm = torch.linalg.vector_norm(target.forward(unitvec),dim=1)
+            actualNorm = torch.linalg.vector_norm(target(unitvec),dim=1)
 
         # Evaluation
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
@@ -534,7 +534,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Actual values
         X = torch.eye(nPoints,dtype=datatype,device=device).repeat(nblks,1,1)
         with torch.no_grad():
-            Z = target.forward(X)
+            Z = target(X)
         actualLeftTop = Z[:,0,0]
 
         # Evaluation
@@ -571,7 +571,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Actual values
         X = torch.eye(nPoints,dtype=datatype,device=device).repeat(nblks,1,1)
         with torch.no_grad():
-            Z = target.forward(X)
+            Z = target(X)
         actualLeftTop = Z[:,0,0]
 
         # Evaluation
@@ -607,7 +607,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Actual values
         X = torch.eye(npoints,dtype=datatype,device=device).repeat(nblks,1,1)
         with torch.no_grad():
-            Z = target.forward(X)
+            Z = target(X)
         actualLeftTop = Z[:,0,0]
 
         # Evaluation
@@ -631,7 +631,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Configuration
         nSamples = 1
         nPoints = 2
-        #nAngles = int(nPoints*(nPoints-1)/2)
+        nAngles = int(nPoints*(nPoints-1)/2)
 
         # Expected values
         X = torch.randn(nblks,nPoints,nSamples,dtype=datatype,device=device,requires_grad=True)
@@ -643,7 +643,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             dtype=datatype,device=device)
         dRdW = dRdW.to(device)
         expctddLdX = torch.zeros_like(X)
-        expctddLdW = torch.zeros(nblks,nPoints,dtype=datatype,device=device)        
+        expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)        
         for iblk in range(nblks):
             dLdZ_iblk = dLdZ[iblk,:,:]
             X_iblk = X[iblk,:,:]
@@ -661,7 +661,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -700,7 +700,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             dtype=datatype)
         dRdW = dRdW.to(device)
         expctddLdX = torch.zeros_like(X)
-        expctddLdW = torch.zeros(nblks,nPoints,dtype=datatype,device=device)        
+        expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)        
         for iblk in range(nblks):
             dLdZ_iblk = dLdZ[iblk,:,:]
             X_iblk = X[iblk,:,:]
@@ -718,7 +718,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -729,7 +729,127 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         for iblk in range(nblks):
             self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
 
-    """           
+"""
+    @parameterized.expand(
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
+    )
+    def testBackwardMultiSamplesWithPi4Angles(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
+
+        # Configuration
+        nPoints = 2
+        nAngles = int(nPoints*(nPoints-1)/2)
+
+        # Expected values
+        X = torch.ones(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)
+        dLdZ = torch.ones(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        angles = (math.pi/4.)*torch.ones(nblks,nAngles,dtype=datatype,device=device)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
+        R = omg(angles=angles,index_pd_angle=None).to(device)
+        dRdW = omg(angles=angles,index_pd_angle=0).to(device)
+        expctddLdX = torch.zeros_like(X)
+        #expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)        
+        for iblk in range(nblks):
+            dLdZ_iblk = dLdZ[iblk,:,:]
+            X_iblk = X[iblk,:,:]
+            R_iblk = R[iblk,:,:]
+            dRdW_iblk = dRdW[iblk,:,:]
+            if mode!='Synthesis':
+                dLdX_iblk = R_iblk.T @ dLdZ_iblk
+                #dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk @ X_iblk))
+            else:
+                dLdX_iblk = R_iblk @ dLdZ_iblk
+                #dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk.T @ X_iblk))
+            expctddLdX[iblk,:,:] = dLdX_iblk
+            #expctddLdW[iblk,:] = dLdW_iblk.view(-1)
+
+        # Instantiation of target class
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
+
+        # Actual values
+        torch.autograd.set_detect_anomaly(True)
+        Z = target(X)
+        print(Z)        
+        target.zero_grad()
+        Z.backward(dLdZ)
+        actualdLdX = X.grad
+        #actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+
+        #print(expctddLdX)
+        #print(actualdLdX)
+        # Evaluation
+        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        #for iblk in range(nblks):
+        #    self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
+
+    @parameterized.expand(
+        list(itertools.product(datatype,nblks,nsamples,mode,usegpu))
+    )
+    def testBackwardMultiSamplesWithRandAngles(self,datatype,nblks,nsamples,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")
+        rtol,atol = 1e-5,1e-8
+
+        # Configuration
+        nPoints = 2
+        nAngles = int(nPoints*(nPoints-1)/2)
+
+        # Expected values
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)
+        dLdZ = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        angles = 2.*math.pi*torch.rand(nblks,nAngles,dtype=datatype,device=device)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
+        R = omg(angles=angles,index_pd_angle=None).to(device)
+        dRdW = omg(angles=angles,index_pd_angle=0).to(device)
+        expctddLdX = torch.zeros_like(X)
+        expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)        
+        for iblk in range(nblks):
+            dLdZ_iblk = dLdZ[iblk,:,:]
+            X_iblk = X[iblk,:,:]
+            R_iblk = R[iblk,:,:]
+            dRdW_iblk = dRdW[iblk,:,:]
+            if mode!='Synthesis':
+                dLdX_iblk = R_iblk.T @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk @ X_iblk))
+            else:
+                dLdX_iblk = R_iblk @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk.T @ X_iblk))
+            expctddLdX[iblk,:,:] = dLdX_iblk
+            expctddLdW[iblk,:] = dLdW_iblk.view(-1)
+
+        # Instantiation of target class
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
+
+        # Actual values
+        torch.autograd.set_detect_anomaly(True)
+        Z = target(X)
+        target.zero_grad()
+        Z.backward(dLdZ)
+        actualdLdX = X.grad
+        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+
+
+        #print(expctddLdX)
+        #print(actualdLdX)
+        # Evaluation
+        #self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        #for iblk in range(nblks):
+        #    self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
+        
 
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
@@ -773,7 +893,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()        
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -828,7 +948,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()        
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -902,7 +1022,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()        
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -936,7 +1056,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
                  
         # Actual values
         torch.autograd.set_detect_anomaly(True)   
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()        
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1012,7 +1132,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -1084,7 +1204,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
-            actualZ = target.forward(X)
+            actualZ = target(X)
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
@@ -1194,7 +1314,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1309,7 +1429,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1432,7 +1552,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1491,7 +1611,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1552,7 +1672,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1654,7 +1774,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.angles.data = angs
         target.mus = mus
         torch.autograd.set_detect_anomaly(True)                
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
 
         # Evaluation        
@@ -1688,7 +1808,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.mus = mus
         target = target.to(device)
         torch.autograd.set_detect_anomaly(True)                
-        Z = target.forward(X)
+        Z = target(X)
         target.zero_grad()
 
         # Evaluation        

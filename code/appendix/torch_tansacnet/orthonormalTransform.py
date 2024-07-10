@@ -51,7 +51,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mus=1,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
 
     def forward(self, X):
-        Z = torch.zeros_like(X)
+        Z = torch.empty_like(X)
         for iblk, layer in enumerate(self.orthonormalTransforms):
            X_iblk = X[iblk]
            Z_iblk = layer(X_iblk)
