@@ -44,8 +44,8 @@ class SetOfOrthonormalTransforms(nn.Module):
             )
         
         # Angles
-        #nAngs = int(n*(n-1)/2)
-        #self.angles = torch.zeros(nblks,nAngs,dtype=self.dtype,device=self.device)
+        nAngs = int(n*(n-1)/2)
+        self.__angles = torch.zeros(nblks,nAngs,dtype=self.dtype,device=self.device)
 
         # OrthonormalTransforms
         self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mus=1,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
@@ -61,6 +61,21 @@ class SetOfOrthonormalTransforms(nn.Module):
     @property
     def mode(self):
         return self.__mode 
+    
+    @property
+    def angles(self):
+        for iblk in range(len(self.orthonormalTransforms)):
+            self.__angles[iblk] = self.orthonormalTransforms[iblk].angles.data
+        return self.__angles
+    
+    @angles.setter
+    def angles(self,angles):
+        if torch.is_tensor(angles):
+            self.__angles = angles.to(dtype=self.dtype,device=self.device)
+        else:
+            self.__angles = torch.tensor(angles,dtype=self.dtype,device=self.device)
+        for iblk in range(self.__angles.size(0)):
+            self.orthonormalTransforms[iblk].angles.data = self.__angles[iblk]
 
 class OrthonormalTransform(nn.Module):
     """
