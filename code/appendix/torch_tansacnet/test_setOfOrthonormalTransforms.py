@@ -1027,70 +1027,41 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         for iblk in range(nblks):
             self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
 
-"""
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,nblks,mode,nsamples,usegpu))
     )
-    def testForward4x4RandAngs(self,datatype,mode,ncols):
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testForward4x4RandnAngs(self,datatype,nblks,mode,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
-        #mode = 'Synthesis'
         nPoints = 4
-        #ncols = 2
-        angs = 2.*math.pi*torch.randn(6,dtype=datatype).to(device)        
-        mus = [ -1, 1, -1, 1 ]
+        nAngles = int(nPoints*(nPoints-1)/2)
+        angles = (math.pi/6.)*torch.randn(nblks,nAngles,dtype=datatype,device=device)
+        mus = torch.tensor([-1,1,-1,1]).repeat(nblks,1)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=False,mode='normal')
 
-        # Expcted values
-        X = torch.randn(nPoints,ncols,dtype=datatype)
-        X = X.to(device)
-        R = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor(
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0, 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0, 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        R = R.to(device)
-        if mode!='Synthesis':
-            expctdZ = R @ X
-        else:
-            expctdZ = R.T @ X
+        # Expected values
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        R = omg(angles=angles,mus=mus,index_pd_angle=None).to(device)
+        expctdZ = torch.empty_like(X)
+        for iblk in range(nblks):
+            if mode!='Synthesis':
+                expctdZ[iblk,:,:] = R[iblk,:,:] @ X[iblk,:,:]
+            else:
+                expctdZ[iblk,:,:] = R[iblk,:,:].T @ X[iblk,:,:]
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,dtype=datatype,mode=mode)
-        target.angles.data = angs
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
+        target.angles = angles
         target.mus = mus
 
         # Actual values
@@ -1101,69 +1072,42 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,nblks,mode,nsamples,usegpu))
     )
-    def testForward4x4RandAngsToDevice(self,datatype,mode,ncols):
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testForward4x4RandnAngsToDevice(self,datatype,nblks,mode,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
-        #mode = 'Synthesis'
         nPoints = 4
-        #ncols = 2
-        mus = [ -1, 1, -1, 1 ]
-        angs = 2.*math.pi*torch.randn(6)
+        nAngles = int(nPoints*(nPoints-1)/2)
+        angles = (math.pi/6)*torch.randn(nblks,nAngles)
+        mus = torch.tensor([-1,1,-1,1]).repeat(nblks,1)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=False,mode='normal')
 
-        # Expcted values
-        X = torch.randn(nPoints,ncols,dtype=datatype)
+        # Expected values
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype)
         X = X.to(device)
-        R = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor(
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0, 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0, 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        R = R.to(device)
-        if mode!='Synthesis':
-            expctdZ = R @ X
-        else:
-            expctdZ = R.T @ X
+        R = omg(angles=angles,mus=mus,index_pd_angle=None).to(device)
+        expctdZ = torch.empty_like(X)
+        for iblk in range(nblks):
+            if mode!='Synthesis':
+                expctdZ[iblk,:,:] = R[iblk,:,:] @ X[iblk,:,:]
+            else:
+                expctdZ[iblk,:,:] = R[iblk,:,:].T @ X[iblk,:,:]
 
         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,mode=mode)
-        target.angles.data = angs
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,dtype=datatype)
+        target.angles = angles
         target.mus = mus
-        target = target.to(device,dtype=datatype)        
+        target = target.to(device)
 
         # Actual values
         with torch.no_grad():
@@ -1173,358 +1117,190 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,nblks,mode,nsamples,usegpu))
     )
-    def testBackward4x4RandAngPdAng2(self,datatype,mode,ncols):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward4x4RandAngPdAng2(self,datatype,nblks,mode,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
-        #mode = 'Synthesis'
         nPoints = 4
-        #ncols = 2
-        mus = [ -1, 1, -1, 1 ]
-        angs = 2.*math.pi*torch.randn(6,dtype=datatype,device=device)
         pdAng = 2
+        nAngles = int(nPoints*(nPoints-1)/2)
+        angles = (math.pi/6)*torch.randn(nblks,nAngles)
+        mus = torch.tensor([-1,1,-1,1]).repeat(nblks,1)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
 
-        # Expcted values
-        X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
-        #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)    
-        dLdZ = dLdZ.to(device)    
-        R = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor(
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0, 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0, 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        R = R.to(device)
-        dRdW = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor(
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0, 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0, 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor( 
-                [ [1, 0, 0, 0 ], 
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor( # Partial Diff. pdAng = 2
-                [ [ math.cos(angs[2]+math.pi/2.), 0, 0, -math.sin(angs[2]+math.pi/2.) ],
-                 [0, 0, 0, 0 ],
-                 [0, 0, 0, 0 ],
-                 [ math.sin(angs[2]+math.pi/2.), 0, 0, math.cos(angs[2]+math.pi/2.) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        dRdW = dRdW.to(device)
-        if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW @ X)) 
-        else:
-            expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))    
+        # Expected values
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)
+        dLdZ = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        R = omg(angles=angles,mus=mus,index_pd_angle=None).to(device)
+        dRdW = omg(angles=angles,mus=mus,index_pd_angle=pdAng).to(device)
+        expctddLdX = torch.empty_like(X)
+        expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)
+        for iblk in range(nblks):
+            dLdZ_iblk = dLdZ[iblk,:,:]
+            X_iblk = X[iblk,:,:]
+            R_iblk = R[iblk,:,:]
+            dRdW_iblk = dRdW[iblk,:,:]
+            if mode!='Synthesis':
+                dLdX_iblk = R_iblk.T @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk @ X_iblk))
+            else:
+                dLdX_iblk = R_iblk @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk.T @ X_iblk))
+            expctddLdX[iblk,:,:] = dLdX_iblk
+            expctddLdW[iblk,:] = dLdW_iblk.view(-1)
 
-         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,dtype=datatype,mode=mode)
-        target.angles.data = angs
+        # Instantiation of target class
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
+        target.angles = angles
         target.mus = mus
 
         # Actual values
-        torch.autograd.set_detect_anomaly(True)        
+        torch.autograd.set_detect_anomaly(True)
         Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = target.angles.grad[pdAng]
-        
+        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
-        self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
-    
+        for iblk in range(nblks):
+            self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
+ 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,nblks,mode,nsamples,usegpu))
     )
-    def testBackward4x4RandAngPdAng5(self,datatype,mode,ncols):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward4x4RandAngPdAng5(self,datatype,nblks,mode,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
-        #mode = 'Synthesis'
         nPoints = 4
-        #ncols = 2
-        mus = [ 1, 1, -1, -1 ]
-        angs = 2.*math.pi*torch.randn(6,dtype=datatype,device=device)
         pdAng = 5
+        nAngles = int(nPoints*(nPoints-1)/2)
+        angles = (math.pi/6)*torch.randn(nblks,nAngles)
+        mus = torch.tensor([1,1,-1,-1]).repeat(nblks,1)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
 
-        # Expcted values
-        X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
-        #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype) 
-        dLdZ = dLdZ.to(device)       
-        R = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor(
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0, 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0, 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        R = R.to(device)
-        dRdW = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor( # Partial Diff. pdAng = 5
-                [ [0, 0, 0, 0. ],
-                 [0, 0, 0., 0. ],
-                 [0, 0, math.cos(angs[5]+math.pi/2), -math.sin(angs[5]+math.pi/2) ],
-                 [0., 0, math.sin(angs[5]+math.pi/2), math.cos(angs[5]+math.pi/2) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor( 
-                [ [1, 0, 0, 0 ], 
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor( 
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        dRdW = dRdW.to(device)
-        if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW @ X)) 
-        else:
-            expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))    
+        # Expected values
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)
+        dLdZ = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        R = omg(angles=angles,mus=mus,index_pd_angle=None).to(device)
+        dRdW = omg(angles=angles,mus=mus,index_pd_angle=pdAng).to(device)
+        expctddLdX = torch.empty_like(X)
+        expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)
+        for iblk in range(nblks):
+            dLdZ_iblk = dLdZ[iblk,:,:]
+            X_iblk = X[iblk,:,:]
+            R_iblk = R[iblk,:,:]
+            dRdW_iblk = dRdW[iblk,:,:]
+            if mode!='Synthesis':
+                dLdX_iblk = R_iblk.T @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk @ X_iblk))
+            else:
+                dLdX_iblk = R_iblk @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk.T @ X_iblk))
+            expctddLdX[iblk,:,:] = dLdX_iblk
+            expctddLdW[iblk,:] = dLdW_iblk.view(-1)
 
-         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,dtype=datatype,mode=mode)
-        target.angles.data = angs
+        # Instantiation of target class
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
+        target.angles = angles
         target.mus = mus
 
         # Actual values
-        torch.autograd.set_detect_anomaly(True)        
+        torch.autograd.set_detect_anomaly(True)
         Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = target.angles.grad[pdAng]
-        
+        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
-        self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
-    
+        for iblk in range(nblks):
+            self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
+
     @parameterized.expand(
-        list(itertools.product(mode,ncols))
+        list(itertools.product(datatype,nblks,mode,nsamples,usegpu))
     )
-    def testBackward4x4RandAngPdAng1(self,mode,ncols):
-        datatype=torch.double
-        rtol,atol = 1e-2,1e-5
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward4x4RandAngPdAng1(self,datatype,nblks,mode,nsamples,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
-        #mode = 'Synthesis'
         nPoints = 4
-        #ncols = 2
-        mus = [ -1, -1, -1, -1 ]
-        angs = 2.*math.pi*torch.randn(6,dtype=datatype,device=device)
         pdAng = 1
-        delta = 1e-4
+        nAngles = int(nPoints*(nPoints-1)/2)
+        angles = (math.pi/6)*torch.randn(nblks,nAngles)
+        mus = torch.tensor([-1,-1,-1,-1]).repeat(nblks,1)
+        omg = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
 
-        # Expcted values
-        X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
-        #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)        
-        dLdZ = dLdZ.to(device)
-        R = torch.as_tensor(
-            torch.tensor(mus).view(-1,1) * \
-            torch.tensor(
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0, 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0, 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ torch.tensor(
-               [ [math.cos(angs[1]), 0, -math.sin(angs[1]), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]), 0, math.cos(angs[1]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        R = R.to(device)
-        dRdW = torch.as_tensor(
-            (1./delta) * torch.tensor(mus).view(-1,1) * \
-            torch.tensor( 
-                [ [1, 0, 0, 0. ],
-                 [0, 1, 0., 0. ],
-                 [0, 0, math.cos(angs[5]), -math.sin(angs[5]) ],
-                 [0., 0, math.sin(angs[5]), math.cos(angs[5]) ] ]
-            ) @ torch.tensor(
-                [ [1, 0, 0, 0 ],
-                 [0, math.cos(angs[4]), 0, -math.sin(angs[4]) ],
-                 [0, 0, 1, 0 ],
-                 [0, math.sin(angs[4]), 0, math.cos(angs[4]) ] ]
-            ) @ torch.tensor( 
-                [ [1, 0, 0, 0 ], 
-                 [0, math.cos(angs[3]), -math.sin(angs[3]), 0 ],
-                 [0, math.sin(angs[3]), math.cos(angs[3]), 0 ],
-                 [0, 0, 0, 1 ] ]
-            ) @ torch.tensor( 
-                [ [ math.cos(angs[2]), 0, 0, -math.sin(angs[2]) ],
-                 [0, 1, 0, 0 ],
-                 [0, 0, 1, 0 ],
-                 [ math.sin(angs[2]), 0, 0, math.cos(angs[2]) ] ]
-            ) @ ( 
-                torch.tensor( 
-               [ [math.cos(angs[1]+delta/2.), 0, -math.sin(angs[1]+delta/2.), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]+delta/2.), 0, math.cos(angs[1]+delta/2.), 0 ],
-                 [0, 0, 0, 1 ] ] ) - \
-                torch.tensor( 
-               [ [math.cos(angs[1]-delta/2.), 0, -math.sin(angs[1]-delta/2.), 0 ],
-                 [0, 1, 0, 0 ],
-                 [math.sin(angs[1]-delta/2.), 0, math.cos(angs[1]-delta/2.), 0 ],
-                 [0, 0, 0, 1 ] ] )
-            ) @ torch.tensor(
-               [ [ math.cos(angs[0]), -math.sin(angs[0]), 0, 0 ],
-                 [ math.sin(angs[0]), math.cos(angs[0]), 0, 0 ],
-                 [ 0, 0, 1, 0 ],
-                 [ 0, 0, 0, 1 ] ]
-            ),dtype=datatype)
-        dRdW = dRdW.to(device)
-        if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW @ X)) 
-        else:
-            expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))    
+        # Expected values
+        X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)
+        dLdZ = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device)
+        R = omg(angles=angles,mus=mus,index_pd_angle=None).to(device)
+        dRdW = omg(angles=angles,mus=mus,index_pd_angle=pdAng).to(device)
+        expctddLdX = torch.empty_like(X)
+        expctddLdW = torch.zeros(nblks,nAngles,dtype=datatype,device=device)
+        for iblk in range(nblks):
+            dLdZ_iblk = dLdZ[iblk,:,:]
+            X_iblk = X[iblk,:,:]
+            R_iblk = R[iblk,:,:]
+            dRdW_iblk = dRdW[iblk,:,:]
+            if mode!='Synthesis':
+                dLdX_iblk = R_iblk.T @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk @ X_iblk))
+            else:
+                dLdX_iblk = R_iblk @ dLdZ_iblk
+                dLdW_iblk = torch.sum(dLdZ_iblk * (dRdW_iblk.T @ X_iblk))
+            expctddLdX[iblk,:,:] = dLdX_iblk
+            expctddLdW[iblk,:] = dLdW_iblk.view(-1)
 
-         # Instantiation of target class
-        target = OrthonormalTransform(n=nPoints,dtype=datatype,mode=mode)
-        target.angles.data = angs
+        # Instantiation of target class
+        target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
+        target.angles = angles
         target.mus = mus
 
         # Actual values
-        torch.autograd.set_detect_anomaly(True)        
+        torch.autograd.set_detect_anomaly(True)
         Z = target(X)
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = target.angles.grad[pdAng]
-        
+        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
-        self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
-    
+        for iblk in range(nblks):
+            self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
+
+"""
+   
     @parameterized.expand(
         list(itertools.product(mode,ncols))
     )
