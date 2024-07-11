@@ -628,7 +628,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-5, 1e-8
 
-        # Configuration
+        # Configuration2
         nSamples = 1
         nPoints = 2
         nAngles = int(nPoints*(nPoints-1)/2)
@@ -908,31 +908,30 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         for iblk in range(nblks):
             self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
 
-"""
     def testInstantiationWithInvalidMode(self):
         mode = 'Invalid'
 
         # Instantiation of target class
         with self.assertRaises(InvalidMode):
-            target = OrthonormalTransform(mode=mode)
-        
+            target = SetOfOrthonormalTransforms(mode=mode)
+
+  
     def testSetInvalidMode(self):
         mode = 'Invalid'        
         with self.assertRaises(InvalidMode):
-            target = OrthonormalTransform()
+            target = SetOfOrthonormalTransforms()
             target.mode = 'InvalidMode'
 
-    def testInstantiationWithInvalidMus(self):
-        mus = 2
+    @parameterized.expand(
+        list(itertools.product(nblks))
+    )
+    def testSetInvalidMus(self,nblks):        
+        mus = [ 2 for _ in range(nblks) ]        
         with self.assertRaises(InvalidMus):
-            target = OrthonormalTransform(mus=mus)
-        
-    def testSetInvalidMus(self):        
-        mus = 2        
-        with self.assertRaises(InvalidMus):
-            target = OrthonormalTransform()
+            target = SetOfOrthonormalTransforms(nblks=nblks)
             target.mus = mus
 
+"""
     @parameterized.expand(
         list(itertools.product(datatype,mode,ncols))
     )
