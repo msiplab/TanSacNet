@@ -51,7 +51,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         self.__mus = torch.empty(nblks,n,dtype=self.dtype,device=self.device)
 
         # OrthonormalTransforms
-        self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mus=1,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
+        self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
 
     def forward(self, X):
         Z = torch.empty_like(X)
@@ -65,6 +65,18 @@ class SetOfOrthonormalTransforms(nn.Module):
     def mode(self):
         return self.__mode 
     
+    @mode.setter
+    def mode(self,mode):
+        if mode in {'Analysis','Synthesis'}:
+            self.__mode = mode
+        else:
+            raise InvalidMode(
+                '%s : Mode should be either of Analysis or Synthesis'\
+                % str(mode)
+            )
+        for iblk in range(len(self.orthonormalTransforms)):
+            self.orthonormalTransforms[iblk].mode = self.__mode
+
     @property
     def mus(self):
         for iblk in range(len(self.orthonormalTransforms)):
