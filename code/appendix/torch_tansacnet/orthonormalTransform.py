@@ -26,6 +26,7 @@ class SetOfOrthonormalTransforms(nn.Module):
     def __init__(self,
         n=2,
         nblks=1,
+        name='SoOT',
         mode='Analysis',
         dtype=torch.get_default_dtype(),
         device=torch.device("cpu")):
@@ -33,6 +34,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         self.dtype = dtype
         self.nPoints = n
         self.device = device
+        self.__name = name
                 
         # Mode
         if mode in {'Analysis','Synthesis'}:
@@ -61,6 +63,15 @@ class SetOfOrthonormalTransforms(nn.Module):
            Z[iblk] = Z_iblk
         return Z
     
+    @property
+    def name(self):
+        return self.__name
+    
+    @name.setter
+    def name(self,name):
+        if isinstance(name,str):
+            self.__name = name
+
     @property
     def mode(self):
         return self.__mode 
@@ -137,6 +148,7 @@ class OrthonormalTransform(nn.Module):
 
     def __init__(self,
         n=2,
+        name='OT',        
         mus=1,
         mode='Analysis',
         dtype=torch.get_default_dtype(),
@@ -146,6 +158,7 @@ class OrthonormalTransform(nn.Module):
         self.dtype = dtype
         self.nPoints = n
         self.device = device
+        self.__name = name
 
         # Mode
         if mode in {'Analysis','Synthesis'}:
@@ -180,6 +193,15 @@ class OrthonormalTransform(nn.Module):
         else:
             givensrots = GivensRotations4Synthesizer.apply
         return givensrots(X,angles,mus)           
+
+    @property
+    def name(self):
+        return self.__name
+    
+    @name.setter
+    def name(self,name):
+        if isinstance(name,str):
+            self.__name = name
 
     @property
     def mode(self):
