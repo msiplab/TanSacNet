@@ -105,7 +105,7 @@ class LsunInitialRotation2dLayer(nn.Module):
     
     @property
     def angles(self):
-        return self.__angles
+        return torch.cat((self.orthTransW0.angles,self.orthTransU0.angles),1)
 
     @angles.setter
     def angles(self, angles):
@@ -127,7 +127,7 @@ class LsunInitialRotation2dLayer(nn.Module):
             mus = torch.ones(nBlocks,nDecs,dtype=self.dtype)
         elif isinstance(mus, int) or isinstance(mus, float):
             mus = mus*torch.ones(nBlocks,nDecs,dtype=self.dtype)
-        self.__mus = mus
+        self.__mus = mus.to(self.device)
         self.is_update_requested = True
         
     def update_parameters(self):

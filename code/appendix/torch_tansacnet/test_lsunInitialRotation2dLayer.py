@@ -7,9 +7,9 @@ import torch.nn as nn
 from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer
 from lsunUtility import Direction,OrthonormalMatrixGenerationSystem
 
-stride = [ [2, 2] ] #, [4, 4] ]
-mus = [ -1, 1 ]
-datatype = [ torch.float32 ] #, torch.float64 ]
+stride = [ [2, 2], [4, 4] ]
+mus = [ 1, -1 ]
+datatype = [ torch.float32, torch.float64 ]
 nrows = [ 2, 4, 8 ]
 ncols = [ 2, 4, 8 ]
 usegpu = [ True, False ]
@@ -255,7 +255,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualZ.shape,expctdZ.shape)
         message = 'usegpu=%s, stride=%s, nrows=%d, ncols=%d, mus=%f, datatype=%s' % (usegpu,stride,nrows,ncols,mus,datatype)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
-"""
+
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,datatype)
             )
@@ -270,8 +270,8 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-5, 1e-6
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True)
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
 
         # Parameters
         nSamples = 8
@@ -282,7 +282,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         mus = 1
 
         # nSamples x nRows x nCols x nDecs
-        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)        
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)        
         dLdZ = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
 
         # Expected values
@@ -292,7 +292,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         W0T = genW(angles=anglesW,mus=mus,index_pd_angle=None).transpose(1,2)
         U0T = genU(angles=anglesU,mus=mus,index_pd_angle=None).transpose(1,2)
         Y = dLdZ.clone()
-        expctddLdX = [ [] for idx in range(nSamples) ] 
+        expctddLdX = torch.empty_like(X) 
         for iSample in range(nSamples):
             Yi = Y[iSample,:,:,:]
             Ys = Yi[:,:,:ps].view(-1,ps)
@@ -304,72 +304,61 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             expctddLdX[iSample] = Zsai
         
         # dLdWi = <dLdZ,(dVdWi)X>
-        dldw_ = torch.zeros(nrows*ncols,2*nAnglesH,dtype=datatype,device=device)
+        nblks = nrows*ncols
+        dldw_ = torch.empty(nblks,2*nAnglesH,dtype=datatype,device=device)
         dldz_= dLdZ.clone()
-        dldz_upp = dldz_[:,:,:,:ps].view(nSamples,nrows*ncols,ps)
-        dldz_low = dldz_[:,:,:,ps:].view(nSamples,nrows*ncols,pa)
+        dldz_upp = dldz_[:,:,:,:ps].view(nSamples,nblks,ps)
+        dldz_low = dldz_[:,:,:,ps:].view(nSamples,nblks,pa)
         a_ = X.clone()
-        c_upp = a_[:,:,:,:ps].view(nSamples,nrows*ncols,ps)
-        c_low = a_[:,:,:,ps:].view(nSamples,nrows*ncols,pa)
+        c_upp = a_[:,:,:,:ps].view(nSamples,nblks,ps)
+        c_low = a_[:,:,:,ps:].view(nSamples,nblks,pa)
         for iAngle in range(nAnglesH):
             dW0 = genW(angles=anglesW,mus=mus,index_pd_angle=iAngle)
             dU0 = genU(angles=anglesU,mus=mus,index_pd_angle=iAngle)
-            for iblk in range(nrows*ncols):
+            for iblk in range(nblks):
                 dldz_upp_iblk = dldz_upp[:,iblk,:] # nSamples x ps
                 dldz_low_iblk = dldz_low[:,iblk,:] # nSamples x pa
                 c_upp_iblk = c_upp[:,iblk,:] # nSamples x ps
                 c_low_iblk = c_low[:,iblk,:] # nSamples x ps
-                d_upp_iblk = torch.zeros_like(c_upp_iblk)
-                d_low_iblk = torch.zeros_like(c_low_iblk)
+                d_upp_iblk = torch.empty_like(c_upp_iblk)
+                d_low_iblk = torch.empty_like(c_low_iblk)
                 for iSample in range(nSamples):
                     d_upp_iblk[iSample,:] = dW0[iblk,:,:ps] @ c_upp_iblk[iSample,:]
                     d_low_iblk[iSample,:] = dU0[iblk,:,:pa] @ c_low_iblk[iSample,:]
-                dldw_[iblk,iAngle] = torch.dot(dldz_upp_iblk.reshape(-1),d_upp_iblk.reshape(-1))
-                dldw_[iblk,nAnglesH+iAngle] = torch.dot(dldz_low_iblk.reshape(-1),d_low_iblk.reshape(-1))
+                dldw_[iblk,iAngle] = torch.sum(dldz_upp_iblk * d_upp_iblk)
+                dldw_[iblk,nAnglesH+iAngle] = torch.sum(dldz_low_iblk * d_low_iblk)
         expctddLdW = dldw_
         
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
             dtype=datatype,
+            device=device,
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
-        #layer.orthTransW0.angles = anglesW
-        #layer.orthTransW0.mus = mus
-        #layer.orthTransU0.angles = anglesU
-        #layer.orthTransU0.mus = mus
-        #layer = layer.to(device)
+        layer.angles = torch.cat((anglesW,anglesU),1)
+        layer.mus = mus
 
         # Actual values
-        #torch.autograd.set_detect_anomaly(True) 
-        #Z = layer.forward(X)
-        #layer.zero_grad()
-        #Z.backward(dLdZ)
-        #actualdLdX = layer.X.grad
+        torch.autograd.set_detect_anomaly(True) 
+        Z = layer(X)
+        layer.zero_grad()
+        Z.backward(dLdZ)
+        actualdLdX = X.grad
+        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, \
+                                  layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),0) \
+                      for iblk in range(nblks) ] 
 
-            
-            % Actual values
-            [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualdLdX,'gpuArray')
-                actualdLdX = gather(actualdLdX);
-                expctddLdX = gather(expctddLdX);
-                testCase.verifyClass(actualdLdW,'gpuArray')
-                actualdLdW = gather(actualdLdW);
-                expctddLdW = gather(expctddLdW);
-            end
-            testCase.verifyInstanceOf(actualdLdX,datatype);
-            testCase.verifyInstanceOf(actualdLdW,datatype);
-            testCase.verifyThat(actualdLdX,...
-                IsEqualTo(expctddLdX,'Within',tolObj));
-            testCase.verifyThat(actualdLdW,...
-                IsEqualTo(expctddLdW,'Within',tolObj));
-            
-        end
+        # Evaluation
+        self.assertIsInstance(actualdLdX,torch.Tensor)
+        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        for iblk in range(nblks):
+            self.assertIsInstance(actualdLdW[iblk],torch.Tensor)
+            self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
 
-        function testBackwardGrayscale(testCase, ...
+
+"""
+         function testBackwardGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             
             if usegpu && gpuDeviceCount == 0
