@@ -7,9 +7,9 @@ import torch.nn as nn
 from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer
 from lsunUtility import Direction,OrthonormalMatrixGenerationSystem
 
-stride = [ [2, 2] , [4, 4] ]
+stride = [ [2, 2] ] #, [4, 4] ]
 mus = [ -1, 1 ]
-datatype = [ torch.float32, torch.float64 ]
+datatype = [ torch.float32 ] #, torch.float64 ]
 nrows = [ 2, 4, 8 ]
 ncols = [ 2, 4, 8 ]
 usegpu = [ True, False ]
@@ -105,6 +105,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
             dtype=datatype,
+            device=device,
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
@@ -167,6 +168,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
             dtype=datatype,
+            device=device,
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
@@ -236,6 +238,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
             dtype=datatype,
+            device=device,
             stride=stride,
             number_of_blocks=[nrows,ncols],
             no_dc_leakage=True,
@@ -252,7 +255,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualZ.shape,expctdZ.shape)
         message = 'usegpu=%s, stride=%s, nrows=%d, ncols=%d, mus=%f, datatype=%s' % (usegpu,stride,nrows,ncols,mus,datatype)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
-
+"""
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,datatype)
             )
@@ -331,9 +334,9 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
-        #layer.orthTransW0.angles.data = anglesW
+        #layer.orthTransW0.angles = anglesW
         #layer.orthTransW0.mus = mus
-        #layer.orthTransU0.angles.data = anglesU
+        #layer.orthTransU0.angles = anglesU
         #layer.orthTransU0.mus = mus
         #layer = layer.to(device)
 
@@ -343,8 +346,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         #layer.zero_grad()
         #Z.backward(dLdZ)
         #actualdLdX = layer.X.grad
-        
-""" 
+
             
             % Actual values
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);

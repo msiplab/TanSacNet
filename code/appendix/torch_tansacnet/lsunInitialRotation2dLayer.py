@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import math
-from lsunUtility import OrthonormalMatrixGenerationSystem
-#from orthonormalTransform import SetOfOrthonormalTransforms
+#from lsunUtility import OrthonormalMatrixGenerationSystem
+from orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunInitialRotation2dLayer(nn.Module):
     """
@@ -30,12 +30,14 @@ class LsunInitialRotation2dLayer(nn.Module):
     
     def __init__(self, 
         dtype=torch.get_default_dtype(),
+        device=torch.device("cpu"),
         stride=[],
         number_of_blocks=[1,1],
         no_dc_leakage=False,
         name=''):
         super(LsunInitialRotation2dLayer, self).__init__()
         self.dtype = dtype
+        self.device = device
         self.stride = stride
         self.number_of_blocks = number_of_blocks
         self.name = name
@@ -53,11 +55,12 @@ class LsunInitialRotation2dLayer(nn.Module):
                 + str(self.stride[1]) + ")"
         
         # Orthonormal matrix generation systems 
-        self.genOM = OrthonormalMatrixGenerationSystem(dtype=self.dtype)
-        #self.orthTransW0 = SetOfOrthonormalTransforms(number_of_blocks=self.number_of_blocks,n=ps,mode='Analysis') 
-        #self.orthTransU0 = SetOfOrthonormalTransforms(number_of_blocks=self.number_of_blocks,n=pa,mode='Analysis') 
-        #self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles)
-        #self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles)
+        #self.genOM = OrthonormalMatrixGenerationSystem(dtype=self.dtype)
+        nblks = self.number_of_blocks[0]*self.number_of_blocks[1]
+        self.orthTransW0 = SetOfOrthonormalTransforms(name=self.name+"_W0",nblks=nblks,n=ps,mode='Analysis',device=self.device,dtype=self.dtype)
+        self.orthTransU0 = SetOfOrthonormalTransforms(name=self.name+"_U0",nblks=nblks,n=pa,mode='Analysis',device=self.device,dtype=self.dtype) 
+        self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles).to(self.device)
+        self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles).to(self.device)
 
         # Update parameters
         self.update_parameters()
@@ -74,27 +77,30 @@ class LsunInitialRotation2dLayer(nn.Module):
         if self.is_update_requested:
             self.number_of_blocks = [ nrows, ncols ]
             self.update_parameters()
-        W0 = self.W0
-        U0 = self.U0
+        #W0 = self.W0
+        #U0 = self.U0
 
         # Process
         # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
         Y = X.permute(1,2,3,0).reshape(nrows*ncols,ps+pa,nSamples)
-        for iblk in range(nrows*ncols):
-            Yb = Y[iblk,:,:]
-            if self.W0 is None:
-                Ys = Yb[:ps,:]
-            else:
-                W0b = W0[iblk,:,:]
-                Ys = W0b @ Yb[:ps,:]
-            if self.U0 is None:
-                Ya = Yb[ps:,:]
-            else:
-                U0b = U0[iblk,:,:]
-                Ya = U0b @ Yb[ps:,:]
-            Y[iblk,:,:] = torch.cat((Ys,Ya),0).view(nDecs,nSamples)
+        Zs = self.orthTransW0(Y[:,:ps,:])
+        Za = self.orthTransU0(Y[:,ps:,:])
+        Z = torch.cat((Zs,Za),1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
+        #for iblk in range(nrows*ncols):
+        #    Yb = Y[iblk,:,:]
+        #    if self.W0 is None:
+        #        Ys = Yb[:ps,:]
+        #    else:
+        #        W0b = W0[iblk,:,:]
+        #        Ys = W0b @ Yb[:ps,:]
+        #    if self.U0 is None:
+        #        Ya = Yb[ps:,:]
+        #    else:
+        #        U0b = U0[iblk,:,:]
+        #        Ya = U0b @ Yb[ps:,:]
+        #    Y[iblk,:,:] = torch.cat((Ys,Ya),0).view(nDecs,nSamples)
         # (nRows x nCols) x nChs x nSamples -> nSamples x nRows x nCols x nChs
-        Z = Y.reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
+        #Z = Y.reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
         return Z
     
     @property
@@ -128,8 +134,8 @@ class LsunInitialRotation2dLayer(nn.Module):
         angles = self.__angles
         mus = self.__mus
         if angles is None:
-            self.W0 = None
-            self.U0 = None
+            self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles).to(self.device)
+            self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles).to(self.device)
         else:
             ps = int(math.ceil(math.prod(self.stride)/2.0))
             if self.no_dc_leakage:
@@ -142,8 +148,13 @@ class LsunInitialRotation2dLayer(nn.Module):
             anglesU = angles[:,nAngles//2:]
             musW = mus[:,:ps]
             musU = mus[:,ps:]       
-            self.W0 = self.genOM(angles=anglesW,mus=musW)
-            self.U0 = self.genOM(angles=anglesU,mus=musU)
+            #self.W0 = self.genOM(angles=anglesW,mus=musW)
+            #self.U0 = self.genOM(angles=anglesU,mus=musU)
+            #
+            self.orthTransW0.angles = anglesW
+            self.orthTransW0.mus = musW
+            self.orthTransU0.angles = anglesU
+            self.orthTransU0.mus = musU
         self.is_update_requested = False
 
 """
