@@ -25,16 +25,16 @@ class LsunInitialRotation2dLayer(nn.Module):
         8050 2-no-cho Ikarashi, Nishi-ku,
         Niigata, 950-2181, JAPAN
 
-    http://www.msiplab.eng.niigata-u.ac.jp/~msiplab/
+    https://www.msiplab.eng.niigata-u.ac.jp/~msiplab/
     """
     
     def __init__(self, 
-        dtype=torch.get_default_dtype(),
-        device=torch.device("cpu"),
-        stride=[],
-        number_of_blocks=[1,1],
-        no_dc_leakage=False,
-        name=''):
+                 dtype=torch.get_default_dtype(),
+                 device=torch.device("cpu"),
+                 stride=None,
+                 number_of_blocks=[1,1],
+                 no_dc_leakage=False,
+                 name=''):
         super(LsunInitialRotation2dLayer, self).__init__()
         self.dtype = dtype
         self.device = device

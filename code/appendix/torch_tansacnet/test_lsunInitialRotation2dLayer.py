@@ -45,10 +45,10 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         expctdName = 'V0'
         expctdDescription = "LSUN initial rotation " \
             + "(ps,pa) = (" \
-            + str(math.ceil(stride[0]*stride[1]/2)) + "," \
-            + str(math.floor(stride[0]*stride[1]/2)) + "), "  \
+            + str(math.ceil(stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]/2)) + "," \
+            + str(math.floor(stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]/2)) + "), "  \
             + "(mv,mh) = (" \
-            + str(stride[0]) + "," + str(stride[1]) + ")"
+            + str(stride[Direction.VERTICAL]) + "," + str(stride[Direction.HORIZONTAL]) + ")"
 
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
@@ -138,7 +138,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Parameters
         nSamples = 8
-        nDecs = stride[0]*stride[1]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
 
         # nSamples x nRows x nCols x nDecs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
@@ -202,7 +202,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Parameters
         nSamples = 8
-        nDecs = stride[0]*stride[1]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
 
         # nSamples x nRows x nCols x nDecs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
@@ -275,7 +275,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Parameters
         nSamples = 8
-        nDecs = stride[0]*stride[1]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
         nAnglesH = int((nDecs-2)*nDecs/8)
         anglesW = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
         anglesU = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
@@ -375,7 +375,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Parameters
         nSamples = 8
-        nDecs = stride[0]*stride[1]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
         nAnglesH = int((nDecs-2)*nDecs/8)
         anglesW = torch.randn(nrows*ncols,nAnglesH,dtype=datatype,device=device)
         anglesU = torch.randn(nrows*ncols,nAnglesH,dtype=datatype,device=device)
@@ -475,7 +475,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Parameters
         nSamples = 8
-        nDecs = stride[0]*stride[1]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
         nAnglesH = int((nDecs-2)*nDecs/8)
         anglesW = torch.randn(nrows*ncols,nAnglesH,dtype=datatype,device=device)
         anglesU = torch.randn(nrows*ncols,nAnglesH,dtype=datatype,device=device)
