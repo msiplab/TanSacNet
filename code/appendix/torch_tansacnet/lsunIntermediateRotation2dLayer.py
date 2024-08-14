@@ -1,46 +1,61 @@
+import torch
+import torch.nn as nn
+import math
+from lsunUtility import Direction
+from orthonormalTransform import SetOfOrthonormalTransforms
+
+class LsunIntermediateRotation2dLayer(nn.Module):
+    """
+    LSUNINTERMEDIATEROTATION2DLAYER
+
+        コンポーネント別に入力(nComponents):
+            nSamples x nRows x nCols x nChs
+
+        コンポーネント別に出力(nComponents):    
+            nSamples x nRows x nCols x nChs
+
+    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+
+    Copyright (c) 2024, Shogo MURAMATSU
+
+    All rights reserved.
+
+    Contact address: Shogo MURAMATSU,
+        Faculty of Engineering, Niigata University,
+        8050 2-no-cho Ikarashi, Nishi-ku,
+        Niigata, 950-2181, JAPAN
+
+    https://www.eng.niigata-u.ac.jp/~msiplab/
 """
-classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
-    %LSUNINTERMEDIATEROTATION2DLAYER
-    %
-    %
-    % Requirements: MATLAB R2022a
-    %
-    % Copyright (c) 2022, Shogo MURAMATSU
-    %
-    % All rights reserved.
-    %
-    % Contact address: Shogo MURAMATSU,
-    %                Faculty of Engineering, Niigata University,
-    %                8050 2-no-cho Ikarashi, Nishi-ku,
-    %                Niigata, 950-2181, JAPAN
-    %
-    % http://msiplab.eng.niigata-u.ac.jp/
-    
-    properties
-        % (Optional) Layer properties.
-        Stride
-        Mode
-        NumberOfBlocks
-    end
-    
-    properties (Dependent)
-        Mus
-    end
-    
-    properties (Learnable,Dependent)
-        Angles
-    end
-    
-    properties (Access = private)
-        PrivateNumberOfChannels
-        PrivateAngles
-        PrivateMus
-        isUpdateRequested
-    end
-    
-    properties (Hidden)
-        Un
-    end
+
+    def __init__(self,
+                 dtype=torch.get_default_dtype(),
+                 device=torch.get_default_device(),
+                 mode='Synthesis',
+                 stride=None,
+                 number_of_blocks=[1,1],
+                 no_dc_leakage=False,
+                 name=''):
+        super(LsunIntermediateRotation2dLayer, self).__init__()
+        self.dtype = dtype
+        self.device = device
+        self.mode = mode
+        self.stride = stride
+        self.number_of_blocks = number_of_blocks
+        self.name = name
+        self.mus = None
+        self.angles = None
+        self.no_dc_leakage = no_dc_leakage
+        ps = math.ceil(math.prod(self.stride)/2)
+        pa = math.floor(math.prod(self.stride)/2)
+        self.description = self.mode \
+            + ' LSUN intermediate rotation ' \
+            + '(ps,pa) = (' + str(ps) + ',' + str(pa) + ')'
+        
+        # Orthonormal matrix generation system
+        nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
+
+"""
     
     methods
         function layer = lsunIntermediateRotation2dLayer(varargin)

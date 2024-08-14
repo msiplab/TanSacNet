@@ -1,5 +1,9 @@
+import itertools
 import unittest
+from parameterized import parameterized
+import math
 import torch
+from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 
 stride = [ [2,2], [4, 4] ]
 mus = [ -1, 1 ]
@@ -8,71 +12,58 @@ nrows = [ 2, 4, 8 ]
 ncols = [ 2, 4, 8 ]
 usegpu = [ True, False ]
 
+class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
+    """
+    LSUNINTERMEDIATEROTATION2DLAYERTESTCASE 
+    
+        コンポーネント別に入力(nComponents=1のみサポート):
+            nSamples x nRows x nCols x nChs
+
+        コンポーネント別に出力(nComponents=1のみサポート):
+            nSamples x nRows x nCols x nChs
+
+        Requirements: Python 3.10/11.x, PyTorch 2.3.x
+
+        Copyright (c) 2024, Shogo MURAMATSU
+
+        All rights reserved.
+
+        Contact address: Shogo MURAMATSU,
+                        Faculty of Engineering, Niigata University,
+                        8050 2-no-cho Ikarashi, Nishi-ku,
+                        Niigata, 950-2181, JAPAN
+
+        https://www.eng.niigata-u.ac.jp/~msiplab/
 """
-classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
-    %LSUNINTERMEDIATEROTATION2DLAYERTESTCASE 
-    %   
-    %   コンポーネント別に入力(nComponents)
-    %      nChs x nRows x nCols x nSamples
-    %
-    %   コンポーネント別に出力(nComponents):
-    %      nChs x nRows x nCols x nSamples
-    %
-    % Requirements: MATLAB R2022a
-    %
-    % Copyright (c) 2022, Shogo MURAMATSU
-    %
-    % All rights reserved.
-    %
-    % Contact address: Shogo MURAMATSU,
-    %                Faculty of Engineering, Niigata University,
-    %                8050 2-no-cho Ikarashi, Nishi-ku,
-    %                Niigata, 950-2181, JAPAN
-    %
-    % http://msiplab.eng.niigata-u.ac.jp/
-    
 
-
-    methods (TestClassTeardown)
-        function finalCheck(~)
-            import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
-                'Stride',[2 2],...
-                'NumberOfBlocks',[8 8]);
-            fprintf("\n --- Check layer for 2-D images ---\n");
-            checkLayer(layer,[4 8 8],...
-                'ObservationDimension',4,...
-                'CheckCodegenCompatibility',true)      
-        end
-    end
-    
-    methods (Test)
+    @parameterized.expand(
+        itertools.product(stride)
+        ) 
+    def testConstructor(self, stride):
+        # Expected values
+        expctdName = 'Vn~'
+        expctdMode = 'Synthesis'
+        expctdDescription = "Synthesis LSUN intermediate rotation " \
+            + "(ps,pa) = (" \
+            + str(math.ceil(math.prod(stride)/2)) + "," + str(math.floor(math.prod(stride)/2)) + ")"
         
-        function testConstructor(testCase, stride)
-            
-            % Expected values
-            expctdName = 'Vn~';
-            expctdMode = 'Synthesis';
-            expctdDescription = "Synthesis LSUN intermediate rotation " ...
-                + "(ps,pa) = (" ...
-                + ceil(prod(stride)/2) + "," + floor(prod(stride)/2) + ")";
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
-                'Stride',stride,...
-                'Name',expctdName);
-            
-            % Actual values
-            actualName = layer.Name;
-            actualMode = layer.Mode;
-            actualDescription = layer.Description;
-            
-            % Evaluation
-            testCase.verifyEqual(actualName,expctdName);
-            testCase.verifyEqual(actualMode,expctdMode);
-            testCase.verifyEqual(actualDescription,expctdDescription);
-        end
+        # Instantiation of target class
+        layer = LsunIntermediateRotation2dLayer(
+            stride=stride,
+            name=expctdName)
+        
+        # Actual values
+        actualName = layer.name
+        actualMode = layer.mode
+        actualDescription = layer.description
+                  
+        # Evaluation
+        self.assertEqual(actualName,expctdName)
+        self.assertEqual(actualMode,expctdMode)
+        self.assertEqual(actualDescription,expctdDescription)
+
+"""
+
         
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
@@ -553,7 +544,6 @@ end
 
 if __name__ == '__main__':
     unittest.main()
-
 
 """
 classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
