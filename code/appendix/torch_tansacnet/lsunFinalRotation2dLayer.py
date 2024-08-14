@@ -85,9 +85,10 @@ class LsunFinalRotation2dLayer(nn.Module):
         Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
 
         return Z
+    
     @property
     def angles(self):
-        return torch.cat((self.orthTransW0T.angles,self.orthTransU0T.angles),1)
+        return torch.cat((self.orthTransW0T.angles,self.orthTransU0T.angles),dim=1)
 
     @angles.setter
     def angles(self, angles):
