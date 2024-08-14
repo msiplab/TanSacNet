@@ -63,230 +63,195 @@ class lsunFinalRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualName,expctdName)
         self.assertEqual(actualDescription,expctdDescription)
 
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,datatype)
+            )
+    def testForwardGrayscale(self, usegpu, stride, nrows, ncols, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-5, 1e-6
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        W0T = torch.eye(ps,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        U0T = torch.eye(pa,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunFinalRotation2dLayer(
+            dtype=datatype,
+            device=device,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            name='V0~')
+        
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer.forward(X) 
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+            )
+    def testForwardGrayscaleWithRandomAngles(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-5, 1e-6
+
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+        nAngles = (nDecs-2)*nDecs//4
+        angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nAnglesH = nAngles//2
+        W0T = genW(angles=angles[:,:nAnglesH]).permute(0,2,1)
+        U0T = genU(angles=angles[:,nAnglesH:]).permute(0,2,1)
+
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunFinalRotation2dLayer(
+            dtype=datatype,
+            device=device,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            name='V0~')
+
+        # Actual values
+        with torch.no_grad():
+            layer.angles = angles
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+            )
+    def testForwardGrayscaleWithRandomAnglesNoDcLeackage(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-5, 1e-6
+
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+
+        # nSamples x nRows x nCols x nDecs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+        nAngles = (nDecs-2)*nDecs//4
+        angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nAnglesH = nAngles//2
+        anglesNoDc = angles.clone()
+        anglesNoDc[:,:(ps-1)] = 0
+
+        musW = mus*torch.ones(nrows*ncols,ps,dtype=datatype,device=device)
+        musW[:,0] = 1
+        musU = mus*torch.ones(nrows*ncols,pa,dtype=datatype,device=device)
+        W0T = genW(angles=anglesNoDc[:,:nAnglesH],mus=musW).permute(0,2,1)
+        U0T = genU(angles=anglesNoDc[:,nAnglesH:],mus=musU).permute(0,2,1)
+
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunFinalRotation2dLayer(
+            dtype=datatype,
+            device=device,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            no_dc_leakage=True,
+            name='V0~')
+        
+        # Actual values
+        with torch.no_grad():
+            layer.mus = mus
+            layer.angles = angles
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        message = 'usegpu=%s, stride=%s, nrows=%d, ncols=%d, mus=%d, datatype=%s' % (usegpu,stride,nrows,ncols,mus,datatype)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
+
 """
-    
-    methods (Test)
-        
-        function testConstructor(testCase, stride)
-            
-            % Expected values
-            expctdName = 'V0~';
-            expctdDescription = "LSUN final rotation " ...
-                + "(ps,pa) = (" ...
-                + ceil(prod(stride)/2) + "," ...
-                + floor(prod(stride)/2) + "), " ...               
-                + "(mv,mh) = (" ...
-                + stride(1) + "," + stride(2) + ")";
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunFinalRotation2dLayer(...
-                'Stride',stride,...
-                'Name',expctdName);
-            
-            % Actual values
-            actualName = layer.Name;
-            actualDescription = layer.Description;
-            
-            % Evaluation
-            testCase.verifyEqual(actualName,expctdName);
-            testCase.verifyEqual(actualDescription,expctdDescription);
-        end
 
-        function testPredictGrayscale(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
-            
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
-
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = nDecs;
-            % nChs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            if usegpu
-                X = gpuArray(X);
-            end
-
-            % Expected values        
-            % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0T = repmat(eye(ps,datatype),[1 1 nrows*ncols]);
-            U0T = repmat(eye(pa,datatype),[1 1 nrows*ncols]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
-            for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample); 
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
-                end
-            end
-            Zsa = cat(1,Ys,Ya);
-            %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunFinalRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'Name','V0~');
-            
-            % Actual values
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualZ,'gpuArray')
-                actualZ = gather(actualZ);
-                expctdZ = gather(expctdZ);
-            end            
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
-        
-        function testPredictGrayscaleWithRandomAngles(testCase, ...
-                usegpu, stride, nrows, ncols, datatype)
-            
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end    
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = nDecs;
-            % nChs x nRows x nCols x nSamples
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-            end   
-
-            % Expected values
-            % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            W0T = permute(genW.step(angles(1:size(angles,1)/2,:),1),[2 1 3]);
-            U0T = permute(genU.step(angles(size(angles,1)/2+1:end,:),1),[2 1 3]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
-            for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample);
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
-                end
-            end
-            Zsa = cat(1,Ys,Ya);
-            %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunFinalRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'Name','V0~');
-            
-            % Actual values
-            layer.Angles = angles;
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            if usegpu
-                testCase.verifyClass(actualZ,'gpuArray')
-                actualZ = gather(actualZ);
-                expctdZ = gather(expctdZ);
-            end 
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
-        
-               
-        function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
-                usegpu, stride, nrows, ncols, mus, datatype)
-
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            import tansacnet.utility.*
-            genW = OrthonormalMatrixGenerationSystem();
-            genU = OrthonormalMatrixGenerationSystem();
-            
-            % Parameters
-            nSamples = 8;
-            nDecs = prod(stride);
-            nChsTotal = nDecs;
-            % nChs x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,sum(stride),nSamples,datatype);
-            X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-            end
-
-            % Expected values
-            % nDecs x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            anglesNoDc = angles;
-            anglesNoDc(1:ps-1,:)=zeros(ps-1,nrows*ncols);
-            musW = mus*ones(ps,nrows*ncols);
-            musW(1,:) = 1;
-            musU = mus*ones(pa,nrows*ncols);
-            W0T = permute(genW.step(anglesNoDc(1:size(angles,1)/2,:),musW),[2 1 3]);
-            U0T = permute(genU.step(anglesNoDc(size(angles,1)/2+1:end,:),musU),[2 1 3]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ys = reshape(Y(1:ps,:,:,:),ps,nrows*ncols,nSamples);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
-            for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Ys(:,iblk,iSample) = W0T(1:ps,:,iblk)*Ys(:,iblk,iSample);
-                    Ya(:,iblk,iSample) = U0T(1:pa,:,iblk)*Ya(:,iblk,iSample);
-                end
-            end
-            Zsa = cat(1,Ys,Ya);
-            %expctdZ = ipermute(reshape(Zsa,nDecs,nrows,ncols,nSamples),...
-            %    [3 1 2 4]);
-            expctdZ = reshape(Zsa,nDecs,nrows,ncols,nSamples);
-
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunFinalRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'NoDcLeakage',true,...
-                'Name','V0~');
             
             % Actual values
             layer.Mus = mus;

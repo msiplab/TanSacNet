@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from lsunUtility import Direction
 from orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunFinalRotation2dLayer(nn.Module):
@@ -28,14 +29,14 @@ class LsunFinalRotation2dLayer(nn.Module):
     """
 
     def __init__(self, 
-                 dttype=torch.get_default_dtype(),
+                 dtype=torch.get_default_dtype(),
                  device=torch.device('cpu'),
                  stride=None, 
                  number_of_blocks=[1,1], 
                  no_dc_leakage=False, 
                  name=''):
         super(LsunFinalRotation2dLayer, self).__init__()
-        self.dttype = dttype
+        self.dtype = dtype
         self.device = device
         self.stride = stride
         self.number_of_blocks = number_of_blocks
@@ -50,8 +51,88 @@ class LsunFinalRotation2dLayer(nn.Module):
                            + str(ps) + "," \
                            + str(pa) + "), " \
                            + "(mv,mh) = (" \
-                           + str(self.stride[0]) + "," \
-                           + str(self.stride[1]) + ")"
+                           + str(self.stride[Direction.VERTICAL]) + "," \
+                           + str(self.stride[Direction.HORIZONTAL]) + ")"
+        
+        # Orthonormal matrix generation systems 
+        nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
+        self.orthTransW0T = SetOfOrthonormalTransforms(name=self.name+"_W0T",nblks=nblks,n=ps,mode='Synthesis',device=self.device,dtype=self.dtype)
+        self.orthTransU0T = SetOfOrthonormalTransforms(name=self.name+"_U0T",nblks=nblks,n=pa,mode='Synthesis',device=self.device,dtype=self.dtype) 
+        self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles).to(self.device)
+        self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
+
+        # Update parameters
+        self.update_parameters()
+
+    def forward(self,X):
+        nSamples = X.size(dim=0)
+        nrows = X.size(dim=1)
+        ncols = X.size(dim=2)
+        nDecs = math.prod(self.stride)
+        ps = math.ceil(nDecs/2.0)
+        pa = math.floor(nDecs/2.0)
+
+        # Update parameters
+        if self.is_update_requested:
+            self.number_of_blocks = [ nrows, ncols ]
+            self.update_parameters()
+
+        # Process
+        # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
+        Y = X.permute(1,2,3,0).reshape(nrows*ncols,ps+pa,nSamples)
+        Zs = self.orthTransW0T(Y[:,:ps,:])
+        Za = self.orthTransU0T(Y[:,ps:,:])
+        Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
+
+        return Z
+    @property
+    def angles(self):
+        return torch.cat((self.orthTransW0T.angles,self.orthTransU0T.angles),1)
+
+    @angles.setter
+    def angles(self, angles):
+        self.__angles = angles
+        self.is_update_requested = True
+
+    @property
+    def mus(self):
+        return self.__mus
+    
+    @mus.setter
+    def mus(self, mus):
+        nBlocks = math.prod(self.number_of_blocks)
+        nDecs = math.prod(self.stride)
+        if mus is None:
+            mus = torch.ones(nBlocks,nDecs,dtype=self.dtype)
+        elif isinstance(mus, int) or isinstance(mus, float):
+            mus = mus*torch.ones(nBlocks,nDecs,dtype=self.dtype)
+        self.__mus = mus.to(self.device)
+        self.is_update_requested = True
+
+    def update_parameters(self):
+        angles = self.__angles
+        mus = self.__mus
+        if angles is None:
+            self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles).to(self.device)
+            self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
+        else:
+            ps = int(math.ceil(math.prod(self.stride)/2.0))
+            if self.no_dc_leakage:
+                mus[:,0] = 1.0
+                self.__mus = mus
+                angles[:,:(ps-1)] = 0.0
+                self.__angles = angles
+            nAngles = angles.size(1)
+            anglesW = angles[:,:nAngles//2]
+            anglesU = angles[:,nAngles//2:]
+            musW = mus[:,:ps]
+            musU = mus[:,ps:]       
+            #
+            self.orthTransW0T.angles = anglesW
+            self.orthTransW0T.mus = musW
+            self.orthTransU0T.angles = anglesU
+            self.orthTransU0T.mus = musU
+        self.is_update_requested = False
 
 """
 classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
