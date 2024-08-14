@@ -88,7 +88,7 @@ class LsunInitialRotation2dLayer(nn.Module):
     
     @property
     def angles(self):
-        return torch.cat((self.orthTransW0.angles,self.orthTransU0.angles),1)
+        return torch.cat((self.orthTransW0.angles,self.orthTransU0.angles),dim=1)
 
     @angles.setter
     def angles(self, angles):
