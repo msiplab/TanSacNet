@@ -29,7 +29,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         name='SoOT',
         mode='Analysis',
         dtype=torch.get_default_dtype(),
-        device=torch.device("cpu")):
+        device=torch.get_default_device()): #device("cpu")):
         super(SetOfOrthonormalTransforms, self).__init__()
         self.dtype = dtype
         self.nPoints = n

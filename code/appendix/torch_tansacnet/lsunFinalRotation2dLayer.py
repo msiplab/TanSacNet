@@ -30,7 +30,7 @@ class LsunFinalRotation2dLayer(nn.Module):
 
     def __init__(self, 
                  dtype=torch.get_default_dtype(),
-                 device=torch.device('cpu'),
+                 device=torch.get_default_device(),
                  stride=None, 
                  number_of_blocks=[1,1], 
                  no_dc_leakage=False, 
