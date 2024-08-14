@@ -51,7 +51,7 @@ class LsunBlockDct2dLayer(nn.Module):
         stride = self.decimation_factor        
         nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
         ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
-        ndecs = stride[0]*stride[1] #math.prod(stride)
+        ndecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL] #math.prod(stride)
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
