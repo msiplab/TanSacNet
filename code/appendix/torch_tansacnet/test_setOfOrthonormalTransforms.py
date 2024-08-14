@@ -32,7 +32,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         8050 2-no-cho Ikarashi, Nishi-ku,
         Niigata, 950-2181, JAPAN
     
-        http://www.eng.niigata-u.ac.jp/~msiplab/
+        https://www.eng.niigata-u.ac.jp/~msiplab/
     """
 
     @parameterized.expand(

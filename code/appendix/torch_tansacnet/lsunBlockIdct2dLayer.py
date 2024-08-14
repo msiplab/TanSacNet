@@ -25,7 +25,7 @@ class LsunBlockIdct2dLayer(nn.Module):
       8050 2-no-cho Ikarashi, Nishi-ku,
       Niigata, 950-2181, JAPAN
    
-      http://www.msiplab.eng.niigata-u.ac.jp/~msiplab/
+      https://www.eng.niigata-u.ac.jp/~msiplab/
    """
    
    def __init__(self,
