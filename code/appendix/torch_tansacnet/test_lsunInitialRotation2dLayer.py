@@ -79,27 +79,25 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # Parameters
         nSamples = 8
-        nDecs = stride[0]*stride[1]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
         
         # nSamples x nRows x nCols x nChs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
 
         # Expected values
-        # nSamples x nRows x nCols x nChs
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
         W0 = torch.eye(ps,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
         U0 = torch.eye(pa,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
         expctdZ = torch.zeros_like(X)
         for iSample in range(nSamples):
-            # Perumation in each block
             Xi = X[iSample,:,:,:].clone()
             Ys = Xi[:,:,:ps].view(-1,ps)
             Ya = Xi[:,:,ps:].view(-1,pa)
             for iblk in range(nrows*ncols):
                 Ys[iblk,:] = W0[iblk,:,:] @ Ys[iblk,:]
                 Ya[iblk,:] = U0[iblk,:,:] @ Ya[iblk,:]
-            Yi = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
             expctdZ[iSample,:,:,:] = Yi
 
         # Instantiation of target class
@@ -142,20 +140,18 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # nSamples x nRows x nCols x nDecs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
-        nAngles = int((nDecs-2)*nDecs/4)
+        nAngles = (nDecs-2)*nDecs//4
         angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device) 
 
         # Expected values
-        # nSamples x nRows x nCols x nDecs
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
-        nAnglesH = int(nAngles/2)
+        nAnglesH = nAngles//2
         W0 = genW(angles=angles[:,:nAnglesH]) 
         U0 = genU(angles=angles[:,nAnglesH:])
 
         expctdZ = torch.zeros_like(X)
         for iSample in range(nSamples):
-            # Perumation in each block
             Xi = X[iSample,:,:,:].clone()
             Ys = Xi[:,:,:ps].view(-1,ps)
             Ya = Xi[:,:,ps:].view(-1,pa)
@@ -206,14 +202,13 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         # nSamples x nRows x nCols x nDecs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
-        nAngles = int((nDecs-2)*nDecs/4)
+        nAngles = (nDecs-2)*nDecs//4
         angles = torch.randn(nrows*ncols,nAngles,dtype=datatype,device=device) 
 
         # Expected values
-        # nSamples x nRows x nCols x nDecs
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
-        nAnglesH = int(nAngles/2)
+        nAnglesH = nAngles//2
         anglesNoDc = angles.clone()
         anglesNoDc[:,:(ps-1)] = 0
         
@@ -225,14 +220,13 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         expctdZ = torch.zeros_like(X)
         for iSample in range(nSamples):
-            # Perumation in each block
             Xi = X[iSample,:,:,:].clone()
             Ys = Xi[:,:,:ps].view(-1,ps)
             Ya = Xi[:,:,ps:].view(-1,pa)
             for iblk in range(nrows*ncols):
                 Ys[iblk,:] = W0[iblk,:,:] @ Ys[iblk,:]
                 Ya[iblk,:] = U0[iblk,:,:] @ Ya[iblk,:]
-            Yi = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
             expctdZ[iSample,:,:,:] = Yi
 
         # Instantiation of target class
@@ -276,7 +270,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Parameters
         nSamples = 8
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
-        nAnglesH = int((nDecs-2)*nDecs/8)
+        nAnglesH = (nDecs-2)*nDecs//8
         anglesW = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
         anglesU = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
         mus = 1
@@ -286,7 +280,6 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         dLdZ = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
 
         # Expected values
-        # nSamples x nRows x nCols x nDecs
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
         W0T = genW(angles=anglesW,mus=mus,index_pd_angle=None).transpose(1,2)
@@ -300,13 +293,13 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             for iblk in range(nrows*ncols):
                 Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
                 Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
-            Zsai = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            Zsai = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
             expctddLdX[iSample] = Zsai
         
         # dLdWi = <dLdZ,(dVdWi)X>
         nblks = nrows*ncols
         dldw_ = torch.empty(nblks,2*nAnglesH,dtype=datatype,device=device)
-        dldz_= dLdZ.clone()
+        dldz_ = dLdZ.clone()
         dldz_upp = dldz_[:,:,:,:ps].view(nSamples,nblks,ps)
         dldz_low = dldz_[:,:,:,ps:].view(nSamples,nblks,pa)
         a_ = X.clone()
@@ -336,7 +329,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
-        layer.angles = torch.cat((anglesW,anglesU),1)
+        layer.angles = torch.cat((anglesW,anglesU),dim=1)
         layer.mus = mus
 
         # Actual values
@@ -346,7 +339,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         Z.backward(dLdZ)
         actualdLdX = X.grad
         actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),0) \
+                                  layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),dim=0) \
                       for iblk in range(nblks) ] 
 
         # Evaluation
