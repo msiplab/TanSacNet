@@ -379,7 +379,6 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
         dLdZ = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
 
         # Expected values
-        # nSamples x nRows x nCols x nDecs
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
         W0T = genW(angles=anglesW,mus=mus,index_pd_angle=None).transpose(1,2)
@@ -393,7 +392,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             for iblk in range(nrows*ncols):
                 Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
                 Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
-            Zsai = torch.cat((Ys,Ya),1).view(nrows,ncols,nDecs)
+            Zsai = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
             expctddLdX[iSample] = Zsai
 
         # dLdWi = <dLdZ,(dVdWi)X>
@@ -429,7 +428,7 @@ class lsunInitialRotation2dLayerTestCase(unittest.TestCase):
             stride=stride,
             number_of_blocks=[nrows,ncols],
             name='V0')
-        layer.angles = torch.cat((anglesW,anglesU),1)
+        layer.angles = torch.cat((anglesW,anglesU),dim=1)
         layer.mus = mus
 
         # Actual values
