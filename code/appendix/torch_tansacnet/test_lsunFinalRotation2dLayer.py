@@ -3,7 +3,7 @@ import unittest
 from parameterized import parameterized
 import math
 import torch
-import torch.nn as nn
+#import torch.nn as nn
 from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer
 from lsunUtility import Direction,OrthonormalMatrixGenerationSystem
 
@@ -14,7 +14,7 @@ nrows = [ 2, 4, 8 ]
 ncols = [ 2, 4, 8 ]
 usegpu = [ True, False ]
 
-class lsunFinalRotation2dLayerTestCase(unittest.TestCase):
+class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
     """
     LSUNFINALROTATION2DLAYERTESTCASE
 
