@@ -64,9 +64,9 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualDescription,expctdDescription)
 
     @parameterized.expand(
-            itertools.product(usegpu,stride,nrows,ncols,datatype)
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
-    def testForwardGrayscale(self, usegpu, stride, nrows, ncols, datatype):
+    def testForwardGrayscale(self, usegpu, stride, nrows, ncols, mus,datatype):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -87,8 +87,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         # Expected values
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
-        W0T = torch.eye(ps,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
-        U0T = torch.eye(pa,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        W0T = mus*torch.eye(ps,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        U0T = mus*torch.eye(pa,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
         expctdZ = torch.zeros_like(X)
         for iSample in range(nSamples):
             Xi = X[iSample,:,:,:].clone()
@@ -110,6 +110,7 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         
         # Actual values
         with torch.no_grad():
+            layer.mus = mus
             actualZ = layer.forward(X) 
 
         # Evaluation
@@ -147,8 +148,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         ps = math.ceil(nDecs/2)
         pa = math.floor(nDecs/2)
         nAnglesH = nAngles//2
-        W0T = genW(angles=angles[:,:nAnglesH]).transpose(1,2)
-        U0T = genU(angles=angles[:,nAnglesH:]).transpose(1,2)
+        W0T = mus*genW(angles=angles[:,:nAnglesH]).transpose(1,2)
+        U0T = mus*genU(angles=angles[:,nAnglesH:]).transpose(1,2)
 
         expctdZ = torch.zeros_like(X)
         for iSample in range(nSamples):
@@ -171,6 +172,7 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
 
         # Actual values
         with torch.no_grad():
+            layer.mus = mus
             layer.angles = angles
             actualZ = layer.forward(X)
 
@@ -554,6 +556,16 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    """
+    # TestSuite に特定のテストケースを追加
+    suite = unittest.TestSuite()
+    suite.addTest(LsunFinalRotation2dLayerTestCase('testForwardGrayscale_142'))
+
+    # TestRunner でスイートを実行
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+    """
 
 """
 classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase

@@ -113,11 +113,11 @@ class LsunFinalRotation2dLayer(nn.Module):
     def update_parameters(self):
         angles = self.__angles
         mus = self.__mus
+        ps = int(math.ceil(math.prod(self.stride)/2.0))
         if angles is None:
             self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles).to(self.device)
             self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
         else:
-            ps = int(math.ceil(math.prod(self.stride)/2.0))
             if self.no_dc_leakage:
                 mus[:,0] = 1.0
                 self.__mus = mus
@@ -126,13 +126,14 @@ class LsunFinalRotation2dLayer(nn.Module):
             nAngles = angles.size(1)
             anglesW = angles[:,:nAngles//2]
             anglesU = angles[:,nAngles//2:]
-            musW = mus[:,:ps]
-            musU = mus[:,ps:]       
             #
             self.orthTransW0T.angles = anglesW
-            self.orthTransW0T.mus = musW
             self.orthTransU0T.angles = anglesU
-            self.orthTransU0T.mus = musU
+        musW = mus[:,:ps]
+        musU = mus[:,ps:]       
+        self.orthTransW0T.mus = musW            
+        self.orthTransU0T.mus = musU
+        #
         self.is_update_requested = False
 
 """
