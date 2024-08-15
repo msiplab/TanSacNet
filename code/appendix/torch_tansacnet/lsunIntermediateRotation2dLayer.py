@@ -46,26 +46,53 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         self.mus = None
         self.angles = None
         self.no_dc_leakage = no_dc_leakage
-        ps = math.ceil(math.prod(self.stride)/2)
-        pa = math.floor(math.prod(self.stride)/2)
+        ps = math.ceil(math.prod(self.stride)/2.0)
+        pa = math.floor(math.prod(self.stride)/2.0)
         self.description = self.mode \
             + ' LSUN intermediate rotation ' \
             + '(ps,pa) = (' + str(ps) + ',' + str(pa) + ')'
         
         # Orthonormal matrix generation system
         nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
+        if self.mode == 'Synthesis':
+            self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_UnT",nblks=nblks,n=ps,mode='Synthesis',device=self.device,dtype=self.dtype)
+        else:
+            self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_Un",nblks=nblks,n=ps,mode='Analysis',device=self.device,dtype=self.dtype)
+        self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
 
         # Update parameters
         self.update_parameters()
 
     def forward(self, X):
-        Z = X.clone()
-        ps = math.ceil(math.prod(self.stride)/2)
+        nSamples = X.size(dim=0)
+        nrows = X.size(dim=1)
+        ncols = X.size(dim=2)
+        nDecs = math.prod(self.stride)
+        ps = math.ceil(nDecs/2.0)
+        pa = math.floor(nDecs/2.0)
 
+        # Update parameters
         if self.is_update_requested:
+            self.number_of_blocks = [ nrows, ncols ]
             self.update_parameters()
-        Z[:,:,:,ps:] = self.mus*Z[:,:,:,ps:]
+
+        # Process
+        # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
+        Y = X.permute(1,2,3,0).reshape(nrows*ncols,ps+pa,nSamples)
+        Zs = Y[:,:ps,:].clone()
+        Za = self.orthTransUnx(Y[:,ps:,:])
+        Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
+
         return Z
+    
+    @property
+    def angles(self):
+        return self.orthTransUnx.angles
+    
+    @angles.setter
+    def angles(self, angles):
+        self.__angles = angles
+        self.is_update_requested = True
     
     @property
     def mus(self):
@@ -73,10 +100,25 @@ class LsunIntermediateRotation2dLayer(nn.Module):
     
     @mus.setter
     def mus(self, mus):
-        self.__mus = mus
+        nBlocks = math.prod(self.number_of_blocks)
+        nDecs = math.prod(self.stride)
+        ps = math.ceil(nDecs/2.0)
+        if mus is None:
+            mus = torch.ones(nBlocks,ps,dtype=self.dtype)
+        elif isinstance(mus, int) or isinstance(mus, float):
+            mus = mus*torch.ones(nBlocks,ps,dtype=self.dtype)
+        self.__mus = mus.to(self.device)
         self.is_update_requested = True
     
     def update_parameters(self):
+        angles = self.__angles
+        mus = self.__mus
+        if angles is None:
+            self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
+        else:
+            self.orthTransUnx.angles = angles
+        self.orthTransUnx.mus = mus
+        #
         self.is_update_requested = False
         
 """
