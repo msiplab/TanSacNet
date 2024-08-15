@@ -4,9 +4,10 @@ from parameterized import parameterized
 import math
 import torch
 from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from lsunUtility import Direction
 
-stride = [ [2,2], [4, 4] ]
-mus = [ -1, 1 ]
+stride = [ [2, 2], [4, 4] ]
+mus = [ 1, -1 ]
 datatype = [ torch.float32, torch.float64 ]
 nrows = [ 2, 4, 8 ]
 ncols = [ 2, 4, 8 ]
@@ -62,56 +63,60 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualMode,expctdMode)
         self.assertEqual(actualDescription,expctdDescription)
 
-"""
+    @parameterized.expand(
+        itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+        )
+    def testForwardGrayscale(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-5, 1e-6
 
+        # Parameters
+        nSamples = 8
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,device=device,dtype=datatype)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        UnT = mus*torch.eye(pa,device=device,dtype=datatype).repeat(nrows*ncols,1,1)
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)            
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ya[iblk,:] = UnT[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunIntermediateRotation2dLayer(
+            dtype=datatype,
+            device=device,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            name='Vn~')
         
-        function testPredictGrayscale(testCase, ...
-                usegpu, stride, nrows, ncols, mus, datatype)
+        # Actual values
+        with torch.no_grad():
+            layer.mus = mus
+            actualZ = layer.forward(X)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));        
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = prod(stride);
-            % nChsTotal x nRows x nCols xnSamples
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            if usegpu
-                X = gpuArray(X);
-            end
-            % Expected values
-            % nChsTotal x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            UnT = repmat(mus*eye(pa,datatype),[1 1 nrows*ncols]);
-            Y = X; %permute(X,[3 1 2 4]);
-            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
-            Za = zeros(size(Ya),'like',Ya);
-            for iSample=1:nSamples
-                for iblk = 1:(nrows*ncols)
-                    Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
-                end
-            end
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunIntermediateRotation2dLayer(...
-                'Stride',stride,...
-                'NumberOfBlocks',[nrows ncols],...
-                'Name','Vn~');
-            
-            % Actual values
-            layer.Mus = mus;
-            actualZ = layer.predict(X);
+"""
             
             % Evaluation
             if usegpu

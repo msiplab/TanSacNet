@@ -55,6 +55,30 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         # Orthonormal matrix generation system
         nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
 
+        # Update parameters
+        self.update_parameters()
+
+    def forward(self, X):
+        Z = X.clone()
+        ps = math.ceil(math.prod(self.stride)/2)
+
+        if self.is_update_requested:
+            self.update_parameters()
+        Z[:,:,:,ps:] = self.mus*Z[:,:,:,ps:]
+        return Z
+    
+    @property
+    def mus(self):
+        return self.__mus
+    
+    @mus.setter
+    def mus(self, mus):
+        self.__mus = mus
+        self.is_update_requested = True
+    
+    def update_parameters(self):
+        self.is_update_requested = False
+        
 """
     
     methods
