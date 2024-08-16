@@ -253,9 +253,9 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
 
     @parameterized.expand(
-            itertools.product(usegpu,stride,nrows,ncols,datatype)
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
-    def testBackwardGrayscale(self, usegpu, stride, nrows, ncols, datatype):
+    def testBackwardGrayscale(self, usegpu, stride, nrows, ncols, mus, datatype):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -275,7 +275,6 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         nAnglesH = (nDecs-2)*nDecs//8
         anglesW = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
         anglesU = torch.zeros(nrows*ncols,nAnglesH,dtype=datatype,device=device)
-        mus = 1
 
         # nSamples x nRows x nCols x nDecs
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)        
@@ -566,7 +565,7 @@ if __name__ == '__main__':
     runner = unittest.TextTestRunner()
     runner.run(suite)
     """
-    
+
 """
 classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
     %LSUNINITIALROTATION2DLAYERTESTCASE
