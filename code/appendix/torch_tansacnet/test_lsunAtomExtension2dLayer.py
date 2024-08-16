@@ -75,257 +75,264 @@ class LsunAtomExtension2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualTargetChannels,expctdTargetChannels)
         self.assertEqual(actualDescription,expctdDescription)
 
-"""
-        
-        function testPredictGrayscaleShiftDifferenceCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
-            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = prod(stride);
-            target_ = 'Difference';
-            % nChsTotal x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0  1 0 ];
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 0 ];
-            elseif strcmp(dir,'Down')
-                shift = [ 0  1 0 0 ];
-            elseif strcmp(dir,'Up')
-                shift = [ 0 -1 0 0 ];
-            else
-                shift = [ 0 0 0 0 ];
-            end
-            % nRows x nCols x nChsTotal x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            % Block butterfly
-            Ys = X(1:ps,:,:,:);
-            Ya = X(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Block circular shift
-            Y(ps+1:ps+pa,:,:,:) = circshift(Y(ps+1:ps+pa,:,:,:),shift);
-            % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Output
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunAtomExtension2dLayer(...
-                'Stride',stride,...
-                'Name','Qn~',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
-        
-        function testPredictGrayscaleShiftSumCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
-            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = prod(stride);
-            target_ = 'Sum';
-            % nChsTotal x nRows x nCols x nSamples
-            %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0  1 0 ];
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0 -1 0 ];
-            elseif strcmp(dir,'Down')
-                shift = [ 0  1 0 0 ];
-            elseif strcmp(dir,'Up')
-                shift = [ 0 -1 0 0 ];
-            else
-                shift = [ 0 0 0 0 ];
-            end
-            % nChsTotal x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            % Block butterfly
-            Ys = X(1:ps,:,:,:);
-            Ya = X(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Block circular shift
-            Y(1:ps,:,:,:) = circshift(Y(1:ps,:,:,:),shift);
-            % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Output
-            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunAtomExtension2dLayer(...
-                'Stride',stride,...
-                'Name','Qn~',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualZ = layer.predict(X);
-            
-            % Evaluation
-            testCase.verifyInstanceOf(actualZ,datatype);
-            testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));
-            
-        end
-        
-        function testBackwardGrayscaleShiftDifferenceCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
-            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = prod(stride);
-            target_ = 'Difference';
-            % nChsTotal x nRows x nCols x nSamples
-            %dLdZ = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            dLdZ = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0 -1 0 ]; % Reverse
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0 1 0 ]; % Reverse
-            elseif strcmp(dir,'Down')
-                shift = [ 0 -1 0 0 ]; % Reverse
-            elseif strcmp(dir,'Up')
-                shift = [ 0 1 0 0 ]; % Reverse
-            else
-                shift = [ 0 0 0 0 ]; % Reverse
-            end
-            % nChsTotal x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
-            % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Block circular shift
-            Y(ps+1:ps+pa,:,:,:) = circshift(Y(ps+1:ps+pa,:,:,:),shift);
-            % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Output
-            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunAtomExtension2dLayer(...
-                'Stride',stride,...
-                'Name','Qn',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualdLdX = layer.backward([],[],dLdZ,[]);
-            
-            % Evaluation
-            testCase.verifyInstanceOf(actualdLdX,datatype);
-            testCase.verifyThat(actualdLdX,...
-                IsEqualTo(expctddLdX,'Within',tolObj));
-            
-        end
-        
-        function testBackwardGrayscaleShiftSumCoefs(testCase, ...
-                stride, nrows, ncols, dir, datatype)
-            
-            import matlab.unittest.constraints.IsEqualTo
-            import matlab.unittest.constraints.AbsoluteTolerance
-            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
-            
-            % Parameters
-            nSamples = 8;
-            nChsTotal = prod(stride);
-            target_ = 'Sum';
-            % nChsTotal x nRows x nCols x nSamples
-            %dLdZ = randn(nrows,ncols,nChsTotal,nSamples,datatype);
-            dLdZ = randn(nChsTotal,nrows,ncols,nSamples,datatype);
-            
-            % Expected values
-            if strcmp(dir,'Right')
-                shift = [ 0 0 -1 0 ]; % Reverse
-            elseif strcmp(dir,'Left')
-                shift = [ 0 0  1 0 ]; % Reverse
-            elseif strcmp(dir,'Down')
-                shift = [ 0 -1 0 0 ]; % Reverse
-            elseif strcmp(dir,'Up')
-                shift = [ 0 1 0 0 ]; % Reverse
-            else
-                shift = [ 0 0 0 0 ];
-            end
-            % nChsTotal x nRows x nCols x nSamples
-            ps = ceil(nChsTotal/2);
-            pa = floor(nChsTotal/2);
-            Y = dLdZ; %permute(dLdZ,[3 1 2 4]); % [ch ver hor smpl]
-            % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Block circular shift
-            Y(1:ps,:,:,:) = circshift(Y(1:ps,:,:,:),shift);
-            % Block butterfly
-            Ys = Y(1:ps,:,:,:);
-            Ya = Y(ps+1:ps+pa,:,:,:);
-            Y =  [ Ys+Ya ; Ys-Ya ]/sqrt(2);
-            % Output
-            expctddLdX = Y; %ipermute(Y,[3 1 2 4]);
-            
-            % Instantiation of target class
-            import tansacnet.lsun.*
-            layer = lsunAtomExtension2dLayer(...
-                'Stride',stride,...
-                'Name','Qn',...
-                'Direction',dir,...
-                'TargetChannels',target_);
-            
-            % Actual values
-            actualdLdX = layer.backward([],[],dLdZ,[]);
-            
-            % Evaluation
-            testCase.verifyInstanceOf(actualdLdX,datatype);
-            testCase.verifyThat(actualdLdX,...
-                IsEqualTo(expctddLdX,'Within',tolObj));
-            
-        end
-    end
+
+
+    @parameterized.expand(
+        list(itertools.product(stride,nrows,ncols,dir,datatype))
+    )
+    def testForwardGrayscaleShiftDifferenceCoefs(self, 
+            stride, nrows, ncols, dir, datatype):
+        rtol,atol=  0,1e-8
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")        
+
+        # Parameters
+        nSamples = 8
+        nChsTotal = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        target = 'Difference'
+        # nSamples x nRows x nCols x nChsTotal  
+        X = torch.randn(nSamples,nrows,ncols,nChsTotal,dtype=datatype,device=device,requires_grad=True)
+                
+        # Expected values
+        if dir=='Right':
+            shift = ( 0, 0, 1, 0 )
+        elif dir=='Left':
+            shift = ( 0, 0, -1, 0 )
+        elif dir=='Down':
+            shift = ( 0, 1, 0, 0 )
+        elif dir=='Up':
+            shift = ( 0, -1, 0, 0 )
+        else:
+            shift = ( 0, 0, 0, 0 )
     
-end
-"""
+        # nSamples x nRows x nCols x nChsTotal 
+        ps = math.ceil(nChsTotal/2)
+        pa = math.floor(nChsTotal/2)
+        Y = X 
+        # Block butterfly
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y =  torch.cat((Ys+Ya, Ys-Ya),dim=-1)
+        # Block circular shift
+        Y[:,:,:,ps:] = torch.roll(Y[:,:,:,ps:],shifts=shift,dims=(0,1,2,3))
+        # Block butterfly
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y =  torch.cat((Ys+Ya ,Ys-Ya),dim=-1)
+        # Output
+        expctdZ = Y/2. 
+
+        # Instantiation of target class
+        layer = LsunAtomExtension2dLayer( 
+            stride=stride, 
+            name='Qn~', 
+            direction=dir, 
+            target_channels=target
+        )
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer.forward(X)
+        
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype) 
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+        self.assertFalse(actualZ.requires_grad)
+
+
+    @parameterized.expand(
+        list(itertools.product(stride,nrows,ncols,dir,datatype))
+    )
+    def testForwardGrayscaleShiftSumCoefs(self, 
+                stride, nrows, ncols, dir, datatype):
+        rtol, atol= 1e-5, 1e-8
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")        
+
+        # Parameters
+        nSamples = 8
+        nChsTotal = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        target = 'Sum'
+        # nSamples x nRows x nCols x nChsTotal 
+        X = torch.randn(nSamples,nrows,ncols,nChsTotal,dtype=datatype,device=device,requires_grad=True)
+        
+        # Expected values
+        if dir=='Right':
+            shift = ( 0, 0, 1, 0 )
+        elif dir=='Left':
+            shift = ( 0, 0, -1, 0 )
+        elif dir=='Down':
+            shift = ( 0, 1, 0, 0 )
+        elif dir=='Up':
+            shift = ( 0, -1, 0, 0 )
+        else:
+            shift = ( 0, 0, 0, 0 )
+
+        # nSamples x nRows x nCols x nChsTotal 
+        ps = math.ceil(nChsTotal/2)
+        pa = math.floor(nChsTotal/2)
+        Y = X
+        # Block butterfly
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y =  torch.cat((Ys+Ya, Ys-Ya),dim=-1)
+        # Block circular shift
+        Y[:,:,:,:ps] = torch.roll(Y[:,:,:,:ps],shifts=shift,dims=(0,1,2,3))
+        # Block butterfly
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y =  torch.cat((Ys+Ya, Ys-Ya),dim=-1)
+        # Output
+        expctdZ = Y/2.
+        
+        # Instantiation of target class
+        layer = LsunAtomExtension2dLayer( 
+            stride=stride, 
+            name='Qn~', 
+            direction=dir, 
+            target_channels=target
+        )
+        
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer.forward(X)
+            
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype) 
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+        self.assertFalse(actualZ.requires_grad)
+
+    @parameterized.expand(
+        list(itertools.product(stride,nrows,ncols,dir,datatype))
+    )
+    def testBackwardGrayscaleShiftDifferenceCoefs(self, 
+                stride, nrows, ncols, dir, datatype):
+        rtol,atol = 1e-5,1e-8
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")        
+
+        # Parameters
+        nSamples = 8
+        nChsTotal = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        target = 'Difference'
+
+        # nSamples x nRows x nCols x nChsTotal
+        X = torch.zeros(nSamples,nrows,ncols,nChsTotal,dtype=datatype,device=device,requires_grad=True)   
+        dLdZ = torch.randn(nSamples,nrows,ncols,nChsTotal,dtype=datatype)
+        dLdZ = dLdZ.to(device)
+
+        # Expected values        
+        if dir=='Right':
+            shift = ( 0, 0, -1, 0 ) # Reverse
+        elif dir=='Left':
+            shift = ( 0, 0, 1, 0 ) # Reverse
+        elif dir=='Down':
+            shift = ( 0, -1, 0, 0 ) # Reverse
+        elif dir=='Up':
+            shift = ( 0, 1, 0, 0 ) # Reverse
+        else:
+            shift = ( 0, 0, 0, 0 ) # Reverse
+
+        # nSamples x nRows x nCols x nChsTotal 
+        ps = math.ceil(nChsTotal/2)
+        pa = math.floor(nChsTotal/2)
+        Y = dLdZ
+        
+        # Block butterfly        
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y = torch.cat((Ys+Ya,Ys-Ya),dim=-1)
+        # Block circular shift
+        Y[:,:,:,ps:] = torch.roll(Y[:,:,:,ps:],shifts=shift,dims=(0,1,2,3))        
+        # Block butterfly        
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y = torch.cat((Ys+Ya,Ys-Ya),dim=-1)
+
+        # Output
+        expctddLdX = Y/2.
+
+        # Instantiation of target class
+        layer = LsunAtomExtension2dLayer(
+            stride=stride,
+            name='Qn',
+            direction=dir,
+            target_channels=target
+        )
+
+        # Actual values
+        Z = layer.forward(X)
+        Z.backward(dLdZ)
+        actualdLdX = X.grad
+        
+        # Evaluation
+        self.assertEqual(actualdLdX.dtype,datatype) 
+        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        self.assertTrue(Z.requires_grad)
+
+    @parameterized.expand(
+        list(itertools.product(stride,nrows,ncols,dir,datatype))
+    )
+    def testBackwardGrayscaleShiftSumCoefs(self, 
+                stride, nrows, ncols, dir, datatype):
+        rtol,atol = 1e-5,1e-8
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")        
+
+        # Parameters
+        nSamples = 8
+        nChsTotal = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        target = 'Sum'
+        
+        # nSamples x nRows x nCols x nChsTotal
+        X = torch.zeros(nSamples,nrows,ncols,nChsTotal,dtype=datatype,device=device,requires_grad=True)       
+        dLdZ = torch.randn(nSamples,nrows,ncols,nChsTotal,dtype=datatype)
+        dLdZ = dLdZ.to(device)
+
+        # Expected values
+        if dir=='Right':
+            shift = ( 0, 0, -1, 0) # Reverse
+        elif dir=='Left':
+            shift = ( 0, 0, 1, 0 ) # Reverse
+        elif dir=='Down':
+            shift = ( 0, -1, 0, 0 ) # Reverse
+        elif dir=='Up':
+            shift = ( 0, 1, 0, 0 ) # Reverse
+        else:
+            shift = ( 0, 0, 0, 0 )
+
+        # nSamples x nRows x nCols x nChsTotal
+        ps = math.ceil(nChsTotal/2)
+        pa = math.floor(nChsTotal/2)
+        Y = dLdZ
+
+        # Block butterfly
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y = torch.cat((Ys+Ya, Ys-Ya),dim=-1)
+        # Block circular shift
+        Y[:,:,:,:ps] = torch.roll(Y[:,:,:,:ps],shifts=shift,dims=(0,1,2,3))
+        # Block butterfly
+        Ys = Y[:,:,:,:ps]
+        Ya = Y[:,:,:,ps:]
+        Y = torch.cat((Ys+Ya, Ys-Ya),dim=-1)
+
+        # Output
+        expctddLdX = Y/2.
+
+        # Instantiation of target class
+        layer = LsunAtomExtension2dLayer(
+                stride=stride,
+                name='Qn',
+                direction=dir,
+                target_channels=target
+        )
+            
+        # Actual values
+        Z = layer.forward(X)
+        Z.backward(dLdZ)
+        actualdLdX = X.grad
+        
+        # Evaluation
+        self.assertEqual(actualdLdX.dtype,datatype) 
+        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        self.assertTrue(Z.requires_grad)
 
 if __name__ == '__main__':
     unittest.main()
