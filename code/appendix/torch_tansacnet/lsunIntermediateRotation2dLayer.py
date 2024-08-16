@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from lsunUtility import Direction
+from lsunLayerExceptions import InvalidMode
 from orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunIntermediateRotation2dLayer(nn.Module):
@@ -39,7 +40,7 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         super(LsunIntermediateRotation2dLayer, self).__init__()
         self.dtype = dtype
         self.device = device
-        self.mode = mode
+        self.__mode = mode
         self.stride = stride
         self.number_of_blocks = number_of_blocks
         self.name = name
@@ -48,16 +49,18 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         self.no_dc_leakage = no_dc_leakage
         ps = math.ceil(math.prod(self.stride)/2.0)
         pa = math.floor(math.prod(self.stride)/2.0)
-        self.description = self.mode \
+        self.description = self.__mode \
             + ' LSUN intermediate rotation ' \
             + '(ps,pa) = (' + str(ps) + ',' + str(pa) + ')'
         
         # Orthonormal matrix generation system
+        if self.__mode != 'Analysis' and self.__mode != 'Synthesis':
+            raise InvalidMode(f"{self.__mode}: Mode should be either of Synthesis or Analysis'")
         nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
-        if self.mode == 'Synthesis':
-            self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_UnT",nblks=nblks,n=ps,mode='Synthesis',device=self.device,dtype=self.dtype)
+        if self.__mode == 'Synthesis':
+            self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_UnT",nblks=nblks,n=pa,mode='Synthesis',device=self.device,dtype=self.dtype)
         else:
-            self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_Un",nblks=nblks,n=ps,mode='Analysis',device=self.device,dtype=self.dtype)
+            self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_Un",nblks=nblks,n=pa,mode='Analysis',device=self.device,dtype=self.dtype)
         self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
 
         # Update parameters
@@ -84,6 +87,10 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
 
         return Z
+    
+    @property
+    def mode(self):
+        return self.__mode
     
     @property
     def angles(self):
