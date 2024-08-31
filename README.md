@@ -1,3 +1,5 @@
+[![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=msiplab/TanSacNet) 
+
 # TanSacNet
 Project for developing tangent space adaptive control networks
 
@@ -83,7 +85,8 @@ parts of your network.
  
 ## References
 
-* 
+* Yasas GODAGE, Eisuke KOBAYASHI, Shogo MURAMATSU, “Locally-Structured Unitary Network,“ APSIPA Transactions on Signal and Information Processing, https://nowpublishers.com/article/Details/SIP-2024-0008, May 2024
+* Yasas GODAGE, Shogo MURAMATSU: Tangent Space Sampling of Video Sequence with Locally Structured Unitary Network, Proc. of 2023 IEEE International Conference on Visual Communications and Image Processing, DOI:10.1109/VCIP59821.2023.10402611, Dec. 2023
  
 ## Acknowledgement
  
