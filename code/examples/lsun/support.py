@@ -1,6 +1,6 @@
 import os
 import requests
-#import torchvision
+from torch.nn.functional import pad
 
 def fcn_download_img(isVerbose=None):
     """
@@ -32,3 +32,32 @@ def fcn_download_img(isVerbose=None):
     print('See Kodak Lossless True Color Image Suite (https://www.r0k.us/graphics/kodak/)')
     
     return dstdir
+
+def fcn_extract_blks(img, iBlk, blksz, k):
+    """ 
+    Function to extract a local patch block from a global array
+    """
+    # Extend array x
+    kx = k[0]
+    ky = k[1]
+    iBlkRow = iBlk[0]
+    iBlkCol = iBlk[1]
+    padsz = ((kx-1)//2*blksz[1], (kx-1)//2*blksz[1], (ky-1)//2*blksz[0], (ky-1)//2*blksz[0])
+    x = img.unsqueeze(0)
+    xx = pad(x, padsz, mode='circular')
+    posy = iBlkRow*blksz[0]
+    posx = iBlkCol*blksz[1]
+    y = xx[:, :, posy:posy+ky*blksz[0], posx:posx+kx*blksz[1]]
+    return y.squeeze(0)
+
+def fcn_place_blks(y,blk,iBlk,blksz):
+    """ 
+    Function to place a local patch block to a global array
+    """
+    # Place array blk 
+    iBlkRow = iBlk[0]
+    iBlkCol = iBlk[1]
+    posy = iBlkRow*blksz[0]
+    posx = iBlkCol*blksz[1]
+    y[posy:posy+blksz[0], posx:posx+blksz[1]] = blk
+    return y
