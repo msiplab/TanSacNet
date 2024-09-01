@@ -1,6 +1,8 @@
-def fcn_createlsunlgraph2d(lsunLgraph, **kwargs):
+import torch.nn as nn
+
+def fcn_createlsun2d(lsunLgraph, **kwargs):
     """
-    FCN_CREATELSUNLGRAPHS2D
+    FCN_CREATELSUN2D
 
     Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
@@ -15,7 +17,10 @@ def fcn_createlsunlgraph2d(lsunLgraph, **kwargs):
     
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
-    pass
+    if lsunLgraph is None:
+        lsunLgraph = nn.Sequential()
+    
+    return lsunLgraph
 
 """
 function lsunLgraph = ...
