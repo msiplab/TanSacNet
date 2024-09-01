@@ -29,3 +29,11 @@ class InvalidNumberOfVanishingMoments(Exception):
 class InvalidNumberOfLevels(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
+
+class InvalidStride(Exception):
+    def __init__(self,msg):
+        super().__init__(self,msg)
+
+class InvalidOverlappingFactor(Exception):
+    def __init__(self,msg):
+        super().__init__(self,msg)        

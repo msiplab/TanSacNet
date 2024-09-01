@@ -1,3 +1,5 @@
+import math
+import argparse
 import torch.nn as nn
 
 def fcn_createlsun2d(lsunLgraph, **kwargs):
@@ -17,93 +19,64 @@ def fcn_createlsun2d(lsunLgraph, **kwargs):
     
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
+    from torch_tansacnet import Direction, InvalidMode, InvalidStride, InvalidOverlappingFactor
+
     if lsunLgraph is None:
         lsunLgraph = nn.Sequential()
-    
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--InputSize', type=list, default=[32, 32])
+    parser.add_argument('--NumberOfComponents', type=int, default=1)
+    parser.add_argument('--Stride', type=list, default=[2, 2])
+    parser.add_argument('--OverlappingFactor', type=list, default=[1, 1])
+    parser.add_argument('--NumberOfLevels', type=int, default=1)
+    parser.add_argument('--NumberOfVanishingMoments', type=list, default=[1, 1])
+    parser.add_argument('--Mode', type=str, default='Whole')
+    parser.add_argument('--Prefix', type=str, default='')
+    parser.add_argument('--AppendInOutLayers', type=bool, default=True)
+    args = parser.parse_args(kwargs)
+
+    # Layer constructor function goes here.
+    nComponents = args.NumberOfComponents
+    inputSize = (args.InputSize[Direction.VERTICAL], args.InputSize[Direction.HORIZONTAL], nComponents)
+    stride = args.Stride
+    ovlpFactor = args.OverlappingFactor
+    nLevels = args.NumberOfLevels
+    noDcLeakage = args.NumberOfVanishingMoments
+    if isinstance(noDcLeakage, int):
+        noDcLeakage = (noDcLeakage, noDcLeakage)
+    mode = args.Mode
+    prefix = args.Prefix
+    isapndinout = args.AppendInOutLayers
+
+    if mode == 'Whole':
+        isAnalyzer = True
+        isSynthesizer = True
+    elif mode == 'Analyzer':
+        isAnalyzer = True
+        isSynthesizer = False
+    elif mode == 'Synthesizer':
+        isAnalyzer = False
+        isSynthesizer = True
+    else:
+        raise InvalidMode('Mode should be in { ''Whole'', ''Analyzer'', ''Synthesizer'' }')
+
+    nDecs = math.prod(stride)
+    nChannels = (math.ceil(nDecs/2), math.floor(nDecs/2))
+
+    if nChannels[Direction.VERTICAL] != nChannels[Direction.HORIZONTAL]:
+        raise InvalidStride(f'[{stride[Direction.VERTICAL]} {stride[Direction.HORIZONTAL]}] : The product of stride should be even.')
+    ovlpFactor_remainder = [ovlpFactor[Direction.VERTICAL] % 2, ovlpFactor[Direction.HORIZONTAL] % 2]
+    if not all(ovlpFactor_remainder):
+        raise InvalidOverlappingFactor(f'[{ovlpFactor[Direction.VERTICAL]} {ovlpFactor[Direction.HORIZONTAL]}] : Currently, odd overlapping factors are only supported.')
+
+    # 
+    nBlocks = (inputSize[Direction.VERTICAL]//stride[Direction.VERTICAL], inputSize[Direction.HORIZONTAL]//stride[Direction.HORIZONTAL])
+    if any([nBlocks[Direction.VERTICAL] % 1, nBlocks[Direction.HORIZONTAL] % 1]):
+        raise InvalidStride(f'[{inputSize[Direction.VERTICAL]} {inputSize[Direction.HORIZONTAL]}] : Input size should be multiple of stride.')
+
     return lsunLgraph
-
 """
-function lsunLgraph = ...
-    fcn_createlsunlgraph2d(lsunLgraph,varargin)
-%FCN_CREATELSUNLGRAPHS2D
-%
-% Requirements: MATLAB R2022a
-%
-% Copyright (c) 2022, Shogo MURAMATSU
-%
-% All rights reserved.
-%
-% Contact address: Shogo MURAMATSU,
-%                Faculty of Engineering, Niigata University,
-%                8050 2-no-cho Ikarashi, Nishi-ku,
-%                Niigata, 950-2181, JAPAN
-%
-% http://msiplab.eng.niigata-u.ac.jp/
-%
-if isempty(lsunLgraph)
-    lsunLgraph = layerGraph;
-end
-
-import tansacnet.lsun.*
-p = inputParser;
-addParameter(p,'InputSize',[32 32])
-addParameter(p,'NumberOfComponents',1)
-addParameter(p,'Stride',[2 2])
-addParameter(p,'OverlappingFactor',[1 1])
-addParameter(p,'NumberOfLevels',1);
-addParameter(p,'NumberOfVanishingMoments',[1 1]);
-addParameter(p,'Mode','Whole');
-addParameter(p,'Prefix','');
-addParameter(p,'AppendInOutLayers',true);
-parse(p,varargin{:})
-
-% Layer constructor function goes here.
-nComponents = p.Results.NumberOfComponents;
-inputSize = [p.Results.InputSize nComponents];
-stride = p.Results.Stride;
-ovlpFactor = p.Results.OverlappingFactor;
-nLevels = p.Results.NumberOfLevels;
-noDcLeakage = p.Results.NumberOfVanishingMoments;
-if isscalar(noDcLeakage)
-    noDcLeakage = [1 1]*noDcLeakage; 
-end
-mode = p.Results.Mode;
-prefix = p.Results.Prefix;
-isapndinout = p.Results.AppendInOutLayers;
-
-if strcmp(mode,'Whole')
-    isAnalyzer = true;
-    isSynthesizer = true;
-elseif strcmp(mode,'Analyzer')
-    isAnalyzer = true;
-    isSynthesizer = false;
-elseif strcmp(mode,'Synthesizer')
-    isAnalyzer = false;
-    isSynthesizer = true;
-else
-    error('Mode should be in { ''Whole'', ''Analyzer'', ''Synthesizer'' }');
-end
-
-nDecs = prod(stride);
-nChannels = [ceil(nDecs/2) floor(nDecs/2)];
-
-if nChannels(1) ~= nChannels(2)
-    throw(MException('LsunLayer:InvalidStride',...
-        '[%d %d] : The product of stride should be even.',...
-        stride(1),stride(2)))
-end
-if ~all(mod(ovlpFactor,2))
-    throw(MException('LsunLayer:InvalidOverlappingFactor',...
-        '[%d %d] : Currently, odd overlapping factors are only supported.',...
-        ovlpFactor(1),ovlpFactor(2)))
-end
-
-%%
-nBlocks = inputSize(1:2)./stride;
-if any(mod(nBlocks,1))
-    error('[%d %d] : Input size should be multiple of stride.')
-end
-
 %%
 blockDctLayers = cell(nLevels);
 analysisLayers = cell(nLevels,nComponents);
