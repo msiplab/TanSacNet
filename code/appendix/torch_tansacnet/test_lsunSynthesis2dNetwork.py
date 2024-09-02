@@ -12,11 +12,11 @@ from lsunUtility import Direction
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
 #nchs = [ [2, 2], [3, 3], [4, 4] ]
-#ppord = [ [0, 0], [0, 2], [2, 0], [2, 2], [4, 4] ]
+ovlpfactor = [ [1,1], [1,3], [3, 1], [3, 3], [5, 5] ]
 #datatype = [ torch.float, torch.double ]
 #height = [ 8, 16, 32 ]
 #width = [ 8, 16, 32 ]
-#nvm = [ 0, 1 ]
+nodcleakage = [ False, True ]
 #nlevels = [ 1, 2, 3 ]
 #isdevicetest = True
 
@@ -37,34 +37,34 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
     
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
+    
     @parameterized.expand(
-        list(itertools.product(stride))
+        list(itertools.product(stride,ovlpfactor,nodcleakage))
     )
-    def testConstructor(self,stride):
+    def testConstructor(self, stride,ovlpfactor,nodcleakage):
 
         # Expcted values
-        #expctdNchs = nchs
         expctdStride = stride
-        #expctdPpord = [0,0]        
-        #expctdNvms = 1
+        expctdOvlpFactor = ovlpfactor
+        expctdNoDcLeakage = nodcleakage        
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
-            stride=stride
+            stride = stride,
+            overlapping_factor = ovlpfactor,
+            no_dc_leakage = nodcleakage
         )
 
         # Actual values
-        #actualNchs = network.number_of_channels
         actualStride = network.stride
-        #actualPpord = network.polyphase_order        
-        #actualNvms = network.number_of_vanishing_moments
+        actualOvlpFactor = network.overlapping_factor
+        actualNoDcLeakage = network.no_dc_leakage 
 
         # Evaluation
         self.assertTrue(isinstance(network, nn.Module))
-        #self.assertEqual(actualNchs,expctdNchs)
         self.assertEqual(actualStride,expctdStride)
-        #self.assertEqual(actualPpord,expctdPpord)        
-        #self.assertEqual(actualNvms,expctdNvms)        
+        self.assertEqual(actualOvlpFactor,expctdOvlpFactor)
+        self.assertEqual(actualNoDcLeakage,expctdNoDcLeakage)                
 
     """
     @parameterized.expand(

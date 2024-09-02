@@ -1,12 +1,12 @@
-#import torch
+import torch
 import torch.nn as nn
 #from lsunBlockDct2dLayer import LsunBlockDct2dLayer 
 #from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
 #from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 #from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 #from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
-#from lsunLayerExceptions import InvalidNumberOfChannels, InvalidPolyPhaseOrder, InvalidNumberOfVanishingMoments, InvalidNumberOfLevels
-#from lsunUtility import Direction
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage #, InvalidNumberOfLevels
+from lsunUtility import Direction
 
 class LsunAnalysis2dNetwork(nn.Module):
     """
@@ -26,39 +26,29 @@ class LsunAnalysis2dNetwork(nn.Module):
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
     def __init__(self,
-        #number_of_channels=[],
-        stride=[],
-        #polyphase_order=[0,0],
-        #number_of_vanishing_moments=1,
+        stride=[2, 2],
+        overlapping_factor=[1,1],
+        no_dc_leakage=True,
         #number_of_levels=0
         ):
         super(LsunAnalysis2dNetwork, self).__init__()
 
         # Check and set parameters
-        # # of channels
-        #if number_of_channels[0] != number_of_channels[1]:
-        #    raise InvalidNumberOfChannels(
-        #    '[%d, %d] : Currently, Type-I LSUN is only suported, where the symmetric and antisymmetric channel numbers should be the same.'\
-        #    % (number_of_channels[0], number_of_channels[1]))
-        #self.number_of_channels = number_of_channels
-
+     
         # Stride
         self.stride = stride
 
-        # Polyphase order
-        #if any(torch.tensor(polyphase_order)%2):
-        #    raise InvalidPolyPhaseOrder(
-        #    '%d + %d : Currently, even polyphase orders are only supported.'\
-        #    % (polyphase_order[Direction.VERTICAL], polyphase_order[Direction.HORIZONTAL]))
-        #self.polyphase_order = polyphase_order
+        # Overlapping factor
+        if any((torch.tensor(overlapping_factor)-1)%2):
+             raise InvalidOverlappingFactor(
+             '%d + %d : Currently, odd overlapping factors are only supported.'\
+             % (overlapping_factor[Direction.VERTICAL], overlapping_factor[Direction.HORIZONTAL]))
+        self.overlapping_factor = overlapping_factor
 
-        # # of vanishing moments
-        #if number_of_vanishing_moments < 0 \
-        #    or number_of_vanishing_moments > 1:
-        #    raise InvalidNumberOfVanishingMoments(
-        #    '%d : The number of vanishing moment must be either of 0 or 1.'\
-        #    % number_of_vanishing_moments)
-        #self.number_of_vanishing_moments = number_of_vanishing_moments
+        # No DC leakage
+        if not isinstance(no_dc_leakage, bool):
+            raise InvalidNoDcLeakage("no_dc_leakage must be a boolean value")
+        self.no_dc_leakage = no_dc_leakage
 
         # # of levels
         #if not isinstance(number_of_levels, int):

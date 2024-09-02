@@ -18,11 +18,11 @@ class InvalidNumberOfChannels(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
-class InvalidPolyPhaseOrder(Exception):
+class InvalidOverlappingFactor(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
-class InvalidNumberOfVanishingMoments(Exception):
+class InvalidNoDcLeakage(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
