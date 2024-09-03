@@ -2,23 +2,22 @@ import itertools
 import unittest
 from parameterized import parameterized
 #import random
-#import torch
+import torch
 import torch.nn as nn
-#import torch_dct as dct
+import torch_dct as dct
 
-#import math
+import math
 from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
-from lsunUtility import Direction
+from lsunUtility import Direction, permuteDctCoefs, permuteIdctCoefs
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
-#nchs = [ [2, 2], [3, 3], [4, 4] ]
-ovlpfactor = [ [1,1], [1,3], [3, 1], [3, 3], [5, 5] ]
-#datatype = [ torch.float, torch.double ]
-#height = [ 8, 16, 32 ]
-#width = [ 8, 16, 32 ]
+ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
+datatype = [ torch.float, torch.double ]
+height = [ 8, 16, 32 ]
+width = [ 8, 16, 32 ]
 nodcleakage = [ False, True ]
 #nlevels = [ 1, 2, 3 ]
-#isdevicetest = True
+usegpu = [ True, False ]
 
 class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
     """
@@ -66,51 +65,53 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertEqual(actualOvlpFactor,expctdOvlpFactor)
         self.assertEqual(actualNoDcLeakage,expctdNoDcLeakage)                
 
-    """
     @parameterized.expand(
-        list(itertools.product(nchs,stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testForwardGrayScale(self,
-            nchs,stride, height, width, datatype):
-        rtol,atol = 1e-5,1e-8
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+            stride, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")       
+            device = torch.device("cpu")    
+        rtol,atol = 1e-5,1e-8
 
         # Parameters
         nSamples = 8
+        nComponents = 1
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL] #math.prod(stride)
+
+        # nSamples x nRows x nCols x nDecs
         nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
         ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
-        nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
-
-        # nSamples x nRows x nCols x nChsTotal
-        X = torch.randn(nSamples,nrows,ncols,nChsTotal,dtype=datatype)
-        X = X.to(device)
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)
         
         # Expected values        
-        # nSamples x nRows x nCols x nDecs
-        ps,pa = nchs
+        # nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols)
+        ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.)) 
         W0T = torch.eye(ps,dtype=datatype).to(device)
         U0T = torch.eye(pa,dtype=datatype).to(device)
         Ys = X[:,:,:,:ps].view(-1,ps).T
-        Ya = X[:,:,:,ps:].view(-1,pa).T
-        ms,ma = int(math.ceil(nDecs/2.)),int(math.floor(nDecs/2.))        
-        Zsa = torch.cat(
-                ( W0T[:ms,:] @ Ys, 
-                  U0T[:ma,:] @ Ya ),dim=0)
+        if pa > 0:
+            Ya = X[:,:,:,ps:].view(-1,pa).T
+            Zsa = torch.cat(
+                ( W0T @ Ys, 
+                  U0T @ Ya ),dim=0)
+        else:
+            Zsa = W0T @ Ys
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
-        Y = idct_2d(A)
+        A = permuteIdctCoefs(V,stride)
+        Y = dct.idct_2d(A,norm='ortho')
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
-            number_of_channels=nchs,
-            decimation_factor=stride
-        )
+            stride=stride
+            )
         network = network.to(device)
 
         # Actual values
@@ -119,9 +120,12 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertEqual(actualZ.dtype,datatype)
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+        msg = ' '.join(['stride=',str(stride),', height=',str(height),', width=',str(width),', datatype=',str(datatype),', usegpu=',str(usegpu)])
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
         self.assertFalse(actualZ.requires_grad)
 
+"""
+    
     @parameterized.expand(  
         list(itertools.product(nchs,stride))
     )
@@ -933,62 +937,6 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             self.assertTrue(torch.allclose(actualdLdX[iCh],expctddLdX[iCh],rtol=rtol,atol=atol))
         self.assertTrue(Z.requires_grad)
 
-"""
- 
-"""
-def permuteDctCoefs_(x):
-    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
-    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
-    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
-    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
-    return torch.cat((cee,coo,coe,ceo),dim=-1)
-
-def permuteIdctCoefs_(x,block_size):
-    coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size))
-    decY_ = block_size[Direction.VERTICAL]
-    decX_ = block_size[Direction.HORIZONTAL]
-    chDecY = int(math.ceil(decY_/2.))
-    chDecX = int(math.ceil(decX_/2.))
-    fhDecY = int(math.floor(decY_/2.))
-    fhDecX = int(math.floor(decX_/2.))
-    nQDecsee = chDecY*chDecX
-    nQDecsoo = fhDecY*fhDecX
-    nQDecsoe = fhDecY*chDecX
-    cee = coefs[:,:nQDecsee]
-    coo = coefs[:,nQDecsee:nQDecsee+nQDecsoo]
-    coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
-    ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
-    nBlocks = coefs.size(0)
-    value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype).to(x.device)
-    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
-    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
-    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
-    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
-    return value
-
-def block_butterfly(X,nchs):
-    ps = nchs[0]
-    Xs = X[:,:,:,:ps]
-    Xa = X[:,:,:,ps:]
-    return torch.cat((Xs+Xa,Xs-Xa),dim=-1)
-
-def block_shift(X,nchs,target,shift):
-    ps = nchs[0]
-    if target == 0: # Difference channel
-        X[:,:,:,ps:] = torch.roll(X[:,:,:,ps:],shifts=tuple(shift),dims=(0,1,2,3))
-    else: # Sum channel
-        X[:,:,:,:ps] = torch.roll(X[:,:,:,:ps],shifts=tuple(shift),dims=(0,1,2,3))
-    return X
-
-def intermediate_rotation(X,nchs,R):
-    Y = X.clone()
-    ps,pa = nchs
-    nSamples = X.size(0)
-    nrows = X.size(1)
-    ncols = X.size(2)
-    Za = R @ X[:,:,:,ps:].view(-1,pa).T 
-    Y[:,:,:,ps:] = Za.T.view(nSamples,nrows,ncols,pa)
-    return Y
 """
 
 if __name__ == '__main__':
