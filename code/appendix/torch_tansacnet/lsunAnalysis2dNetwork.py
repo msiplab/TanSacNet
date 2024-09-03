@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-#from lsunBlockDct2dLayer import LsunBlockDct2dLayer 
+from lsunBlockDct2dLayer import LsunBlockDct2dLayer 
 #from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
 #from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 #from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 #from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage #, InvalidNumberOfLevels
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels
 from lsunUtility import Direction
 
 class LsunAnalysis2dNetwork(nn.Module):
@@ -29,7 +29,7 @@ class LsunAnalysis2dNetwork(nn.Module):
         stride=[2, 2],
         overlapping_factor=[1,1],
         no_dc_leakage=True,
-        #number_of_levels=0
+        number_of_levels=0
         ):
         super(LsunAnalysis2dNetwork, self).__init__()
 
@@ -51,29 +51,31 @@ class LsunAnalysis2dNetwork(nn.Module):
         self.no_dc_leakage = no_dc_leakage
 
         # # of levels
-        #if not isinstance(number_of_levels, int):
-        #    raise InvalidNumberOfLevels(
-        #    '%f : The number of levels must be integer.'\
-        #    % number_of_levels)   
-        #if number_of_levels < 0:
-        #    raise InvalidNumberOfLevels(
-        #    '%d : The number of levels must be greater than or equal to 0.'\
-        #    % number_of_levels)
-        #self.number_of_levels = number_of_levels
+        if not isinstance(number_of_levels, int):
+            raise InvalidNumberOfLevels(
+            '%f : The number of levels must be integer.'\
+            % number_of_levels)   
+        if number_of_levels < 0:
+            raise InvalidNumberOfLevels(
+            '%d : The number of levels must be greater than or equal to 0.'\
+            % number_of_levels)
+        self.number_of_levels = number_of_levels
 
         # Instantiation of layers
-        #if self.number_of_levels == 0:
-        #    nlevels = 1
-        #else:
-        #    nlevels = self.number_of_levels
-        #stages = [ nn.Sequential() for iStage in range(nlevels) ]
-        #for iStage in range(len(stages)):
-        #    iLevel = iStage+1
-        #    strLv = 'Lv%0d_'%iLevel
+        if self.number_of_levels == 0:
+            nlevels = 1
+        else:
+            nlevels = self.number_of_levels
+        stages = [ nn.Sequential() for iStage in range(nlevels) ]
+        for iStage in range(len(stages)):
+            iLevel = iStage+1
+            strLv = 'Lv%0d_'%iLevel
 
             # Initial blocks
-        #    stages[iStage].add_module(strLv+'E0',LsunBlockDct2dLayer(
-        #        decimation_factor=decimation_factor))
+            stages[iStage].add_module(strLv+'E0',LsunBlockDct2dLayer(
+                decimation_factor=stride
+                ))
+                
         #    stages[iStage].add_module(strLv+'V0',LsunInitialRotation2dLayer(
         #        number_of_channels=number_of_channels,
         #        decimation_factor=decimation_factor,
@@ -121,34 +123,34 @@ class LsunAnalysis2dNetwork(nn.Module):
         #        stages[iStage].add_module(strLv+'Sp',LsunChannelSeparation2dLayer())
 
         # Stack modules as a list
-        #self.layers = nn.ModuleList(stages)
+        self.layers = nn.ModuleList(stages)
         
     def forward(self,x):
         if self.number_of_levels == 0: # Flat structure
             for m in self.layers:
                 y = m.forward(x) 
             return y
-        else: # Tree structure
-            stride = self.decimation_factor
-            nSamples = x.size(0)
-            nComponents = x.size(1)
-            nrows = int(x.size(2)/stride[Direction.VERTICAL])
-            ncols = int(x.size(3)/stride[Direction.HORIZONTAL])
-            y = []
-            iLevel = 1                   
-            for m in self.layers:
-                yac, ydc = m.forward(x)
-                y.insert(0,yac)
-                if iLevel < self.number_of_levels:
-                    x = ydc.view(nSamples,nComponents,nrows,ncols)
-                    nrows = int(nrows/stride[Direction.VERTICAL])
-                    ncols = int(ncols/stride[Direction.HORIZONTAL])     
-                    iLevel += 1             
-                else:
-                    y.insert(0,ydc)
-        
-            return tuple(y)
+        #else: # Tree structure
+        #    stride = self.stride
+        #    nSamples = x.size(0)
+        #    nComponents = x.size(1)
+        #    nrows = int(x.size(2)/stride[Direction.VERTICAL])
+        #    ncols = int(x.size(3)/stride[Direction.HORIZONTAL])
+        #    y = []
+        #    iLevel = 1                   
+        #    for m in self.layers:
+        #        yac, ydc = m.forward(x)
+        #        y.insert(0,yac)
+        #        if iLevel < self.number_of_levels:
+        #            x = ydc.view(nSamples,nComponents,nrows,ncols)
+        #            nrows = int(nrows/stride[Direction.VERTICAL])
+        #            ncols = int(ncols/stride[Direction.HORIZONTAL])     
+        #            iLevel += 1             
+        #        else:
+        #            y.insert(0,ydc)
+        #   return tuple(y)
     
+    """
     @property
     def T(self):
         from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
@@ -156,10 +158,9 @@ class LsunAnalysis2dNetwork(nn.Module):
 
         # Create synthesizer as the adjoint of SELF
         synthesizer = LsunSynthesis2dNetwork(
-            number_of_channels=self.number_of_channels,
-            decimation_factor=self.decimation_factor,
-            polyphase_order=self.polyphase_order,
-            number_of_vanishing_moments=self.number_of_vanishing_moments,
+            stride=self.stride,
+            overlapping_factor=self.overlapping_factor,
+            no_dc_leakage=self.no_dc_leakage,
             number_of_levels=self.number_of_levels            
         )
 
@@ -185,3 +186,4 @@ class LsunAnalysis2dNetwork(nn.Module):
 
         # Return adjoint
         return synthesizer.to(angs.device)
+    """
