@@ -237,6 +237,7 @@ def permuteIdctCoefs(x,block_size):
     value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
     value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
     return value
+
 def block_butterfly(X,nchs):
     ps = nchs[0]
     Xs = X[:,:,:,:ps]
