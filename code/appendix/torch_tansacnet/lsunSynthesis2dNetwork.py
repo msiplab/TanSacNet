@@ -56,7 +56,7 @@ class LsunSynthesis2dNetwork(nn.Module):
             '%f : The number of levels must be integer.'\
             % number_of_levels)   
         if number_of_levels < 0:
-            raise InvalidNumberOfLevels(
+           raise InvalidNumberOfLevels(
             '%d : The number of levels must be greater than or equal to 0.'\
             % number_of_levels)
         self.number_of_levels = number_of_levels

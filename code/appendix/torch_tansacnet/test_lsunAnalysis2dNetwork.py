@@ -8,7 +8,8 @@ import torch_dct as dct
 
 import math
 from lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
-from lsunUtility import Direction, permuteDctCoefs, permuteIdctCoefs
+from lsunUtility import Direction 
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
@@ -95,7 +96,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs(Y)
+        A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamplex x nRows x nCols x nChs
         ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.))        
@@ -125,97 +126,73 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
 
-    """
-    @parameterized.expand(
-        list(itertools.product(nchs,stride))
-    )
-    def testNumberOfChannelsException(self,
-        nchs,stride):
-        ps,pa = nchs
-        with self.assertRaises(InvalidNumberOfChannels):
-            LsunAnalysis2dNetwork(
-                number_of_channels = [ps,ps+1],
-                decimation_factor = stride
-            )
-
-        with self.assertRaises(InvalidNumberOfChannels):
-            LsunAnalysis2dNetwork(
-                number_of_channels = [pa+1,pa],
-                decimation_factor = stride
-            )
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord))
-    )
-    def testNumberOfPolyPhaseOrderException(self,
-        nchs,stride,ppord):
-        with self.assertRaises(InvalidPolyPhaseOrder):
+        list(itertools.product(stride,ovlpfactor))
+        )
+    def testOverlappingFactorException(self,
+        stride,ovlpfactor):
+        with self.assertRaises(InvalidOverlappingFactor):
             LsunAnalysis2dNetwork(
-                polyphase_order = [ ppord[0]+1, ppord[1] ],
-                number_of_channels = nchs,
-                decimation_factor = stride
+                overlapping_factor = [ ovlpfactor[Direction.VERTICAL]+1, ovlpfactor[Direction.HORIZONTAL] ],
+                stride = stride
             )
 
-        with self.assertRaises(InvalidPolyPhaseOrder):
+        with self.assertRaises(InvalidOverlappingFactor):
             LsunAnalysis2dNetwork(
-                polyphase_order = [ ppord[0], ppord[1]+1 ],
-                number_of_channels = nchs,
-                decimation_factor = stride
+                overlapping_factor = [ ovlpfactor[Direction.VERTICAL], ovlpfactor[Direction.HORIZONTAL]+1 ],
+                stride = stride
             )
 
-        with self.assertRaises(InvalidPolyPhaseOrder):
+        with self.assertRaises(InvalidOverlappingFactor):
             LsunAnalysis2dNetwork(
-                polyphase_order = [ ppord[0]+1, ppord[1]+1 ],
-                number_of_channels = nchs,
-                decimation_factor = stride
+                overlapping_factor = [ ovlpfactor[Direction.VERTICAL]+1, ovlpfactor[Direction.HORIZONTAL]+1 ],
+                stride = stride
             )
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord))
+        list(itertools.product(stride,ovlpfactor))
     )
     def testNumberOfVanishingMomentsException(self,
-        nchs,stride,ppord):
-        nVm = -1
-        with self.assertRaises(InvalidNumberOfVanishingMoments):
+        stride,ovlpfactor):
+        no_dc_leakage = 0
+        with self.assertRaises(InvalidNoDcLeakage):
             LsunAnalysis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
-                number_of_vanishing_moments = nVm
+                stride = stride,
+                overlapping_factor = ovlpfactor,
+                no_dc_leakage = no_dc_leakage
             )
 
-        nVm = 2
-        with self.assertRaises(InvalidNumberOfVanishingMoments):
+        no_dc_leakage = 1
+        with self.assertRaises(InvalidNoDcLeakage):
             LsunAnalysis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
-                number_of_vanishing_moments = nVm
+                stride = stride,
+                overlapping_factor = ovlpfactor,
+                no_dc_leakage = no_dc_leakage
             )
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord))
+        list(itertools.product(stride,ovlpfactor))
     )
     def testNumberOfLevelsException(self,
-        nchs,stride,ppord):
+        stride,ovlpfactor):
         nlevels = -1
         with self.assertRaises(InvalidNumberOfLevels):
             LsunAnalysis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
+                stride = stride,
+                overlapping_factor = ovlpfactor,
                 number_of_levels = nlevels
             )
 
         nlevels = 0.5
         with self.assertRaises(InvalidNumberOfLevels):
             LsunAnalysis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
+                stride = stride,
+                overlapping_factor = ovlpfactor,
                 number_of_levels = nlevels
             )
 
+"""
 
     @parameterized.expand(
         list(itertools.product(nchs,stride,height,width,datatype))
@@ -252,7 +229,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
+        A = permuteDctCoefs__(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -318,7 +295,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
+        A = permuteDctCoefs__(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -403,7 +380,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
+        A = permuteDctCoefs__(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -477,7 +454,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
+        A = permuteDctCoefs__(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -553,7 +530,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
+        A = permuteDctCoefs__(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -650,7 +627,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
+        A = permuteDctCoefs__(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -818,7 +795,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             iLevel = iStage+1
             Y = dct_2d(X_.view(arrayshape))
             # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-            A = permuteDctCoefs_(Y)
+            A = permuteDctCoefs__(Y)
             V = A.view(nSamples,nrows,ncols,nDecs)
             # nSamples x nRows x nCols x nChs
             ps, pa = nchs
@@ -967,6 +944,13 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         for iCh in range(len(Z)):
             self.assertTrue(Z[iCh].requires_grad)
 """
+
+def permuteDctCoefs_(x):
+    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
+    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
+    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
+    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
+    return torch.cat((cee,coo,coe,ceo),dim=-1)
 
 if __name__ == '__main__':
     unittest.main()

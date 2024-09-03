@@ -8,7 +8,8 @@ import torch_dct as dct
 
 import math
 from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
-from lsunUtility import Direction, permuteDctCoefs, permuteIdctCoefs
+from lsunUtility import Direction
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
@@ -104,7 +105,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         else:
             Zsa = W0T @ Ys
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = dct.idct_2d(A,norm='ortho')
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -124,97 +125,74 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
         self.assertFalse(actualZ.requires_grad)
 
-"""
-    
-    @parameterized.expand(  
-        list(itertools.product(nchs,stride))
-    )
-    def testNumberOfChannelsException(self,
-        nchs,stride):
-        ps,pa = nchs
-        with self.assertRaises(InvalidNumberOfChannels):
-            LsunSynthesis2dNetwork(
-                number_of_channels = [ps,ps+1],
-                decimation_factor = stride
-            )
-
-        with self.assertRaises(InvalidNumberOfChannels):
-            LsunSynthesis2dNetwork(
-                number_of_channels = [pa+1,pa],
-                decimation_factor = stride
-            )
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord))
-    )
-    def testNumberOfPolyPhaseOrderException(self,
-        nchs,stride,ppord):
-        with self.assertRaises(InvalidPolyPhaseOrder):
+        list(itertools.product(stride,ovlpfactor))
+        )
+    def testOverlappingFactorException(self,
+        stride,ovlpfactor):
+        with self.assertRaises(InvalidOverlappingFactor):
             LsunSynthesis2dNetwork(
-                polyphase_order = [ ppord[0]+1, ppord[1] ],
-                number_of_channels = nchs,
-                decimation_factor = stride
+                overlapping_factor = [ ovlpfactor[Direction.VERTICAL]+1, ovlpfactor[Direction.HORIZONTAL] ],
+                stride = stride
             )
 
-        with self.assertRaises(InvalidPolyPhaseOrder):
+        with self.assertRaises(InvalidOverlappingFactor):
             LsunSynthesis2dNetwork(
-                polyphase_order = [ ppord[0], ppord[1]+1 ],
-                number_of_channels = nchs,
-                decimation_factor = stride
+                overlapping_factor = [ ovlpfactor[Direction.VERTICAL], ovlpfactor[Direction.HORIZONTAL]+1 ],
+                stride = stride
             )
 
-        with self.assertRaises(InvalidPolyPhaseOrder):
+        with self.assertRaises(InvalidOverlappingFactor):
             LsunSynthesis2dNetwork(
-                polyphase_order = [ ppord[0]+1, ppord[1]+1 ],
-                number_of_channels = nchs,
-                decimation_factor = stride
-            )   
+                overlapping_factor = [ ovlpfactor[Direction.VERTICAL]+1, ovlpfactor[Direction.HORIZONTAL]+1 ],
+                stride = stride
+            )
+
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord))
+        list(itertools.product(stride,ovlpfactor))
     )
     def testNumberOfVanishingMomentsException(self,
-        nchs,stride,ppord):
-        nVm = -1
-        with self.assertRaises(InvalidNumberOfVanishingMoments):
+        stride,ovlpfactor):
+        no_dc_leakage = 0
+        with self.assertRaises(InvalidNoDcLeakage):
             LsunSynthesis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
-                number_of_vanishing_moments = nVm
+                stride = stride,
+                overlapping_factor = ovlpfactor,
+                no_dc_leakage = no_dc_leakage
             )
 
-        nVm = 2
-        with self.assertRaises(InvalidNumberOfVanishingMoments):
+        no_dc_leakage = 1
+        with self.assertRaises(InvalidNoDcLeakage):
             LsunSynthesis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
-                number_of_vanishing_moments = nVm
+                stride = stride,
+                overlapping_factor = ovlpfactor,
+                no_dc_leakage = no_dc_leakage
             )
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord))
+        list(itertools.product(stride,ovlpfactor))
     )
     def testNumberOfLevelsException(self,
-        nchs,stride,ppord):
+        stride,ovlpfactor):
         nlevels = -1
         with self.assertRaises(InvalidNumberOfLevels):
             LsunSynthesis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
+                stride = stride,
+                overlapping_factor = ovlpfactor,
                 number_of_levels = nlevels
             )
 
         nlevels = 0.5
         with self.assertRaises(InvalidNumberOfLevels):
             LsunSynthesis2dNetwork(
-                number_of_channels = nchs,
-                decimation_factor = stride,
-                polyphase_order = ppord,
+                stride = stride,
+                overlapping_factor = ovlpfactor,
                 number_of_levels = nlevels
             )
+
+"""
 
     @parameterized.expand(
         list(itertools.product(nchs,stride,height,width,datatype))
@@ -260,7 +238,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
+        A = permuteIdctCoefs__(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -343,7 +321,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
+        A = permuteIdctCoefs__(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -412,7 +390,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
+        A = permuteIdctCoefs__(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -481,7 +459,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
+        A = permuteIdctCoefs__(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -565,7 +543,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
+        A = permuteIdctCoefs__(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -659,7 +637,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
+        A = permuteIdctCoefs__(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -835,7 +813,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                     ( W0T[:ms,:] @ Ys, 
                       U0T[:ma,:] @ Ya ),dim=0)
             V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-            A = permuteIdctCoefs_(V,stride)
+            A = permuteIdctCoefs__(V,stride)
             Y = idct_2d(A)
             # Update
             nrows *= stride[Direction.VERTICAL]
@@ -938,6 +916,29 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(Z.requires_grad)
 
 """
+
+def permuteIdctCoefs_(x,block_size):
+    coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size)) 
+    decY_ = block_size[Direction.VERTICAL]
+    decX_ = block_size[Direction.HORIZONTAL]
+    chDecY = int(math.ceil(decY_/2.)) #.astype(int)
+    chDecX = int(math.ceil(decX_/2.)) #.astype(int)
+    fhDecY = int(math.floor(decY_/2.)) #.astype(int)
+    fhDecX = int(math.floor(decX_/2.)) #.astype(int)
+    nQDecsee = chDecY*chDecX
+    nQDecsoo = fhDecY*fhDecX
+    nQDecsoe = fhDecY*chDecX
+    cee = coefs[:,:nQDecsee]
+    coo = coefs[:,nQDecsee:nQDecsee+nQDecsoo]
+    coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
+    ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
+    nBlocks = coefs.size(0)
+    value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype,device=x.device)
+    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
+    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
+    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
+    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
+    return value
 
 if __name__ == '__main__':
     unittest.main()
