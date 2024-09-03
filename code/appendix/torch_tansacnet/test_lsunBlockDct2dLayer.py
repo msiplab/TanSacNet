@@ -8,7 +8,7 @@ import scipy.fftpack as fftpack
 
 import math
 from lsunBlockDct2dLayer import LsunBlockDct2dLayer
-from lsunUtility import Direction, permuteDctCoefs, permuteIdctCoefs
+from lsunUtility import Direction
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
 datatype = [ torch.float32, torch.float64 ]
@@ -101,7 +101,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs(Y)
+        A = permuteDctCoefs_(Y)
         expctdZ = A.view(nSamples,nrows,ncols,ndecs)
 
         # Instantiation of target class
@@ -155,7 +155,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs(Y)
+        A = permuteDctCoefs_(Y)
         expctdZ = A.view(nSamples,nrows,ncols,ndecs)
 
         # Instantiation of target class
@@ -209,7 +209,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs(Y)
+        A = permuteDctCoefs_(Y)
         Z = A.view(nSamples,nComponents,nrows,ncols,ndecs)
         expctdZr = Z[:,0,:,:,:]
         expctdZg = Z[:,1,:,:,:]
@@ -274,7 +274,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs(Y)
+        A = permuteDctCoefs_(Y)
         Z = A.view(nSamples,nComponents,nrows,ncols,ndecs)
         expctdZr = Z[:,0,:,:,:]
         expctdZg = Z[:,1,:,:,:]
@@ -334,7 +334,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         dLdZ = dLdZ.to(device)
 
         # Expected values
-        A = permuteIdctCoefs(dLdZ,stride)
+        A = permuteIdctCoefs_(dLdZ,stride)
         #Y = dct.idct_2d(A,norm='ortho')
         Y = torch.tensor(fftpack.idct(fftpack.idct(A.detach().numpy(),axis=1,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
@@ -393,9 +393,9 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         dLdZb = dLdZb.to(device)
     
         # Expected values
-        Ar = permuteIdctCoefs(dLdZr,stride)
-        Ag = permuteIdctCoefs(dLdZg,stride)        
-        Ab = permuteIdctCoefs(dLdZb,stride)                
+        Ar = permuteIdctCoefs_(dLdZr,stride)
+        Ag = permuteIdctCoefs_(dLdZg,stride)        
+        Ab = permuteIdctCoefs_(dLdZb,stride)                
         #Yr = dct.idct_2d(Ar,norm='ortho')
         Yr = torch.tensor(fftpack.idct(fftpack.idct(Ar.detach().numpy(),axis=1,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),dtype=datatype)
         Yr = Yr.to(device)
@@ -431,6 +431,36 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertTrue(Zr.requires_grad)
         self.assertTrue(Zg.requires_grad)
         self.assertTrue(Zb.requires_grad)
+
+def permuteDctCoefs_(x):
+    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
+    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
+    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
+    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
+    return torch.cat((cee,coo,coe,ceo),dim=-1)
+
+def permuteIdctCoefs_(x,block_size):
+    coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size))
+    decY_ = block_size[Direction.VERTICAL]
+    decX_ = block_size[Direction.HORIZONTAL]
+    chDecY = int(math.ceil(decY_/2.))
+    chDecX = int(math.ceil(decX_/2.))
+    fhDecY = int(math.floor(decY_/2.))
+    fhDecX = int(math.floor(decX_/2.))
+    nQDecsee = chDecY*chDecX
+    nQDecsoo = fhDecY*fhDecX
+    nQDecsoe = fhDecY*chDecX
+    cee = coefs[:,:nQDecsee]
+    coo = coefs[:,nQDecsee:nQDecsee+nQDecsoo]
+    coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
+    ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
+    nBlocks = coefs.size(0)
+    value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype)
+    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
+    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
+    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
+    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
+    return value
 
 if __name__ == '__main__':
     unittest.main()
@@ -509,7 +539,7 @@ if __name__ == '__main__':
                     stride,@(x) dct2(x.data));
                 % Rearrange the DCT Coefs.
                 A = blockproc(Y,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 expctdZ(:,:,:,iSample) = ...
                     ...permute(reshape(A,ndecs,nrows,ncols),[2 3 1]);
                     reshape(A,ndecs,nrows,ncols);
@@ -556,7 +586,7 @@ if __name__ == '__main__':
                     stride,@(x) dct2(x.data));
                 % Rearrange the DCT Coefs.
                 A = blockproc(Y,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 expctdZ(:,:,:,iSample) = ...
                     ...permute(reshape(A,ndecs,nrows,ncols),[2 3 1]);
                     reshape(A,ndecs,nrows,ncols);
@@ -611,11 +641,11 @@ if __name__ == '__main__':
                     stride,@(x) dct2(x.data));
                 % Rearrange the DCT Coefs.
                 Ar = blockproc(Yr,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 Ag = blockproc(Yg,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 Ab = blockproc(Yb,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 expctdZr(:,:,:,iSample) = ...
                     ...permute(reshape(Ar,ndecs,nrows,ncols),[2 3 1]);
                     reshape(Ar,ndecs,nrows,ncols);
@@ -682,11 +712,11 @@ if __name__ == '__main__':
                     stride,@(x) dct2(x.data));
                 % Rearrange the DCT Coefs.
                 Ar = blockproc(Yr,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 Ag = blockproc(Yg,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 Ab = blockproc(Yb,...
-                    stride,@testCase.permuteDctCoefs);
+                    stride,@testCase.permuteDctCoefs_);
                 expctdZr(:,:,:,iSample) = ...
                     ...permute(reshape(Ar,ndecs,nrows,ncols),[2 3 1]);
                     reshape(Ar,ndecs,nrows,ncols);
@@ -745,7 +775,7 @@ if __name__ == '__main__':
                 %    nDecs*nrows,ncols);
                 A = reshape(dLdZ(:,:,:,iSample),nDecs*nrows,ncols);                
                 Y = blockproc(A,[nDecs 1],...
-                    @(x) testCase.permuteIdctCoefs(x.data,stride));
+                    @(x) testCase.permuteIdctCoefs_(x.data,stride));
                 expctddLdX(:,:,nComponents,iSample) = ...
                     blockproc(Y,...
                     stride,...
@@ -801,11 +831,11 @@ if __name__ == '__main__':
                 Ag = reshape(dLdZg(:,:,:,iSample),nDecs*nrows,ncols);
                 Ab = reshape(dLdZb(:,:,:,iSample),nDecs*nrows,ncols);                
                 Yr = blockproc(Ar,[nDecs 1],...
-                    @(x) testCase.permuteIdctCoefs(x.data,stride));
+                    @(x) testCase.permuteIdctCoefs_(x.data,stride));
                 Yg = blockproc(Ag,[nDecs 1],...
-                    @(x) testCase.permuteIdctCoefs(x.data,stride));
+                    @(x) testCase.permuteIdctCoefs_(x.data,stride));
                 Yb = blockproc(Ab,[nDecs 1],...
-                    @(x) testCase.permuteIdctCoefs(x.data,stride));
+                    @(x) testCase.permuteIdctCoefs_(x.data,stride));
                 expctddLdX(:,:,1,iSample) = ...
                     blockproc(Yr,...
                     stride,...
@@ -841,7 +871,7 @@ if __name__ == '__main__':
     
     methods (Static, Access = private)
         
-        function value = permuteDctCoefs(x)
+        function value = permuteDctCoefs_(x)
             coefs = x.data;
             cee = coefs(1:2:end,1:2:end);
             coo = coefs(2:2:end,2:2:end);
@@ -849,7 +879,7 @@ if __name__ == '__main__':
             ceo = coefs(1:2:end,2:2:end);
             value = [ cee(:) ; coo(:) ; coe(:) ; ceo(:) ];
         end
-        function value = permuteIdctCoefs(x,blockSize)
+        function value = permuteIdctCoefs_(x,blockSize)
             import tansacnet.utility.Direction
             coefs = x;
             decY_ = blockSize(Direction.VERTICAL);
