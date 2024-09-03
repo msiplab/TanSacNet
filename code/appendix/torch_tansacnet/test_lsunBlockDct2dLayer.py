@@ -14,7 +14,7 @@ stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
 datatype = [ torch.float32, torch.float64 ]
 height = [ 8, 16, 32 ]
 width = [ 8, 16, 32 ]
-isdevicetest = True
+usegpu = [ True, False ] # isdevicetest = True
 
 class LsunBlockDct2dLayerTestCase(unittest.TestCase):
     """
@@ -66,15 +66,23 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualDescription,expctdDescription)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testPredictGrayScale(self,
-            stride, height, width, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+            stride, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")      
+            device = torch.device("cpu")         
+        rtol,atol = 1e-3,1e-6
+        #if isdevicetest:
+        #   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        #else:
+        #    device = torch.device("cpu")      
 
         # Parameters
         nSamples = 8
@@ -112,15 +120,23 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertFalse(actualZ.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testForwardGrayScale(self,
-        stride, height, width, datatype):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        stride, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")               
+            device = torch.device("cpu")         
+        rtol,atol=1e-3,1e-6
+        #if isdevicetest:
+        #    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        #else:
+        #    device = torch.device("cpu")               
             
         # Parameters
         nSamples = 8
@@ -157,15 +173,23 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertTrue(actualZ.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testPredictRgbColor(self,
-        stride, height, width, datatype):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        stride, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")    
+            device = torch.device("cpu")         
+        rtol,atol=1e-3,1e-6
+        #if isdevicetest:
+        #    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        #else:
+        #    device = torch.device("cpu")    
 
         # Parameters
         nSamples = 8
@@ -214,15 +238,23 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertFalse(actualZb.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testForwardRgbColor(self,
-        stride, height, width, datatype):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        stride, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")      
+            device = torch.device("cpu")         
+        rtol,atol=1e-3,1e-6
+        #if isdevicetest:
+        #    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        #else:
+        #    device = torch.device("cpu")      
 
         # Parameters
         nSamples = 8
@@ -270,15 +302,23 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertTrue(actualZb.requires_grad)    
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testBackwardGrayScale(self,
-        stride, height, width, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        stride, height, width, datatype,usergpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")               
+            device = torch.device("cpu")         
+        rtol,atol = 1e-3,1e-6
+        #if isdevicetest:
+        #    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        #else:
+        #    device = torch.device("cpu")               
 
         # Parameters
         nSamples = 8
@@ -317,15 +357,23 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertTrue(Z.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testBackwardRgbColor(self,
-        stride, height, width, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        stride, height, width, datatype,usergpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")              
+            device = torch.device("cpu") 
+        rtol,atol = 1e-3,1e-6
+        #if isdevicetest:
+        #    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        #else:
+        #    device = torch.device("cpu")              
 
         # Parameters
         nSamples = 8
