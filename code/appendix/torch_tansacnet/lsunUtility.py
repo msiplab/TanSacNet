@@ -207,3 +207,56 @@ class OrthonormalMatrixGenerationSystem:
             self.nextangle += 1
 
         return matrix
+
+def permuteDctCoefs(x):
+    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
+    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
+    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
+    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
+    return torch.cat((cee,coo,coe,ceo),dim=-1)
+
+def permuteIdctCoefs(x,block_size):
+    coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size)) 
+    decY_ = block_size[Direction.VERTICAL]
+    decX_ = block_size[Direction.HORIZONTAL]
+    chDecY = int(math.ceil(decY_/2.)) #.astype(int)
+    chDecX = int(math.ceil(decX_/2.)) #.astype(int)
+    fhDecY = int(math.floor(decY_/2.)) #.astype(int)
+    fhDecX = int(math.floor(decX_/2.)) #.astype(int)
+    nQDecsee = chDecY*chDecX
+    nQDecsoo = fhDecY*fhDecX
+    nQDecsoe = fhDecY*chDecX
+    cee = coefs[:,:nQDecsee]
+    coo = coefs[:,nQDecsee:nQDecsee+nQDecsoo]
+    coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
+    ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
+    nBlocks = coefs.size(0)
+    value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype)
+    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
+    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
+    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
+    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
+    return value
+def block_butterfly(X,nchs):
+    ps = nchs[0]
+    Xs = X[:,:,:,:ps]
+    Xa = X[:,:,:,ps:]
+    return torch.cat((Xs+Xa,Xs-Xa),dim=-1)
+
+def block_shift(X,nchs,target,shift):
+    ps = nchs[0]
+    if target == 0: # Difference channel
+        X[:,:,:,ps:] = torch.roll(X[:,:,:,ps:],shifts=tuple(shift),dims=(0,1,2,3))
+    else: # Sum channel
+        X[:,:,:,:ps] = torch.roll(X[:,:,:,:ps],shifts=tuple(shift),dims=(0,1,2,3))
+    return X
+
+def intermediate_rotation(X,nchs,R):
+    Y = X.clone()
+    ps,pa = nchs
+    nSamples = X.size(0)
+    nrows = X.size(1)
+    ncols = X.size(2)
+    Za = R @ X[:,:,:,ps:].view(-1,pa).T 
+    Y[:,:,:,ps:] = Za.T.view(nSamples,nrows,ncols,pa)
+    return Y
