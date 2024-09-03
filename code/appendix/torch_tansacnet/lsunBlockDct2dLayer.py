@@ -12,7 +12,7 @@ class LsunBlockDct2dLayer(nn.Module):
           nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols) 
     
        コンポーネント別に出力(nComponents):
-          nSamples x nDecs x nRows x nCols 
+          nSamples x nRows x nCols x nDecs
         
     Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
