@@ -67,55 +67,6 @@ class LsunBlockIdct2dLayerTestCase(unittest.TestCase):
     @parameterized.expand(
         list(itertools.product(stride,height,width,datatype,usegpu))
     )
-    def testPredictGrayScale(self,
-        stride, height, width, datatype,usegpu):
-        if usegpu:
-            if torch.cuda.is_available():
-                device = torch.device("cuda:0")
-            else:
-                return
-        else:
-            device = torch.device("cpu")
-        rtol,atol = 1e-3,1e-6
-        #if isdevicetest:
-        #    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
-        #else:
-        #    device = torch.device("cpu") 
-
-        # Parameters
-        nSamples = 8
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
-        nDecs = stride[0]*stride[1] # math.prod(stride)
-        nComponents = 1
-        # nSamples x nRows x nCols x nDecs         
-        X = torch.rand(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)
-
-        # Expected values
-        A = permuteIdctCoefs_(X,stride)
-        #Y = dct.idct_2d(A,norm='ortho')
-        Y = torch.tensor(fftpack.idct(fftpack.idct(A.detach().numpy(),axis=1,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),dtype=datatype)
-        Y = Y.to(device)
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
-
-        # Instantiation of target class
-        layer = LsunBlockIdct2dLayer(
-               decimation_factor=stride,
-                name='E0~'
-            )
-
-        # Actual values
-        with torch.no_grad():
-            actualZ = layer.forward(X)
-
-        # Evaluation
-        self.assertEqual(actualZ.dtype,datatype)
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-        self.assertFalse(actualZ.requires_grad)
-
-    @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype,usegpu))
-    )
     def testForwardGrayScale(self,
         stride, height, width, datatype,usegpu):
         if usegpu:

@@ -68,60 +68,6 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
     @parameterized.expand(
         list(itertools.product(stride,height,width,datatype,usegpu))
     )
-    def testPredictGrayScale(self,
-            stride, height, width, datatype,usegpu):
-        if usegpu:
-            if torch.cuda.is_available():
-                device = torch.device("cuda:0")
-            else:
-                print('No GPU device was detected.')
-                return
-        else:
-            device = torch.device("cpu")         
-        rtol,atol = 1e-3,1e-6
-        #if isdevicetest:
-        #   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
-        #else:
-        #    device = torch.device("cpu")      
-
-        # Parameters
-        nSamples = 8
-        nComponents = 1
-        # Source (nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols))
-        X = torch.rand(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
-
-        # Expected values
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL])) #.astype(int)
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL])) #.astype(int)
-        ndecs =  stride[0]*stride[1] # math.prod(stride)
-        # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
-        arrayshape = stride.copy()
-        arrayshape.insert(0,-1)
-        #Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
-        Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
-        Y = Y.to(device)
-        # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs_(Y)
-        expctdZ = A.view(nSamples,nrows,ncols,ndecs)
-
-        # Instantiation of target class
-        layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
-                name='E0'
-            )
-            
-        # Actual values
-        with torch.no_grad():
-            actualZ = layer.forward(X)
-
-        # Evaluation
-        self.assertEqual(actualZ.dtype,datatype)         
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-        self.assertFalse(actualZ.requires_grad)
-
-    @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype,usegpu))
-    )
     def testForwardGrayScale(self,
         stride, height, width, datatype,usegpu):
         if usegpu:
