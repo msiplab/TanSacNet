@@ -34,6 +34,7 @@ class LsunIntermediateRotation2dLayer(nn.Module):
                  device=torch.get_default_device(),
                  mode='Synthesis',
                  stride=None,
+                 mus=None,
                  number_of_blocks=[1,1],
                  no_dc_leakage=False,
                  name=''):
@@ -44,7 +45,6 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         self.stride = stride
         self.number_of_blocks = number_of_blocks
         self.name = name
-        self.mus = None
         self.angles = None
         self.no_dc_leakage = no_dc_leakage
         ps = math.ceil(math.prod(self.stride)/2.0)
@@ -64,6 +64,7 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
 
         # Update parameters
+        self.mus = mus
         self.update_parameters()
 
     def forward(self, X):

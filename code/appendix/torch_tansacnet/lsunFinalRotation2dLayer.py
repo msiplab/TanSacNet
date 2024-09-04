@@ -32,6 +32,7 @@ class LsunFinalRotation2dLayer(nn.Module):
                  dtype=torch.get_default_dtype(),
                  device=torch.get_default_device(),
                  stride=None, 
+                 mus=None,
                  number_of_blocks=[1,1], 
                  no_dc_leakage=False, 
                  name=''):
@@ -41,7 +42,6 @@ class LsunFinalRotation2dLayer(nn.Module):
         self.stride = stride
         self.number_of_blocks = number_of_blocks
         self.name = name        
-        self.mus = None
         self.angles = None
         self.no_dc_leakage = no_dc_leakage
         ps = math.ceil(math.prod(self.stride)/2)
@@ -62,6 +62,7 @@ class LsunFinalRotation2dLayer(nn.Module):
         self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
 
         # Update parameters
+        self.mus = mus
         self.update_parameters()
 
     def forward(self,X):

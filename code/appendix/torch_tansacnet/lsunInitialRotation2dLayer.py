@@ -32,6 +32,7 @@ class LsunInitialRotation2dLayer(nn.Module):
                  dtype=torch.get_default_dtype(),
                  device=torch.get_default_device(),
                  stride=None,
+                 mus=None,
                  number_of_blocks=[1,1],
                  no_dc_leakage=False,
                  name=''):
@@ -41,7 +42,6 @@ class LsunInitialRotation2dLayer(nn.Module):
         self.stride = stride
         self.number_of_blocks = number_of_blocks
         self.name = name
-        self.mus = None
         self.angles = None
         self.no_dc_leakage = no_dc_leakage        
         ps = math.ceil(math.prod(self.stride)/2.0)
@@ -53,7 +53,7 @@ class LsunInitialRotation2dLayer(nn.Module):
                 + "(mv,mh) = (" \
                 + str(self.stride[Direction.VERTICAL]) + "," \
                 + str(self.stride[Direction.HORIZONTAL]) + ")"
-        
+
         # Orthonormal matrix generation systems 
         nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
         self.orthTransW0 = SetOfOrthonormalTransforms(name=self.name+"_W0",nblks=nblks,n=ps,mode='Analysis',device=self.device,dtype=self.dtype)
@@ -62,6 +62,7 @@ class LsunInitialRotation2dLayer(nn.Module):
         self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles).to(self.device)
 
         # Update parameters
+        self.mus = mus
         self.update_parameters()
 
     def forward(self,X):

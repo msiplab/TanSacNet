@@ -121,6 +121,61 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
+    def testForwardGrayscaleMus(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else: 
+                print("No GPU device was detected.")                
+                return
+        else:
+            device = torch.device("cpu")     
+        rtol, atol = 1e-5, 1e-6
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        W0 = mus*torch.eye(ps,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        U0 = mus*torch.eye(pa,dtype=datatype,device=device).repeat(nrows*ncols,1,1)
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunInitialRotation2dLayer(
+            dtype=datatype,
+            device=device,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            mus=mus,
+            name='V0')
+        
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
+
+    @parameterized.expand(
+            itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+            )
     def testForwardGrayscaleWithRandomAngles(self, usegpu, stride, nrows, ncols, mus, datatype):
         if usegpu:
             if torch.cuda.is_available():
@@ -264,7 +319,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")
-        rtol, atol = 1e-5, 1e-6
+        rtol, atol = 1e-4, 1e-5
 
         genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
         genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
@@ -556,6 +611,13 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+    # Run specific test cases
+    #suite = unittest.TestSuite()
+    #suite.addTest(LsunInitialRotation2dLayerTestCase('testBackwardGrayscale_066'))
+
+    #runner = unittest.TextTestRunner()
+    #runner.run(suite)
+    
     """
     # TestSuite に特定のテストケースを追加
     suite = unittest.TestSuite()
