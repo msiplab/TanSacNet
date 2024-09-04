@@ -1,15 +1,15 @@
 import itertools
 import unittest
 from parameterized import parameterized
-#import random
 import torch
 import torch.nn as nn
 import torch_dct as dct
 
 import math
+import random
 from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
 from lsunUtility import Direction
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 
 stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
@@ -39,17 +39,19 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
     """
     
     @parameterized.expand(
-        list(itertools.product(stride,ovlpfactor,nodcleakage))
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage))
     )
-    def testConstructor(self, stride,ovlpfactor,nodcleakage):
+    def testConstructor(self, stride,ovlpfactor,height,width,nodcleakage):
 
         # Expcted values
         expctdStride = stride
         expctdOvlpFactor = ovlpfactor
+        expctdInputSize = [ height, width ]
         expctdNoDcLeakage = nodcleakage        
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
+            input_size = [ height, width ],
             stride = stride,
             overlapping_factor = ovlpfactor,
             no_dc_leakage = nodcleakage
@@ -58,12 +60,14 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Actual values
         actualStride = network.stride
         actualOvlpFactor = network.overlapping_factor
+        actualInputSize = network.input_size
         actualNoDcLeakage = network.no_dc_leakage 
 
         # Evaluation
         self.assertTrue(isinstance(network, nn.Module))
         self.assertEqual(actualStride,expctdStride)
         self.assertEqual(actualOvlpFactor,expctdOvlpFactor)
+        self.assertEqual(actualInputSize,expctdInputSize)
         self.assertEqual(actualNoDcLeakage,expctdNoDcLeakage)                
 
     @parameterized.expand(
@@ -111,7 +115,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
-            stride=stride
+                input_size = [ height, width ],
+                stride=stride
             )
         network = network.to(device)
 
@@ -121,10 +126,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertEqual(actualZ.dtype,datatype)
-        msg = ' '.join(['stride=',str(stride),', height=',str(height),', width=',str(width),', datatype=',str(datatype),', usegpu=',str(usegpu)])
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
-
 
     @parameterized.expand(
         list(itertools.product(stride,ovlpfactor))
@@ -224,6 +227,26 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 stride = stride,
                 overlapping_factor = ovlpfactor
             )
+
+
+    @parameterized.expand(
+        list(itertools.product(stride))
+    )
+    def testInputSize(self,stride):
+        input_size = [ 2*stride[Direction.VERTICAL]+1, 2*stride[Direction.HORIZONTAL]+1 ]
+        with self.assertRaises(InvalidInputSize):
+            LsunSynthesis2dNetwork(
+                input_size = input_size,
+                stride = stride
+            )
+    
+        input_size = [ -2*stride[Direction.VERTICAL], -2*stride[Direction.HORIZONTAL] ]
+        with self.assertRaises(InvalidInputSize):
+            LsunSynthesis2dNetwork(
+                input_size = input_size,
+                stride = stride
+            )
+
 
 """
 

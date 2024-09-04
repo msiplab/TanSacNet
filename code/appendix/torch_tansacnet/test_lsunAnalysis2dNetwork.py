@@ -10,7 +10,7 @@ import random
 from lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
 from lsunUtility import Direction, OrthonormalMatrixGenerationSystem
 from orthonormalTransform import OrthonormalTransform
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 
 stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
@@ -40,17 +40,19 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
     """
 
     @parameterized.expand(
-        list(itertools.product(stride,ovlpfactor,nodcleakage))
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage))
     )
-    def testConstructor(self, stride,ovlpfactor,nodcleakage):
+    def testConstructor(self, stride,ovlpfactor,height,width,nodcleakage):
 
         # Expcted values
         expctdStride = stride
         expctdOvlpFactor = ovlpfactor
+        expctdInputSize = [ height, width ]
         expctdNoDcLeakage = nodcleakage        
 
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
+            input_size = [ height, width ],
             stride = stride,
             overlapping_factor = ovlpfactor,
             no_dc_leakage = nodcleakage
@@ -59,12 +61,14 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Actual values
         actualStride = network.stride
         actualOvlpFactor = network.overlapping_factor
+        actualInputSize = network.input_size
         actualNoDcLeakage = network.no_dc_leakage 
 
         # Evaluation
         self.assertTrue(isinstance(network, nn.Module))
         self.assertEqual(actualStride,expctdStride)
         self.assertEqual(actualOvlpFactor,expctdOvlpFactor)
+        self.assertEqual(actualInputSize,expctdInputSize)
         self.assertEqual(actualNoDcLeakage,expctdNoDcLeakage)                
 
     @parameterized.expand(
@@ -114,6 +118,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
 
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
+                input_size=[height,width],
                 stride=stride
             )
         network = network.to(device)
@@ -126,7 +131,6 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         self.assertEqual(actualZ.dtype,datatype)         
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
-
 
     @parameterized.expand(
         list(itertools.product(stride,ovlpfactor))
@@ -225,12 +229,29 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 overlapping_factor = ovlpfactor
             )
 
+    @parameterized.expand(
+        list(itertools.product(stride))
+    )
+    def testInputSize(self,stride):
+        input_size = [ 2*stride[Direction.VERTICAL]+1, 2*stride[Direction.HORIZONTAL]+1 ]
+        with self.assertRaises(InvalidInputSize):
+            LsunAnalysis2dNetwork(
+                input_size = input_size,
+                stride = stride
+            )
+    
+        input_size = [ -2*stride[Direction.VERTICAL], -2*stride[Direction.HORIZONTAL] ]
+        with self.assertRaises(InvalidInputSize):
+            LsunAnalysis2dNetwork(
+                input_size = input_size,
+                stride = stride
+            )
 
     @parameterized.expand(
-        list(itertools.product(stride,ovlpfactor,height,width,datatype,usegpu))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testForwardGrayScaleWithInitilization(self,
-            stride, ovlpfactor, height, width, datatype,usegpu):
+            stride, height, width, datatype,usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -239,7 +260,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")
-        rtol,atol = 1e-3,1e-6
+        rtol,atol = 1e-4,1e-5
         
         genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
         genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
@@ -272,29 +293,30 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # nSamples x nRows x nCols x nDecs        
         V = A.view(nSamples,nrows,ncols,nDecs)
         nAngles = (nDecs-2)*nDecs//4
-        #angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
-        #ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.)) 
-        #nAnglesH = nAngles//2
-        #W0,U0 = genW(angles=angles[:,:nAnglesH]),genU(angles=angles[:,nAnglesH:])
+        angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
+        ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.)) 
+        nAnglesH = nAngles//2
+        W0,U0 = genW(angles=angles[:,:nAnglesH]),genU(angles=angles[:,nAnglesH:])
 
-"""
-        Zsa = torch.zeros(nChsTotal,nrows*ncols*nSamples,dtype=datatype) 
-        Zsa = Zsa.to(device)       
-        Ys = V[:,:,:,:ms].view(-1,ms).T
-        Zsa[:ps,:] = W0[:,:ms] @ Ys
-        if ma > 0:
-            Ya = V[:,:,:,ms:].view(-1,ma).T
-            Zsa[ps:,:] = U0[:,:ma] @ Ya
-        expctdZ = Zsa.T.view(nSamples,nrows,ncols,nChsTotal)
+        expctdZ = torch.zeros_like(V)
+        for iSample in range(nSamples):
+            Vi = V[iSample,:,:,:].clone()
+            Ys = Vi[:,:,:ps].view(-1,ps)
+            Ya = Vi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0[iblk,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0[iblk,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
 
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
-                number_of_channels=nchs,
-                decimation_factor=stride,
-                number_of_vanishing_moments=nVm
+                input_size=[height,width],
+                stride=stride,
+                no_dc_leakage=isNoDcLeakage
             )
         network = network.to(device)
-        
+
         # Initialization of angle parameters
         network.apply(init_angles)
 
@@ -303,9 +325,11 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             actualZ = network.forward(X)
 
         # Evaluation
-        self.assertEqual(actualZ.dtype,datatype)         
+        self.assertEqual(actualZ.dtype,datatype)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
+
+"""
 
     @parameterized.expand(
         list(itertools.product(nchs,stride,height,width,datatype))

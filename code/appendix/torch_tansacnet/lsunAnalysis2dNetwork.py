@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 from lsunBlockDct2dLayer import LsunBlockDct2dLayer 
-#from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
+from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
 #from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 #from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 #from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 from lsunUtility import Direction
 
 class LsunAnalysis2dNetwork(nn.Module):
@@ -26,6 +26,7 @@ class LsunAnalysis2dNetwork(nn.Module):
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
     def __init__(self,
+        input_size=[2, 2], 
         stride=[2, 2],
         overlapping_factor=[1,1],
         no_dc_leakage=True,
@@ -44,7 +45,7 @@ class LsunAnalysis2dNetwork(nn.Module):
         self.stride = stride
 
         # Overlapping factor
-        if any((torch.tensor(overlapping_factor)-1)%2):
+        if (overlapping_factor[Direction.VERTICAL]-1)%2 or (overlapping_factor[Direction.HORIZONTAL]-1)%2: 
              raise InvalidOverlappingFactor(
              '%d + %d : Currently, odd overlapping factors are only supported.'\
              % (overlapping_factor[Direction.VERTICAL], overlapping_factor[Direction.HORIZONTAL]))
@@ -66,6 +67,19 @@ class LsunAnalysis2dNetwork(nn.Module):
             % number_of_levels)
         self.number_of_levels = number_of_levels
 
+        # Number of blocks
+        if input_size[Direction.VERTICAL]%stride[Direction.VERTICAL] != 0 or input_size[Direction.HORIZONTAL]%stride[Direction.HORIZONTAL] != 0:
+            raise InvalidInputSize(
+            '%d x %d : Currently, multiples of strides is only supported.'\
+            % (input_size[Direction.VERTICAL], input_size[Direction.HORIZONTAL]))
+        if input_size[Direction.VERTICAL] < 1 or input_size[Direction.HORIZONTAL] < 1:
+            raise InvalidInputSize(
+            '%d x %d : Positive integers are only supported.'\
+            % (input_size[Direction.VERTICAL], input_size[Direction.HORIZONTAL]))
+        nrows = input_size[Direction.VERTICAL]//stride[Direction.VERTICAL]
+        ncols = input_size[Direction.HORIZONTAL]//stride[Direction.HORIZONTAL]
+        self.input_size = input_size
+
         # Instantiation of layers
         if self.number_of_levels == 0:
             nlevels = 1
@@ -78,13 +92,15 @@ class LsunAnalysis2dNetwork(nn.Module):
 
             # Initial blocks
             stages[iStage].add_module(strLv+'E0',LsunBlockDct2dLayer(
-                decimation_factor=stride
+                decimation_factor=self.stride
                 ))
-                
-        #    stages[iStage].add_module(strLv+'V0',LsunInitialRotation2dLayer(
-        #        number_of_channels=number_of_channels,
-        #        decimation_factor=decimation_factor,
-        #        no_dc_leakage=(self.number_of_vanishing_moments==1)))
+
+            stages[iStage].add_module(strLv+'V0',LsunInitialRotation2dLayer(
+                stride=self.stride,
+                number_of_blocks=[nrows,ncols], 
+                mus=1,               
+                no_dc_leakage=self.no_dc_leakage
+               ))
 
             # Horizontal extension
         #    for iOrderH in range(2,polyphase_order[Direction.HORIZONTAL]+1,2):
@@ -129,8 +145,12 @@ class LsunAnalysis2dNetwork(nn.Module):
 
         # Stack modules as a list
         self.layers = nn.ModuleList(stages)
+
+        # Set flag
+        self.hasSetup_ = True
         
     def forward(self,x):
+
         if self.number_of_levels == 0: # Flat structure
             for m in self.layers:
                 y = m.forward(x) 
