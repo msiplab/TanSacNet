@@ -5,7 +5,7 @@ from lsunBlockIdct2dLayer import LsunBlockIdct2dLayer
 #from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 #from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 #from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride
 from lsunUtility import Direction
 
 class LsunSynthesis2dNetwork(nn.Module):
@@ -36,6 +36,11 @@ class LsunSynthesis2dNetwork(nn.Module):
         # Check and set parameters
         
         # Stride
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        if nDecs%2!=0:
+            raise InvalidStride(
+            '%d x %d : Currently, even product of strides is only supported.'\
+            % (stride[Direction.VERTICAL], stride[Direction.HORIZONTAL]))        
         self.stride = stride
         
         # Overlapping factor

@@ -9,9 +9,9 @@ import torch_dct as dct
 import math
 from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
 from lsunUtility import Direction
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride
 
-stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
+stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
 datatype = [ torch.float, torch.double ]
 height = [ 8, 16, 32 ]
@@ -192,6 +192,39 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 number_of_levels = nlevels
             )
 
+
+    @parameterized.expand(
+        list(itertools.product(ovlpfactor))
+    )
+    def testStrideException(self,ovlpfactor):
+        stride = [ 1, 1 ]
+        with self.assertRaises(InvalidStride):
+            LsunSynthesis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
+        stride = [ 1, 3 ]
+        with self.assertRaises(InvalidStride):
+            LsunSynthesis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
+        stride = [ 3, 1 ]
+        with self.assertRaises(InvalidStride):
+            LsunSynthesis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
+        stride = [ 3, 3 ]
+        with self.assertRaises(InvalidStride):
+            LsunSynthesis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
 """
 
     @parameterized.expand(
@@ -238,7 +271,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs__(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -321,7 +354,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs__(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -390,7 +423,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs__(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -459,7 +492,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs__(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -543,7 +576,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs__(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -637,7 +670,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 ( W0T[:ms,:] @ Ys, 
                   U0T[:ma,:] @ Ya ),dim=0)
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs__(V,stride)
+        A = permuteIdctCoefs_(V,stride)
         Y = idct_2d(A)
         expctdZ = Y.reshape(nSamples,nComponents,height,width)
         
@@ -813,7 +846,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                     ( W0T[:ms,:] @ Ys, 
                       U0T[:ma,:] @ Ya ),dim=0)
             V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-            A = permuteIdctCoefs__(V,stride)
+            A = permuteIdctCoefs_(V,stride)
             Y = idct_2d(A)
             # Update
             nrows *= stride[Direction.VERTICAL]

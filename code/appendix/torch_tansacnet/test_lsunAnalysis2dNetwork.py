@@ -1,17 +1,18 @@
 import itertools
 import unittest
 from parameterized import parameterized
-#import random
 import torch
 import torch.nn as nn
 import torch_dct as dct
 
 import math
+import random
 from lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
-from lsunUtility import Direction 
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels
+from lsunUtility import Direction, OrthonormalMatrixGenerationSystem
+from orthonormalTransform import OrthonormalTransform
+from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride
 
-stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
+stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
 datatype = [ torch.float, torch.double ]
 height = [ 8, 16, 32 ]
@@ -192,19 +193,56 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 number_of_levels = nlevels
             )
 
-"""
+    @parameterized.expand(
+        list(itertools.product(ovlpfactor))
+    )
+    def testStrideException(self,ovlpfactor):
+        stride = [ 1, 1 ]
+        with self.assertRaises(InvalidStride):
+            LsunAnalysis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
+        stride = [ 1, 3 ]
+        with self.assertRaises(InvalidStride):
+            LsunAnalysis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
+        stride = [ 3, 1 ]
+        with self.assertRaises(InvalidStride):
+            LsunAnalysis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
+        stride = [ 3, 3 ]
+        with self.assertRaises(InvalidStride):
+            LsunAnalysis2dNetwork(
+                stride = stride,
+                overlapping_factor = ovlpfactor
+            )
+
 
     @parameterized.expand(
-        list(itertools.product(nchs,stride,height,width,datatype))
+        list(itertools.product(stride,ovlpfactor,height,width,datatype,usegpu))
     )
     def testForwardGrayScaleWithInitilization(self,
-            nchs,stride, height, width, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+            stride, ovlpfactor, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")              
-        gen = OrthonormalMatrixGenerationSystem(dtype=datatype)
+            device = torch.device("cpu")
+        rtol,atol = 1e-3,1e-6
+        
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -213,31 +251,33 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 torch.nn.init.constant_(m.angles,angle0)
 
         # Parameters
-        nVm = 0
+        isNoDcLeakage = False
         nSamples = 8
         nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+
         # Source (nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols))
         X = torch.rand(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
 
         # Expected values
         nrows = int(math.ceil(height/stride[Direction.VERTICAL])) #.astype(int)
         ncols = int(math.ceil(width/stride[Direction.HORIZONTAL])) #.astype(int)
-        # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
+        # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH)
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct_2d(X.view(arrayshape))
+        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs__(Y)
+        A = permuteDctCoefs_(Y)
+        # nSamples x nRows x nCols x nDecs        
         V = A.view(nSamples,nrows,ncols,nDecs)
-        # nSamples x nRows x nCols x nChs
-        ps, pa = nchs
-        angles = angle0*torch.ones(int((nChsTotal-2)*nChsTotal/4)).to(device) #,dtype=datatype)
-        nAngsW = int(len(angles)/2)
-        angsW,angsU = angles[:nAngsW],angles[nAngsW:]
-        W0,U0 = gen(angsW),gen(angsU)        
-        ms,ma = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.))        
+        nAngles = (nDecs-2)*nDecs//4
+        #angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
+        #ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.)) 
+        #nAnglesH = nAngles//2
+        #W0,U0 = genW(angles=angles[:,:nAnglesH]),genU(angles=angles[:,nAnglesH:])
+
+"""
         Zsa = torch.zeros(nChsTotal,nrows*ncols*nSamples,dtype=datatype) 
         Zsa = Zsa.to(device)       
         Ys = V[:,:,:,:ms].view(-1,ms).T
@@ -295,7 +335,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs__(Y)
+        A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -380,7 +420,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs__(Y)
+        A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -454,7 +494,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs__(Y)
+        A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -530,7 +570,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs__(Y)
+        A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -627,7 +667,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         arrayshape.insert(0,-1)
         Y = dct_2d(X.view(arrayshape))
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        A = permuteDctCoefs__(Y)
+        A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
         # nSamples x nRows x nCols x nChs
         ps, pa = nchs
@@ -795,7 +835,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             iLevel = iStage+1
             Y = dct_2d(X_.view(arrayshape))
             # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-            A = permuteDctCoefs__(Y)
+            A = permuteDctCoefs_(Y)
             V = A.view(nSamples,nrows,ncols,nDecs)
             # nSamples x nRows x nCols x nChs
             ps, pa = nchs
