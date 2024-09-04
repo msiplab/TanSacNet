@@ -37,3 +37,7 @@ class InvalidStride(Exception):
 class InvalidOverlappingFactor(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)        
+
+class InvalidInputSize(Exception):
+    def __init__(self,msg):
+        super().__init__(self,msg)        
