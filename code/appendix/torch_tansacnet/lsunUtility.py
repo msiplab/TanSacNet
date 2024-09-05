@@ -239,6 +239,7 @@ def permuteIdctCoefs(x,block_size):
     value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
     return value
 
+"""
 def block_butterfly(X,nchs):
     ps = nchs[0]
     Xs = X[:,:,:,:ps]
@@ -262,3 +263,4 @@ def intermediate_rotation(X,nchs,R):
     Za = R @ X[:,:,:,ps:].view(-1,pa).T 
     Y[:,:,:,ps:] = Za.T.view(nSamples,nrows,ncols,pa)
     return Y
+"""
