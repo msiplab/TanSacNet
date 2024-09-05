@@ -92,7 +92,7 @@ class LsunAnalysis2dNetwork(nn.Module):
 
             # Initial blocks
             stages[iStage].add_module(strLv+'E0',LsunBlockDct2dLayer(
-                decimation_factor=self.stride
+                stride=self.stride
                 ))
 
             stages[iStage].add_module(strLv+'V0',LsunInitialRotation2dLayer(
@@ -146,8 +146,6 @@ class LsunAnalysis2dNetwork(nn.Module):
         # Stack modules as a list
         self.layers = nn.ModuleList(stages)
 
-        # Set flag
-        self.hasSetup_ = True
         
     def forward(self,x):
 

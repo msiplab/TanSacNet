@@ -30,20 +30,20 @@ class LsunBlockIdct2dLayer(nn.Module):
    
    def __init__(self,
              name='',
-             decimation_factor=[],
+             stride=[],
              number_of_components=1
              ):
       super(LsunBlockIdct2dLayer, self).__init__()
-      self.decimation_factor = decimation_factor 
+      self.stride = stride 
       self.name = name 
       self.description = "Block IDCT of size " \
-         + str(self.decimation_factor[Direction.VERTICAL]) + "x" \
-         + str(self.decimation_factor[Direction.HORIZONTAL])
+         + str(self.stride[Direction.VERTICAL]) + "x" \
+         + str(self.stride[Direction.HORIZONTAL])
       #self.type = ''
       self.num_inputs = number_of_components
 
    def forward(self,*args):
-        block_size = self.decimation_factor
+        block_size = self.stride
         for iComponent in range(self.num_inputs):
             X = args[iComponent]
             nsamples = X.size(0)

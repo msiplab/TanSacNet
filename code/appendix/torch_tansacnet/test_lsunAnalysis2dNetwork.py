@@ -276,13 +276,19 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         nSamples = 8
         nComponents = 1
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        nrows = height//stride[Direction.VERTICAL]
+        ncols = width//stride[Direction.HORIZONTAL]
+        ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.)) 
+        nAngles = (nDecs-2)*nDecs//4
+        nAnglesH = nAngles//2
+        angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
+        W0 = genW(angles=angles[:,:nAnglesH])
+        U0 = genU(angles=angles[:,nAnglesH:])    
 
         # Source (nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols))
         X = torch.rand(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
 
         # Expected values
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL])) #.astype(int)
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL])) #.astype(int)
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH)
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
@@ -292,11 +298,6 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         A = permuteDctCoefs_(Y)
         # nSamples x nRows x nCols x nDecs        
         V = A.view(nSamples,nrows,ncols,nDecs)
-        nAngles = (nDecs-2)*nDecs//4
-        angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
-        ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.)) 
-        nAnglesH = nAngles//2
-        W0,U0 = genW(angles=angles[:,:nAnglesH]),genU(angles=angles[:,nAnglesH:])
 
         expctdZ = torch.zeros_like(V)
         for iSample in range(nSamples):
@@ -402,7 +403,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd
             )
         network = network.to(device)
@@ -476,7 +477,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd
             )
         network = network.to(device)
@@ -550,7 +551,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd
             )
         network = network.to(device)
@@ -639,7 +640,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd
             )
         network = network.to(device)
@@ -738,7 +739,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd,
                 number_of_vanishing_moments=nVm
             )
@@ -797,7 +798,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd,
                 number_of_vanishing_moments=nVm
             )
@@ -916,7 +917,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd,
                 number_of_vanishing_moments=nVm,
                 number_of_levels=nlevels
@@ -983,7 +984,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd,
                 number_of_vanishing_moments=nVm,
                 number_of_levels=nlevels

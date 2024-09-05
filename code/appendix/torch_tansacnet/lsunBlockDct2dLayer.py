@@ -30,15 +30,15 @@ class LsunBlockDct2dLayer(nn.Module):
 
     def __init__(self,
         name='',
-        decimation_factor=[],
+        stride=[],
         number_of_components=1
         ):
         super(LsunBlockDct2dLayer, self).__init__()
-        self.decimation_factor = decimation_factor
+        self.stride = stride
         self.name = name
         self.description = "Block DCT of size " \
-            + str(self.decimation_factor[Direction.VERTICAL]) + "x" \
-            + str(self.decimation_factor[Direction.HORIZONTAL])
+            + str(self.stride[Direction.VERTICAL]) + "x" \
+            + str(self.stride[Direction.HORIZONTAL])
         #self.type = ''
         self.num_outputs = number_of_components
         #self.num_inputs = 1
@@ -48,7 +48,7 @@ class LsunBlockDct2dLayer(nn.Module):
         nSamples = X.size(0)
         height = X.size(2)
         width = X.size(3)
-        stride = self.decimation_factor        
+        stride = self.stride        
         nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
         ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
         ndecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL] #math.prod(stride)

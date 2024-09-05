@@ -52,7 +52,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
 
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
+                stride=stride,
                 name=expctdName
             )
 
@@ -106,7 +106,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
 
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
+                stride=stride,
                 name='E0'
             )
             
@@ -163,7 +163,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
 
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
+                stride=stride,
                 number_of_components=nComponents,
                 name='E0'
             )
@@ -228,7 +228,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
 
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
+                stride=stride,
                 number_of_components=nComponents,
                 name='E0'
             )
@@ -288,7 +288,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
+                stride=stride,
                 name='E0'
             )
             
@@ -359,7 +359,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
-                decimation_factor=stride,
+                stride=stride,
                 number_of_components=nComponents,                
                 name='E0'
             )
