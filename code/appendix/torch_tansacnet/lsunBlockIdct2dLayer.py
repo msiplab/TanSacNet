@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch_dct as dct
 import math
-from lsunUtility import Direction 
+from lsunUtility import Direction, permuteIdctCoefs 
 
 class LsunBlockIdct2dLayer(nn.Module):
    """
@@ -50,7 +50,7 @@ class LsunBlockIdct2dLayer(nn.Module):
             nrows = X.size(1)
             ncols = X.size(2)
             # Permute IDCT coefficients
-            V = permuteIdctCoefs_(X,block_size)
+            V = permuteIdctCoefs(X,block_size)
             # 2D IDCT
             Y = dct.idct_2d(V,norm='ortho')
             # Reshape and return
@@ -62,6 +62,7 @@ class LsunBlockIdct2dLayer(nn.Module):
                 Z = torch.cat((Z,Y.reshape(nsamples,1,height,width)),dim=1)
         return Z
 
+"""
 def permuteIdctCoefs_(x,block_size):
     coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # math.prod(block_size)
     decY_ = block_size[Direction.VERTICAL]
@@ -84,3 +85,4 @@ def permuteIdctCoefs_(x,block_size):
     value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
     value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
     return value
+"""

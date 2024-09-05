@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch_dct as dct
 import math
-from lsunUtility import Direction 
+from lsunUtility import Direction, permuteDctCoefs
     
 class LsunBlockDct2dLayer(nn.Module):
     """
@@ -57,11 +57,12 @@ class LsunBlockDct2dLayer(nn.Module):
         arrayshape.insert(0,-1)
         Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
-        cee = Y[:,0::2,0::2].reshape(Y.size(0),-1)
-        coo = Y[:,1::2,1::2].reshape(Y.size(0),-1)
-        coe = Y[:,1::2,0::2].reshape(Y.size(0),-1)
-        ceo = Y[:,0::2,1::2].reshape(Y.size(0),-1)
-        A = torch.cat((cee,coo,coe,ceo),dim=-1)
+        #cee = Y[:,0::2,0::2].reshape(Y.size(0),-1)
+        #coo = Y[:,1::2,1::2].reshape(Y.size(0),-1)
+        #coe = Y[:,1::2,0::2].reshape(Y.size(0),-1)
+        #ceo = Y[:,0::2,1::2].reshape(Y.size(0),-1)
+        #A = torch.cat((cee,coo,coe,ceo),dim=-1)
+        A = permuteDctCoefs(Y)
         Z = A.view(nSamples,nComponents,nrows,ncols,ndecs) 
 
         if nComponents<2:
