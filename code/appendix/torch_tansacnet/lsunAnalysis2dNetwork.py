@@ -14,7 +14,7 @@ class LsunAnalysis2dNetwork(nn.Module):
     
     Requirements: Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
-    Copyright (c) 2024, Yasas Dulanjaya, Shogo MURAMATSU
+    Copyright (c) 2024, Shogo MURAMATSU
     
     All rights reserved.
     
@@ -27,10 +27,12 @@ class LsunAnalysis2dNetwork(nn.Module):
     """
     def __init__(self,
         input_size=[2, 2], 
+        number_of_components=1,
         stride=[2, 2],
         overlapping_factor=[1,1],
         no_dc_leakage=True,
-        number_of_levels=0
+        number_of_levels=0,
+        prefix=''
         ):
         super(LsunAnalysis2dNetwork, self).__init__()
 
@@ -91,11 +93,11 @@ class LsunAnalysis2dNetwork(nn.Module):
             strLv = 'Lv%0d_'%iLevel
 
             # Initial blocks
-            stages[iStage].add_module(strLv+'E0',LsunBlockDct2dLayer(
+            stages[iStage].add_module(prefix+strLv+'E0',LsunBlockDct2dLayer(
                 stride=self.stride
                 ))
 
-            stages[iStage].add_module(strLv+'V0',LsunInitialRotation2dLayer(
+            stages[iStage].add_module(prefix+strLv+'V0',LsunInitialRotation2dLayer(
                 stride=self.stride,
                 number_of_blocks=[nrows,ncols], 
                 mus=1,               
