@@ -16,7 +16,7 @@ class LsunChannelConcatenation2dLayerTestCase(unittest.TestCase):
     LSUNCHANNELCONCATENATION2DLAYERTESTCASE
 
         ２コンポーネント入力(nComponents=2のみサポート):
-            nSamples x  nRows x nCols x (nChsTotal-1)    
+            nSamples x nRows x nCols x (nChsTotal-1)    
             nSamples x nRows x nCols
 
         １コンポーネント出力(nComponents=1のみサポート):
