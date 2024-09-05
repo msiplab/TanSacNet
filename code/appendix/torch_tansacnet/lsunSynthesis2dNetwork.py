@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from lsunBlockIdct2dLayer import LsunBlockIdct2dLayer 
-#from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
+from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
 #from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 #from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 #from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
@@ -14,7 +14,7 @@ class LsunSynthesis2dNetwork(nn.Module):
     
     Requirements: Requirements: Python 3.10/11.x, PyTorch 2.3.x
     
-    Copyright (c) 2024, Yasas Dulanjaya, Shogo MURAMATSU
+    Copyright (c) 2024, Shogo MURAMATSU
     
     All rights reserved.
     
@@ -27,10 +27,12 @@ class LsunSynthesis2dNetwork(nn.Module):
     """
     def __init__(self,
         input_size=[2, 2], 
+        number_of_components=1,
         stride=[2, 2],
         overlapping_factor=[1,1],
         no_dc_leakage=True,
-        number_of_levels=0
+        number_of_levels=0,
+        prefix=''
         ):
         super(LsunSynthesis2dNetwork, self).__init__()
         
@@ -132,18 +134,22 @@ class LsunSynthesis2dNetwork(nn.Module):
             #        direction='Left',
             #        target_channels='Difference'))
                 
-            #stages[iStage].add_module(strLv+'V0~',LsunFinalRotation2dLayer(
-            #    number_of_channels=number_of_channels,
-            #    decimation_factor=decimation_factor,
-            #    no_dc_leakage=(self.number_of_vanishing_moments==1)))
-            stages[iStage].add_module(strLv+'E0~',LsunBlockIdct2dLayer(
-                decimation_factor=stride
+            stages[iStage].add_module(prefix+strLv+'V0~',LsunFinalRotation2dLayer(
+                stride=self.stride,
+                number_of_blocks=[nrows,ncols],
+                mus=1,
+                no_dc_leakage=self.no_dc_leakage
+                ))
+            
+            stages[iStage].add_module(prefix+strLv+'E0~',LsunBlockIdct2dLayer(
+                stride=self.stride
                 ))    
         
         # Stack modules as a list
         self.layers = nn.ModuleList(stages)
             
     def forward(self,x):
+        
         if self.number_of_levels == 0: # Flat structure
             for m in self.layers:
                 xdc = m.forward(x)

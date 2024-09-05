@@ -8,7 +8,8 @@ import torch_dct as dct
 import math
 import random
 from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
-from lsunUtility import Direction
+from lsunUtility import Direction, OrthonormalMatrixGenerationSystem
+from orthonormalTransform import OrthonormalTransform
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 
 stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
@@ -91,8 +92,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL] #math.prod(stride)
 
         # nSamples x nRows x nCols x nDecs
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
+        nrows = height//stride[Direction.VERTICAL]
+        ncols = width//stride[Direction.HORIZONTAL]
         X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)
         
         # Expected values        
@@ -109,9 +110,10 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         else:
             Zsa = W0T @ Ys
         V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-        A = permuteIdctCoefs_(V,stride)
-        Y = dct.idct_2d(A,norm='ortho')
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
+        A = permuteIdctCoefs_(V,stride)        
+        arrayshape = stride.copy() # FIXME
+        arrayshape.insert(0,-1)
+        expctdZ = dct.idct_2d(A.view(arrayshape),norm='ortho').reshape(nSamples,nComponents,height,width)        
         
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -248,61 +250,68 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             )
 
 
-"""
-
     @parameterized.expand(
-        list(itertools.product(nchs,stride,height,width,datatype))
+        list(itertools.product(stride,height,width,datatype,usegpu))
     )
-    def testForwardGrayScaleWithInitialization(self,
-            nchs,stride, height, width, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+    def testForwardGrayScaleWithInitalization(self,
+            stride, height, width, datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")                 
-        gen = OrthonormalMatrixGenerationSystem(dtype=datatype)
+            device = torch.device("cpu")    
+        rtol,atol = 1e-4,1e-5
+
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
         def init_angles(m):
             if type(m) == OrthonormalTransform:
-                torch.nn.init.constant_(m.angles,angle0)
+                torch.nn.init.constant_(m.angles,angle0)        
 
         # Parameters
-        nVm = 0
+        isNoDcLeakage = False
         nSamples = 8
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
         nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        nrows = height//stride[Direction.VERTICAL]
+        ncols = width//stride[Direction.HORIZONTAL]
+        ps,pa = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.))
+        nAngles = (nDecs-2)*nDecs//4
+        nAnglesH = nAngles//2
+        angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
+        W0T = genW(angles=angles[:,:nAnglesH]).transpose(1,2)
+        U0T = genU(angles=angles[:,nAnglesH:]).transpose(1,2)
 
-        # nSamples x nRows x nCols x nChsTotal
-        X = torch.randn(nSamples,nrows,ncols,nChsTotal,dtype=datatype,device=device,requires_grad=True)
-        
-        # Expected values        
         # nSamples x nRows x nCols x nDecs
-        ps,pa = nchs
-        angles = angle0*torch.ones(int((nChsTotal-2)*nChsTotal/4)) #,dtype=datatype)
-        nAngsW = int(len(angles)/2)
-        angsW,angsU = angles[:nAngsW],angles[nAngsW:]
-        W0T,U0T = gen(angsW).T.to(device),gen(angsU).T.to(device)
-        Ys = X[:,:,:,:ps].view(-1,ps).T
-        Ya = X[:,:,:,ps:].view(-1,pa).T
-        ms,ma = int(math.ceil(nDecs/2.)),int(math.floor(nDecs/2.))        
-        Zsa = torch.cat(
-                ( W0T[:ms,:] @ Ys, 
-                  U0T[:ma,:] @ Ya ),dim=0)
-        V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)
+
+        # Expected values        
+        V = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            V[iSample,:,:,:] = Yi
         A = permuteIdctCoefs_(V,stride)
-        Y = idct_2d(A)
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
-        
+        arrayshape = stride.copy() 
+        arrayshape.insert(0,-1)
+        expctdZ = dct.idct_2d(A.view(arrayshape),norm='ortho').reshape(nSamples,nComponents,height,width)
+
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
-            number_of_channels=nchs,
-            decimation_factor=stride,
-            number_of_vanishing_moments=nVm
+            input_size=[height,width],
+            stride=stride,
+            no_dc_leakage=isNoDcLeakage
         )
         network = network.to(device)
 
@@ -318,6 +327,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
 
+"""
     @parameterized.expand(
         list(itertools.product(nchs,stride,height,width,datatype))
     )
@@ -384,7 +394,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd
         )
         network = network.to(device)
@@ -453,7 +463,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd
         )
         network = network.to(device)
@@ -522,7 +532,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd
         )
         network = network.to(device)
@@ -606,7 +616,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd
         )
         network = network.to(device)
@@ -700,7 +710,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd,
             number_of_vanishing_moments=nVm
         )
@@ -760,7 +770,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd,
             number_of_vanishing_moments=nVm
         )
@@ -880,7 +890,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
             number_of_channels=nchs,
-            decimation_factor=stride,
+            stride=stride,
             polyphase_order=ppOrd,
             number_of_vanishing_moments=nVm,
             number_of_levels=nlevels
@@ -945,7 +955,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
                 number_of_channels=nchs,
-                decimation_factor=stride,
+                stride=stride,
                 polyphase_order=ppOrd,
                 number_of_vanishing_moments=nVm,
                 number_of_levels=nlevels
@@ -998,3 +1008,18 @@ def permuteIdctCoefs_(x,block_size):
 
 if __name__ == '__main__':
     unittest.main()
+
+    """
+    # Create a test suite
+    suite = unittest.TestSuite()
+
+    # Add specific test methods to the suite
+    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScale_215'))
+
+    # Create a test runner
+    runner = unittest.TextTestRunner()
+
+    # Run the tests
+    runner.run(suite)
+    """
+    
