@@ -386,11 +386,121 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
         self.assertFalse(actualZ.requires_grad)
 
+    @parameterized.expand(
+        list(itertools.product(stride,height,width,datatype,usegpu))
+    )
+    def testForwardGrayScaleOvlpFactor33(self,
+            stride, height, width, datatype, usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-5
+
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+
+        # Initialization function of angle parameters
+        angle0 = 2.0*math.pi*random.random()
+        def init_angles(m):
+            if type(m) == OrthonormalTransform:
+                torch.nn.init.constant_(m.angles,angle0)        
+
+        # Parameters
+        ovlpFactor = [ 3, 3 ]
+        isNoDcLeakage = False # TODO
+        nSamples = 8
+        nComponents = 1
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        nrows = height//stride[Direction.VERTICAL]
+        ncols = width//stride[Direction.HORIZONTAL]
+
+        # Source (nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols))
+        X = torch.rand(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
+        nAngles = (nDecs-2)*nDecs//4
+        angles = angle0*torch.ones(nrows*ncols,nAngles,dtype=datatype,device=device)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nchs = (ps, pa)
+        nAnglesH = nAngles//2
+        W0 = genW(angles[:,:nAnglesH]) # TODO: Handling no_dc_leakage
+        U0 = genU(angles[:,nAnglesH:])
+        Uh1 = -genU(angles[:,nAnglesH:])
+        Uh2 = -genU(angles[:,nAnglesH:])        
+        Uv1 = -genU(angles[:,nAnglesH:])
+        Uv2 = -genU(angles[:,nAnglesH:])        
+
+        # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
+        arrayshape = stride.copy()
+        arrayshape.insert(0,-1)
+        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = Y.to(device)
+        # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
+        A = permuteDctCoefs_(Y)
+        # nSamples x nRows x nCols x nDecs
+        Z = A.view(nSamples,nrows,ncols,nDecs)
+        for iSample in range(nSamples):
+            Vi = Z[iSample,:,:,:].clone()
+            Ys = Vi[:,:,:ps].view(-1,ps)
+            Ya = Vi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0[iblk,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0[iblk,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            Z[iSample,:,:,:] = Yi
+
+        # Horizontal atom extention
+        for ordH in range(ovlpFactor[Direction.HORIZONTAL]//2):
+            Z = block_butterfly_(Z,nchs)
+            Z = block_shift_(Z,nchs,0,[0,0,1,0]) # target=diff, shift=right
+            Z = block_butterfly_(Z,nchs)/2.
+            Z = intermediate_rotation_(Z,nchs,Uh1)
+            Z = block_butterfly_(Z,nchs)
+            Z = block_shift_(Z,nchs,1,[0,0,-1,0]) # target=sum, shift=left
+            Z = block_butterfly_(Z,nchs)/2.
+            Z = intermediate_rotation_(Z,nchs,Uh2)
+        # Vertical atom extention
+        for ordV in range(ovlpFactor[Direction.VERTICAL]//2):
+            Z = block_butterfly_(Z,nchs)
+            Z = block_shift_(Z,nchs,0,[0,1,0,0]) # target=diff, shift=down
+            Z = block_butterfly_(Z,nchs)/2.
+            Z = intermediate_rotation_(Z,nchs,Uv1)
+            Z = block_butterfly_(Z,nchs)
+            Z = block_shift_(Z,nchs,1,[0,-1,0,0]) # target=sum, shift=up
+            Z = block_butterfly_(Z,nchs)/2.
+            Z = intermediate_rotation_(Z,nchs,Uv2)
+        expctdZ = Z
+
+        # Instantiation of target class
+        network = LsunAnalysis2dNetwork(
+                input_size=[height,width],
+                stride=stride,
+                overlapping_factor=ovlpFactor,
+                no_dc_leakage=isNoDcLeakage
+            )
+        network = network.to(device)
+
+        # Actual values
+        network.apply(init_angles)            
+        with torch.no_grad():
+            actualZ = network.forward(X)
+
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype) 
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+        self.assertFalse(actualZ.requires_grad)
+
 """
     @parameterized.expand(
         list(itertools.product(nchs,stride,height,width,datatype))
     )
-    def testForwardGrayScaleOrd20(self,
+    def testForwardGrayScaleOvlpFactor2Ord20(self,
             nchs, stride, height, width, datatype):
         rtol,atol = 1e-3,1e-6
         if isdevicetest:
@@ -399,17 +509,10 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")        
 
         # Parameters
-        ppOrd = [ 2, 0 ]
-        nSamples = 8
-        nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
         # Source (nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols))
         X = torch.rand(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
         
         # Expected values
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL])) #.astype(int)
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL])) #.astype(int)
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
@@ -1002,15 +1105,22 @@ def block_shift_(X,nchs,target,shift):
     return X
 
 def intermediate_rotation_(X,nchs,R):
-    Y = X.clone()
+    #Y = X.clone()
     ps,pa = nchs
     nSamples = X.size(0)
     nrows = X.size(1)
     ncols = X.size(2)
-    Za = R @ X[:,:,:,ps:].view(-1,pa).T 
-    Y[:,:,:,ps:] = Za.T.view(nSamples,nrows,ncols,pa)
+    #Za = R @ X[:,:,:,ps:].view(-1,pa).T 
+    #Y[:,:,:,ps:] = Za.T.view(nSamples,nrows,ncols,pa)
+    #return Y
+    Y = X.clone()
+    for iSample in range(nSamples):
+        Ya = Y[iSample,:,:,ps:].view(-1,pa)
+        for iblk in range(nrows*ncols):
+            Ya[iblk,:] = R[iblk,:,:] @ Ya[iblk,:]
+        Y[iSample,:,:,ps:] = Ya.view(nrows,ncols,pa)
     return Y
-
+    
 if __name__ == '__main__':
     unittest.main()
 
