@@ -13,7 +13,7 @@ from orthonormalTransform import OrthonormalTransform
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 
 stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
-ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
+ovlpfactor = [ [1, 1], [3, 3], [5, 5], [1, 3], [3, 1] ]
 datatype = [ torch.float, torch.double ]
 height = [ 8, 16, 32 ]
 width = [ 8, 16, 32 ]
@@ -330,93 +330,63 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
 
-"""
-
     @parameterized.expand(
-        list(itertools.product(nchs,stride,height,width,datatype))
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage,datatype,usegpu))
     )
-    def testForwardGrayScaleOrd22(self,
-            nchs, stride, height, width, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+    def testForwardGrayScaleOvlpFactorDefault(self,
+            stride, ovlpfactor, height, width, nodcleakage, datatype, usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")       
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-5
 
         # Parameters
-        ppOrd = [ 2, 2 ]
+        isNoDcLeakage = nodcleakage
         nSamples = 8
         nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        nrows = height//stride[Direction.VERTICAL]
+        ncols = width//stride[Direction.HORIZONTAL]
+
         # Source (nSamples x nComponents x (Stride[0]xnRows) x (Stride[1]xnCols))
         X = torch.rand(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
-        
+
         # Expected values
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL])) #.astype(int)
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL])) #.astype(int)
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct_2d(X.view(arrayshape))
+        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
-        V = A.view(nSamples,nrows,ncols,nDecs)
-        # nSamples x nRows x nCols x nChs
-        ps, pa = nchs
-        # Initial rotation
-        W0 = torch.eye(ps,dtype=datatype).to(device)
-        U0 = torch.eye(pa,dtype=datatype).to(device)
-        ms,ma = int(math.ceil(nDecs/2.)), int(math.floor(nDecs/2.))        
-        Zsa = torch.zeros(nChsTotal,nrows*ncols*nSamples,dtype=datatype)  
-        Zsa = Zsa.to(device)      
-        Ys = V[:,:,:,:ms].view(-1,ms).T
-        Zsa[:ps,:] = W0[:,:ms] @ Ys
-        if ma > 0:
-            Ya = V[:,:,:,ms:].view(-1,ma).T
-            Zsa[ps:,:] = U0[:,:ma] @ Ya
-        Z = Zsa.T.view(nSamples,nrows,ncols,nChsTotal)
-        # Horizontal atom extention
-        Z = block_butterfly(Z,nchs)
-        Z = block_shift(Z,nchs,0,[0,0,1,0]) # target=diff, shift=right
-        Z = block_butterfly(Z,nchs)/2.
-        Uh1 = -torch.eye(pa,dtype=datatype).to(device)
-        Z = intermediate_rotation(Z,nchs,Uh1)
-        Z = block_butterfly(Z,nchs)
-        Z = block_shift(Z,nchs,1,[0,0,-1,0]) # target=sum, shift=left
-        Z = block_butterfly(Z,nchs)/2.
-        Uh2 = -torch.eye(pa,dtype=datatype).to(device)
-        Z = intermediate_rotation(Z,nchs,Uh2)
-        # Vertical atom extention
-        Z = block_butterfly(Z,nchs)
-        Z = block_shift(Z,nchs,0,[0,1,0,0]) # target=diff, shift=down
-        Z = block_butterfly(Z,nchs)/2.
-        Uv1 = -torch.eye(pa,dtype=datatype).to(device)
-        Z = intermediate_rotation(Z,nchs,Uv1)
-        Z = block_butterfly(Z,nchs)
-        Z = block_shift(Z,nchs,1,[0,-1,0,0]) # target=sum, shift=up
-        Z = block_butterfly(Z,nchs)/2.
-        Uv2 = -torch.eye(pa,dtype=datatype).to(device)
-        Z = intermediate_rotation(Z,nchs,Uv2)
-        expctdZ = Z
+        # nSamples x nRows x nCols x nDecs
+        expctdZ = A.view(nSamples,nrows,ncols,nDecs)
 
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
-                number_of_channels=nchs,
+                input_size=[height,width],
                 stride=stride,
-                polyphase_order=ppOrd
+                overlapping_factor=ovlpfactor,
+                no_dc_leakage=isNoDcLeakage
             )
         network = network.to(device)
-            
+
         # Actual values
         with torch.no_grad():
             actualZ = network.forward(X)
 
         # Evaluation
-        self.assertEqual(actualZ.dtype,datatype)         
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+        self.assertEqual(actualZ.dtype,datatype) 
+        msg = 'stride=%s, ovlpfactor=%s, height=%d, width=%d, nodcleakage=%s, datatype=%s' % (stride,ovlpfactor,height,width,nodcleakage,datatype)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
         self.assertFalse(actualZ.requires_grad)
 
+"""
     @parameterized.expand(
         list(itertools.product(nchs,stride,height,width,datatype))
     )
@@ -1017,5 +987,43 @@ def permuteDctCoefs_(x):
     ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
     return torch.cat((cee,coo,coe,ceo),dim=-1)
 
+def block_butterfly_(X,nchs):
+    ps = nchs[0]
+    Xs = X[:,:,:,:ps]
+    Xa = X[:,:,:,ps:]
+    return torch.cat((Xs+Xa,Xs-Xa),dim=-1)
+
+def block_shift_(X,nchs,target,shift):
+    ps = nchs[0]
+    if target == 0: # Difference channel
+        X[:,:,:,ps:] = torch.roll(X[:,:,:,ps:],shifts=tuple(shift),dims=(0,1,2,3))
+    else: # Sum channel
+        X[:,:,:,:ps] = torch.roll(X[:,:,:,:ps],shifts=tuple(shift),dims=(0,1,2,3))
+    return X
+
+def intermediate_rotation_(X,nchs,R):
+    Y = X.clone()
+    ps,pa = nchs
+    nSamples = X.size(0)
+    nrows = X.size(1)
+    ncols = X.size(2)
+    Za = R @ X[:,:,:,ps:].view(-1,pa).T 
+    Y[:,:,:,ps:] = Za.T.view(nSamples,nrows,ncols,pa)
+    return Y
+
 if __name__ == '__main__':
     unittest.main()
+
+    """
+    # Create a test suite
+    suite = unittest.TestSuite()
+
+    # Add specific test methods to the suite
+    suite.addTest(LsunAnalysis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33Initial_215'))
+
+    # Create a test runner
+    runner = unittest.TextTestRunner()
+
+    # Run the tests
+    runner.run(suite)
+    """

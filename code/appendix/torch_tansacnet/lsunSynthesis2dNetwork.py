@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from lsunBlockIdct2dLayer import LsunBlockIdct2dLayer 
 from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
-#from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
-#from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-#from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
+from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
+from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 from lsunUtility import Direction
 
@@ -97,42 +97,46 @@ class LsunSynthesis2dNetwork(nn.Module):
             #    stages[iStage].add_module(strLv+'Cc',LsunChannelConcatenation2dLayer())
             
             # Vertical concatenation
-            #for iOrderV in range(polyphase_order[Direction.VERTICAL],1,-2):            
-            #    stages[iStage].add_module(strLv+'Vv~%d'%(iOrderV),LsunIntermediateRotation2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        mode='Synthesis',
-            #       mus=-1))
-            #    stages[iStage].add_module(strLv+'Qv~%dus'%(iOrderV),LsunAtomExtension2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        direction='Down',
-            #        target_channels='Sum'))
-            #    stages[iStage].add_module(strLv+'Vv~%d'%(iOrderV-1),LsunIntermediateRotation2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        mode='Synthesis',
-            #        mus=-1))
-            #    stages[iStage].add_module(strLv+'Qv~%ddd'%(iOrderV-1),LsunAtomExtension2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        direction='Up',
-            #        target_channels='Difference'))
+            for iOrderV in range(overlapping_factor[Direction.VERTICAL]-1,1,-2):            
+                stages[iStage].add_module(strLv+'Vv~%d'%(iOrderV),LsunIntermediateRotation2dLayer(
+                    stride=self.stride,
+                    number_of_blocks=[nrows,ncols],
+                    mode='Synthesis',
+                    mus=-1))
+                stages[iStage].add_module(strLv+'Qv~%dus'%(iOrderV),LsunAtomExtension2dLayer(
+                    stride=self.stride,
+                    direction='Down',
+                    target_channels='Sum'))
+                stages[iStage].add_module(strLv+'Vv~%d'%(iOrderV-1),LsunIntermediateRotation2dLayer(
+                    stride=self.stride,
+                    number_of_blocks=[nrows,ncols],
+                    mode='Synthesis',
+                    mus=-1))
+                stages[iStage].add_module(strLv+'Qv~%ddd'%(iOrderV-1),LsunAtomExtension2dLayer(
+                    stride=self.stride,
+                    direction='Up',
+                    target_channels='Difference'))
             
             # Horizontal concatenation
-            #for iOrderH in range(polyphase_order[Direction.HORIZONTAL],1,-2):
-            #    stages[iStage].add_module(strLv+'Vh~%d'%(iOrderH),LsunIntermediateRotation2dLayer(
-            #        number_of_channels=number_of_channels,
-            #         mode='Synthesis',
-            #        mus=-1))
-            #    stages[iStage].add_module(strLv+'Qh~%dls'%(iOrderH),LsunAtomExtension2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        direction='Right',
-            #        target_channels='Sum'))
-            #    stages[iStage].add_module(strLv+'Vh~%d'%(iOrderH-1),LsunIntermediateRotation2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        mode='Synthesis',
-            #        mus=-1))
-            #    stages[iStage].add_module(strLv+'Qh~%drd'%(iOrderH-1),LsunAtomExtension2dLayer(
-            #        number_of_channels=number_of_channels,
-            #        direction='Left',
-            #        target_channels='Difference'))
+            for iOrderH in range(overlapping_factor[Direction.HORIZONTAL]-1,1,-2):
+                stages[iStage].add_module(strLv+'Vh~%d'%(iOrderH),LsunIntermediateRotation2dLayer(
+                    stride=self.stride,
+                    number_of_blocks=[nrows,ncols],
+                    mode='Synthesis',
+                    mus=-1))
+                stages[iStage].add_module(strLv+'Qh~%dls'%(iOrderH),LsunAtomExtension2dLayer(
+                    stride=self.stride,
+                    direction='Right',
+                    target_channels='Sum'))
+                stages[iStage].add_module(strLv+'Vh~%d'%(iOrderH-1),LsunIntermediateRotation2dLayer(
+                    stride=self.stride,
+                    number_of_blocks=[nrows,ncols],
+                    mode='Synthesis',
+                    mus=-1))
+                stages[iStage].add_module(strLv+'Qh~%drd'%(iOrderH-1),LsunAtomExtension2dLayer(
+                    stride=self.stride,
+                    direction='Left',
+                    target_channels='Difference'))
                 
             stages[iStage].add_module(prefix+strLv+'V0~',LsunFinalRotation2dLayer(
                 stride=self.stride,

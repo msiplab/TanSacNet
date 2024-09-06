@@ -13,7 +13,7 @@ from orthonormalTransform import OrthonormalTransform
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 
 stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
-ovlpfactor = [ [1, 1], [1, 3], [3, 1], [3, 3], [5, 5] ]
+ovlpfactor = [ [1, 1], [3, 3], [5, 5], [1, 3], [3, 1] ]
 datatype = [ torch.float, torch.double ]
 height = [ 8, 16, 32 ]
 width = [ 8, 16, 32 ]
@@ -317,6 +317,55 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Initialization of angle parameters
         network.apply(init_angles)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = network.forward(X)
+
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+        self.assertFalse(actualZ.requires_grad)
+
+    @parameterized.expand(
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage,datatype,usegpu))
+    )
+    def testForwardGrayScaleOverlappingDefault(self,
+            stride, ovlpfactor, height, width, nodcleakage,datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")    
+        rtol,atol = 1e-4,1e-5
+
+        # Parameters
+        isNoDcLeakage = nodcleakage
+        nSamples = 8
+        nComponents = 1
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+        nrows = height//stride[Direction.VERTICAL]
+        ncols = width//stride[Direction.HORIZONTAL]
+
+        # nSamples x nRows x nCols x nDecs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)
+
+        # Expected values
+        A = permuteIdctCoefs_(X,stride)
+        Y = dct.idct_2d(A,norm='ortho')
+        expctdZ = Y.reshape(nSamples,nComponents,height,width)
+
+        # Instantiation of target class
+        network = LsunSynthesis2dNetwork(
+            input_size=[height,width],
+            stride=stride,
+            overlapping_factor=ovlpfactor,
+            no_dc_leakage=isNoDcLeakage
+        )
+        network = network.to(device)
 
         # Actual values
         with torch.no_grad():
