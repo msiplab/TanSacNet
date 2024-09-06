@@ -38,9 +38,9 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
 """
 
     @parameterized.expand(
-        itertools.product(stride)
+        itertools.product(stride,nrows,ncols)
         ) 
-    def testConstructor(self, stride):
+    def testConstructor(self, stride,nrows,ncols):
         # Expected values
         expctdName = 'Vn~'
         expctdMode = 'Synthesis'
@@ -51,6 +51,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunIntermediateRotation2dLayer(
             stride=stride,
+            number_of_blocks=[nrows,ncols],
             name=expctdName)
         
         # Actual values
@@ -232,6 +233,61 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
         )
     def testForwardGrayscaleAnalysisMode(self, usegpu, stride, nrows, ncols, mus, datatype):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-5, 1e-6
+
+        # Parameters
+        nSamples = 8
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
+
+        # nSamples x nRows x nCols x nChs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,device=device,dtype=datatype)
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        Un = mus*torch.eye(pa,device=device,dtype=datatype).repeat(nrows*ncols,1,1)
+
+        expctdZ = torch.zeros_like(X)
+        for iSample in range(nSamples):
+            Xi = X[iSample,:,:,:].clone()
+            Ys = Xi[:,:,:ps].view(-1,ps)   
+            Ya = Xi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ya[iblk,:] = Un[iblk,:,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            expctdZ[iSample,:,:,:] = Yi
+
+        # Instantiation of target class
+        layer = LsunIntermediateRotation2dLayer(
+            dtype=datatype,
+            device=device,
+            stride=stride,
+            number_of_blocks=[nrows,ncols],
+            mus=mus,
+            name='Vn',
+            mode='Analysis')
+        
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer.forward(X)
+
+        # Evaluation
+        self.assertIsInstance(actualZ,torch.Tensor)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+
+    @parameterized.expand(
+        itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
+        )
+    def testForwardGrayscaleAnalysisModeWithRandomAngles(self, usegpu, stride, nrows, ncols, mus, datatype):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")

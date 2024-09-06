@@ -38,9 +38,9 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
     @parameterized.expand(
-            itertools.product(stride)
+            itertools.product(stride,nrows,ncols)
             )
-    def testConstructor(self, stride):
+    def testConstructor(self, stride,nrows,ncols):
         # Expected values
         expctdName = 'V0'
         expctdDescription = "LSUN initial rotation " \
@@ -53,6 +53,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunInitialRotation2dLayer(
             stride=stride,
+            number_of_blocks=[nrows,ncols],
             name=expctdName)
 
         # Actual values
