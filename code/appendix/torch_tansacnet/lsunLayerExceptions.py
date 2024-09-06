@@ -14,7 +14,7 @@ class InvalidMus(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
-class InvalidNumberOfChannels(Exception):
+class InvalidNumberOfBlocks(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
