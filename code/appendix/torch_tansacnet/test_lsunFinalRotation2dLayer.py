@@ -38,9 +38,9 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
     @parameterized.expand(
-            itertools.product(stride)
+            itertools.product(stride, nrows, ncols)
             )
-    def testConstructor(self, stride):
+    def testConstructor(self, stride, nrows, ncols):
         # Expected values
         expctdName = 'V0~'
         expctdDescription = "LSUN final rotation " \
@@ -53,6 +53,7 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         # Instantiation of target class
         layer = LsunFinalRotation2dLayer(
             stride=stride,
+            number_of_blocks=[nrows,ncols],
             name=expctdName)
 
         # Actual values
@@ -613,11 +614,11 @@ if __name__ == '__main__':
 
     # Run specific test cases
     #suite = unittest.TestSuite()
-    #suite.addTest(LsunFinalRotation2dLayerTestCase('testBackwardGrayscale_064'))
+    #suite.addTest(LsunFinalRotation2dLayerTestCase('testConstructor_0'))
+    #suite.addTest(LsunFinalRotation2dLayerTestCase('testConstructor_1'))
 
     #runner = unittest.TextTestRunner()
     #runner.run(suite)
-    
 
     """
     # TestSuite に特定のテストケースを追加

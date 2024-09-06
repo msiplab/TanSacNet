@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from lsunUtility import Direction
+from lsunLayerExceptions import InvalidNumberOfBlocks, InvalidStride
 from orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunFinalRotation2dLayer(nn.Module):
@@ -33,19 +34,31 @@ class LsunFinalRotation2dLayer(nn.Module):
                  device=torch.get_default_device(),
                  stride=None, 
                  mus=None,
-                 number_of_blocks=[1,1], 
+                 number_of_blocks=None, 
                  no_dc_leakage=False, 
                  name=''):
         super(LsunFinalRotation2dLayer, self).__init__()
         self.dtype = dtype
         self.device = device
-        self.stride = stride
-        self.number_of_blocks = number_of_blocks
         self.name = name        
         self.angles = None
         self.no_dc_leakage = no_dc_leakage
+
+        # Stride
+        if stride is None:
+            raise InvalidStride("The stride must be specified.")            
+        self.stride = stride
+
+        # Number of blocks
+        if number_of_blocks is None:
+            raise InvalidNumberOfBlocks("The number of blocks must be specified.")
+        self.number_of_blocks = number_of_blocks
+
+        # Number of channels
         ps = math.ceil(math.prod(self.stride)/2)
         pa = math.floor(math.prod(self.stride)/2)
+
+        # Description
         self.description = "LSUN final rotation " \
                            + "(ps,pa) = (" \
                            + str(ps) + "," \
