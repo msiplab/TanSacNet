@@ -4,7 +4,7 @@ from lsunBlockIdct2dLayer import LsunBlockIdct2dLayer
 from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
 from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
+#from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 from lsunUtility import Direction
 
@@ -69,7 +69,7 @@ class LsunSynthesis2dNetwork(nn.Module):
             % number_of_levels)
         self.number_of_levels = number_of_levels
 
-        # Number of blocks
+        # # of blocks
         if input_size[Direction.VERTICAL]%stride[Direction.VERTICAL] != 0 or input_size[Direction.HORIZONTAL]%stride[Direction.HORIZONTAL] != 0:
             raise InvalidInputSize(
             '%d x %d : Currently, multiples of strides is only supported.'\
@@ -87,6 +87,7 @@ class LsunSynthesis2dNetwork(nn.Module):
             nlevels = 1
         else:
             nlevels = self.number_of_levels
+            
         stages = [ nn.Sequential() for iStage in range(nlevels) ]
         for iStage in range(len(stages)):
             iLevel = nlevels - iStage
@@ -97,7 +98,7 @@ class LsunSynthesis2dNetwork(nn.Module):
             #    stages[iStage].add_module(strLv+'Cc',LsunChannelConcatenation2dLayer())
             
             # Vertical concatenation
-            for iOrderV in range(overlapping_factor[Direction.VERTICAL]-1,1,-2):            
+            for iOrderV in range(overlapping_factor[Direction.VERTICAL]-1,1,-2):  
                 stages[iStage].add_module(strLv+'Vv~%d'%(iOrderV),LsunIntermediateRotation2dLayer(
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],
