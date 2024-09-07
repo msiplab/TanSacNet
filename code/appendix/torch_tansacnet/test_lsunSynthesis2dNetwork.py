@@ -395,17 +395,17 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
 
         # Initialization function of angle parameters
-        angle0 = 2.0 * math.pi * random.random()
+        angle0 = 2.0*math.pi*random.random()
         def init_angles(m):
             if type(m) == OrthonormalTransform:
                 torch.nn.init.constant_(m.angles, angle0)
 
         # Parameters
-        ovlpFactor = [1, 1]
+        ovlpFactor = [ 1, 1 ]
         isNoDcLeakage = False # TODO: Handling no_dc_leakage
         nSamples = 8
         nComponents = 1
-        nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
+        nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
         nrows = height//stride[Direction.VERTICAL]
         ncols = width//stride[Direction.HORIZONTAL]
 
@@ -416,40 +416,25 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Expected values
         ps = math.ceil(nDecs/2)
-        #pa = math.floor(nDecs/2)
+        pa = math.floor(nDecs/2)
         #nchs = (ps, pa)
         nAnglesH = nAngles//2
         if isNoDcLeakage:
             angles[:,:(ps-1)] = 0
         W0T = genW(angles[:,:nAnglesH]).transpose(1,2) 
         U0T = genU(angles[:,nAnglesH:]).transpose(1,2)
-        #Uh1T = -genU(angles[:,nAnglesH:]).transpose(1,2)
-        #Uh2T = -genU(angles[:,nAnglesH:]).transpose(1,2)
-        #Uv1T = -genU(angles[:,nAnglesH:]).transpose(1,2)
-        #Uv2T = -genU(angles[:,nAnglesH:]).transpose(1,2)
 
-        # Vertical atom concatenation
+        # Final rotation
         Z = X.clone()
-        #for ordV in range(ovlpFactor[Direction.VERTICAL]//2):        
-        #Z = intermediate_rotation_(Z,nchs,Uv2T)
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,1,[0,1,0,0]) # target=sum, shift=down
-        #Z = block_butterfly_(Z,nchs)/2.
-        #Z = intermediate_rotation_(Z,nchs,Uv1T)
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,0,[0,-1,0,0]) # target=diff, shift=up
-        #Z = block_butterfly_(Z,nchs)/2.
-        # Horizontal atom concatenation
-        #for ordH in range(ovlpFactor[Direction.HORIZONTAL]//2):  
-        #Z = intermediate_rotation_(Z,nchs,Uh2T)
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,1,[0,0,1,0]) # target=sum, shift=right
-        #Z = block_butterfly_(Z,nchs)/2.
-        #Z = intermediate_rotation_(Z,nchs,Uh1T)
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,0,[0,0,-1,0]) # target=diff, shift=left
-        #Z = block_butterfly_(Z,nchs)/2.
-        # Block IDCT (nSamples x nRows x nCols x nDecs)
+        for iSample in range(nSamples):
+            Vi = Z[iSample,:,:,:].clone()
+            Ys = Vi[:,:,:ps].view(-1,ps)
+            Ya = Vi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            Z[iSample,:,:,:] = Yi            
         A = permuteIdctCoefs_(Z,stride)
         Y = dct.idct_2d(A,norm='ortho')
         # Samples x nComponents x (nrows x decV)x (decH x decH)
@@ -465,6 +450,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         network = network.to(device)
 
         # Actual values
+        network.apply(init_angles)        
         with torch.no_grad():
             actualZ = network.forward(X)
 
@@ -546,7 +532,17 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         Z = intermediate_rotation_(Z,nchs,Uh1T)
         Z = block_butterfly_(Z,nchs)
         Z = block_shift_(Z,nchs,0,[0,0,-1,0]) # target=diff, shift=left
-        Z = block_butterfly_(Z,nchs)/2.
+        Z = block_butterfly_(Z,nchs)/2. 
+        # Final rotation
+        for iSample in range(nSamples):
+            Vi = Z[iSample,:,:,:].clone()
+            Ys = Vi[:,:,:ps].view(-1,ps)
+            Ya = Vi[:,:,ps:].view(-1,pa)
+            for iblk in range(nrows*ncols):
+                Ys[iblk,:] = W0T[iblk,:] @ Ys[iblk,:]
+                Ya[iblk,:] = U0T[iblk,:] @ Ya[iblk,:]
+            Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
+            Z[iSample,:,:,:] = Yi                   
         # Block IDCT (nSamples x nRows x nCols x nDecs)
         A = permuteIdctCoefs_(Z,stride)
         Y = dct.idct_2d(A,norm='ortho')
@@ -563,6 +559,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         network = network.to(device)
 
         # Actual values
+        network.apply(init_angles)        
         with torch.no_grad():
             actualZ = network.forward(X)
 
@@ -571,7 +568,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
     """
-
+        
     """
     @parameterized.expand(
         list(itertools.product(stride,ovlpfactor,height,width,datatype,usegpu))
@@ -644,7 +641,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             Z = block_butterfly_(Z,nchs)
             Z = block_shift_(Z,nchs,0,[0,0,-1,0]) # target=diff, shift=left
             Z = block_butterfly_(Z,nchs)/2.
-
+        # Final rotation
         for iSample in range(nSamples):
             Vi = Z[iSample,:,:,:].clone()
             Ys = Vi[:,:,:ps].view(-1,ps)
@@ -653,7 +650,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 Ys[iblk,:] = W0T[iblk,:] @ Ys[iblk,:]
                 Ya[iblk,:] = U0T[iblk,:] @ Ya[iblk,:]
             Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
-            Z[iSample,:,:,:] = Yi
+            Z[iSample,:,:,:] = Yi                 
         # Block IDCT (nSamples x nRows x nCols x nDecs)
         A = permuteIdctCoefs_(Z,stride)
         Y = dct.idct_2d(A,norm='ortho')

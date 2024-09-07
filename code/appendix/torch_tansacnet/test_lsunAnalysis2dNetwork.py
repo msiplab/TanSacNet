@@ -426,18 +426,14 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
 
         # Expected values
         ps = math.ceil(nDecs/2)
-        #pa = math.floor(nDecs/2)
+        pa = math.floor(nDecs/2)
         #nchs = (ps, pa)
         nAnglesH = nAngles//2
         if isNoDcLeakage:
             angles[:,:(ps-1)] = 0
         W0 = genW(angles[:,:nAnglesH]) 
         U0 = genU(angles[:,nAnglesH:])
-        #Uh1 = -genU(angles[:,nAnglesH:])
-        #Uh2 = -genU(angles[:,nAnglesH:])        
-        #Uv1 = -genU(angles[:,nAnglesH:])
-        #Uv2 = -genU(angles[:,nAnglesH:])        
-
+ 
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
@@ -456,27 +452,6 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 Ya[iblk,:] = U0[iblk,:] @ Ya[iblk,:]
             Yi = torch.cat((Ys,Ya),dim=1).view(nrows,ncols,nDecs)
             Z[iSample,:,:,:] = Yi
-
-        # Horizontal atom extention
-        #for ordH in range(ovlpFactor[Direction.HORIZONTAL]//2):
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,0,[0,0,1,0]) # target=diff, shift=right
-        #Z = block_butterfly_(Z,nchs)/2.
-        #Z = intermediate_rotation_(Z,nchs,Uh1)
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,1,[0,0,-1,0]) # target=sum, shift=left
-        #Z = block_butterfly_(Z,nchs)/2.
-        #Z = intermediate_rotation_(Z,nchs,Uh2)
-        # Vertical atom extention
-        #for ordV in range(ovlpFactor[Direction.VERTICAL]//2):
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,0,[0,1,0,0]) # target=diff, shift=down
-        #Z = block_butterfly_(Z,nchs)/2.
-        #Z = intermediate_rotation_(Z,nchs,Uv1)
-        #Z = block_butterfly_(Z,nchs)
-        #Z = block_shift_(Z,nchs,1,[0,-1,0,0]) # target=sum, shift=up
-        #Z = block_butterfly_(Z,nchs)/2.
-        #Z = intermediate_rotation_(Z,nchs,Uv2)
         expctdZ = Z
 
         # Instantiation of target class
