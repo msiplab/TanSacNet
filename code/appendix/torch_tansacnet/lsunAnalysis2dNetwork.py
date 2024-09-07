@@ -69,7 +69,7 @@ class LsunAnalysis2dNetwork(nn.Module):
             % number_of_levels)
         self.number_of_levels = number_of_levels
 
-        # Number of blocks
+        # # of blocks
         if input_size[Direction.VERTICAL]%stride[Direction.VERTICAL] != 0 or input_size[Direction.HORIZONTAL]%stride[Direction.HORIZONTAL] != 0:
             raise InvalidInputSize(
             '%d x %d : Currently, multiples of strides is only supported.'\
@@ -87,9 +87,10 @@ class LsunAnalysis2dNetwork(nn.Module):
             nlevels = 1
         else:
             nlevels = self.number_of_levels
+
         stages = [ nn.Sequential() for iStage in range(nlevels) ]
         for iStage in range(len(stages)):
-            iLevel = iStage+1
+            iLevel = iStage + 1
             strLv = 'Lv%0d_'%iLevel
 
             # Initial blocks
