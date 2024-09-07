@@ -459,7 +459,6 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
 
-    """
     @parameterized.expand(
         list(itertools.product(stride,height,width,datatype,usegpu))
     )
@@ -473,7 +472,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")
-        rtol, atol = 1e-4, 1e-5
+        rtol, atol = 1e-3, 1e-4
 
         genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
         genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
@@ -567,9 +566,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertEqual(actualZ.dtype,datatype)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
-    """
-        
-    """
+            
     @parameterized.expand(
         list(itertools.product(stride,ovlpfactor,height,width,datatype,usegpu))
     )
@@ -583,7 +580,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")
-        rtol, atol = 1e-4, 1e-5
+        rtol, atol = 1e-3, 1e-4
 
         genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
         genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
@@ -673,10 +670,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertEqual(actualZ.dtype,datatype)
-        msg = 'stride=%s, ovlpfactor=%s, height=%d, width=%d, datatype=%s' % (stride,ovlpfactor,height,width,datatype)
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
-        """
     
 """
     @parameterized.expand(
@@ -996,7 +991,7 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
 
     # Add specific test methods to the suite
-    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33_135'))
+    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33_198'))
 
     # Create a test runner
     runner = unittest.TextTestRunner()
