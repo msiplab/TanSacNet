@@ -12,7 +12,8 @@ datatype = [ torch.float32, torch.float64 ]
 ncols = [ 1, 2, 4 ]
 npoints = [ 1, 2, 3, 4, 5, 6 ]
 mode = [ 'Analysis', 'Synthesis' ]
-isdevicetest = True
+#isdevicetest = True
+usegpu = [ False, True ]
 
 class OrthonormalTransformTestCase(unittest.TestCase):
     """
@@ -33,14 +34,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
     """
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols))
+        list(itertools.product(datatype,ncols,usegpu))
     )
-    def testConstructor(self,datatype,ncols):
-        rtol,atol = 1e-5,1e-8 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testConstructor(self,datatype,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-5,1e-8 
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)
@@ -66,14 +71,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertEqual(actualMode,expctdMode)
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols))
+        list(itertools.product(datatype,ncols,usegpu))
     )
-    def testConstructorToDevice(self,datatype,ncols):
-        rtol,atol = 1e-5,1e-8 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testConstructorToDevice(self,datatype,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-5,1e-8 
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)
@@ -100,15 +109,19 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertEqual(actualMode,expctdMode)
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testCallWithAngles(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAngles(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
-
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
+        
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)   
         X = X.to(device)   
@@ -135,14 +148,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))        
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testCallWithAnglesToDevice(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAnglesToDevice(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)   
@@ -171,14 +188,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))        
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testCallWithAnglesAndMus(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAnglesAndMus(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)   
@@ -207,14 +228,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testCallWithAnglesAndMusToDevice(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testCallWithAnglesAndMusToDevice(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)   
@@ -243,14 +268,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testSetAngles(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testSetAngles(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)  
@@ -288,14 +317,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testSetAnglesToDevice(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testSetAnglesToDevice(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Expected values
         X = torch.randn(2,ncols,dtype=datatype)  
@@ -496,14 +529,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
     
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode))
+        list(itertools.product(datatype,mode,usegpu))
     )
-    def testBackward(self,datatype,mode):
-        rtol,atol = 1e-5,1e-8 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward(self,datatype,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")        
+            device = torch.device("cpu")
+        rtol,atol = 1e-5,1e-8 
 
         # Configuration
         ncols = 1
@@ -544,14 +581,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
         
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testBackwardMultiColumns(self,datatype,ncols,mode):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackwardMultiColumns(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Configuration
         nPoints = 2
@@ -591,14 +632,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,ncols,mode))
+        list(itertools.product(datatype,ncols,mode,usegpu))
     )
-    def testBackwardMultiColumnsAngs(self,datatype,ncols,mode):
-        rtol,atol = 1e-3,1e-6 
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackwardMultiColumnsAngs(self,datatype,ncols,mode,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol = 1e-3,1e-6 
 
         # Configuration
         nPoints = 2
@@ -643,14 +688,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,mode,ncols,usegpu))
     )
-    def testBackwardAngsAndMus(self,datatype,mode,ncols):
-        rtol,atol = 1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackwardAngsAndMus(self,datatype,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol = 1e-4,1e-7
 
         # Configuration
         #mode = 'Analysis'
@@ -722,14 +771,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
             target.mus = mus
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,mode,ncols,usegpu))
     )
-    def testBackwardSetAngles(self,datatype,mode,ncols):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackwardSetAngles(self,datatype,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol = 1e-3,1e-6
 
         # Configuration
         #mode='Synthesis'
@@ -806,14 +859,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,mode,ncols,usegpu))
     )
-    def testForward4x4RandAngs(self,datatype,mode,ncols):
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testForward4x4RandAngs(self,datatype,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
         #mode = 'Synthesis'
@@ -877,14 +934,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,mode,ncols,usegpu))
     )
-    def testForward4x4RandAngsToDevice(self,datatype,mode,ncols):
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testForward4x4RandAngsToDevice(self,datatype,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-4,1e-7
 
         # Configuration
         #mode = 'Synthesis'
@@ -949,14 +1010,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,mode,ncols,usegpu))
     )
-    def testBackward4x4RandAngPdAng2(self,datatype,mode,ncols):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward4x4RandAngPdAng2(self,datatype,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-3,1e-6
 
         # Configuration
         #mode = 'Synthesis'
@@ -1064,14 +1129,18 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
     
     @parameterized.expand(
-        list(itertools.product(datatype,mode,ncols))
+        list(itertools.product(datatype,mode,ncols,usegpu))
     )
-    def testBackward4x4RandAngPdAng5(self,datatype,mode,ncols):
-        rtol,atol=1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward4x4RandAngPdAng5(self,datatype,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        rtol,atol=1e-3,1e-6
 
         # Configuration
         #mode = 'Synthesis'
@@ -1179,15 +1248,19 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
     
     @parameterized.expand(
-        list(itertools.product(mode,ncols))
+        list(itertools.product(mode,ncols,usegpu))
     )
-    def testBackward4x4RandAngPdAng1(self,mode,ncols):
-        datatype=torch.double
-        rtol,atol = 1e-2,1e-5
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward4x4RandAngPdAng1(self,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        datatype=torch.double
+        rtol,atol = 1e-2,1e-4
 
         # Configuration
         #mode = 'Synthesis'
@@ -1302,15 +1375,19 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
     
     @parameterized.expand(
-        list(itertools.product(mode,ncols))
+        list(itertools.product(mode,ncols,usegpu))
     )
-    def testBackward8x8RandAngPdAng4(self,mode,ncols):
-        datatype=torch.double
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward8x8RandAngPdAng4(self,mode,ncols,usergpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        datatype=torch.double
+        rtol,atol=1e-4,1e-7
 
         # Configuration
         #mode = 'Synthesis'
@@ -1361,15 +1438,19 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(mode,ncols))
+        list(itertools.product(mode,ncols,usegpu))
     )
-    def testBackward8x8RandAngMusPdAng13(self,mode,ncols):
-        datatype = torch.double
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackward8x8RandAngMusPdAng13(self,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        datatype = torch.double
+        rtol,atol=1e-4,1e-7
 
         # Configuration
         #mode = 'Synthesis'
@@ -1422,15 +1503,19 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(mode,ncols))
+        list(itertools.product(mode,ncols,usegpu))
     )
-    def testBackword8x8RandAngMusPdAng7(self,mode,ncols):
-        datatype = torch.double
-        rtol,atol=1e-4,1e-7
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testBackword8x8RandAngMusPdAng7(self,mode,ncols,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
+        datatype = torch.double
+        rtol,atol=1e-4,1e-7
 
         # Configuration
         #mode = 'Synthesis'
@@ -1487,11 +1572,15 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
 
     @parameterized.expand(
-        list(itertools.product(mode,ncols,npoints))
+        list(itertools.product(mode,ncols,npoints,usegpu))
     )
-    def testGradCheckNxNRandAngMus(self,mode,ncols,npoints):
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testGradCheckNxNRandAngMus(self,mode,ncols,npoints,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
             
@@ -1520,11 +1609,15 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.autograd.gradcheck(target,(X,)))
 
     @parameterized.expand(
-        list(itertools.product(mode,ncols,npoints))
+        list(itertools.product(mode,ncols,npoints,usegpu))
     )
-    def testGradCheckNxNRandAngMusToDevice(self,mode,ncols,npoints):
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def testGradCheckNxNRandAngMusToDevice(self,mode,ncols,npoints,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
             device = torch.device("cpu")
             
