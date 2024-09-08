@@ -10,7 +10,7 @@ class InvalidMode(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
-class InvalidMus(Exception):
+class InvalidAngles(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)
 
@@ -40,4 +40,6 @@ class InvalidOverlappingFactor(Exception):
 
 class InvalidInputSize(Exception):
     def __init__(self,msg):
-        super().__init__(self,msg)        
+        class InvalidMus(Exception):
+    def __init__(self,msg):
+        super().__init__(self,msg)super().__init__(self,msg)        

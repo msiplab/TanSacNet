@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.autograd as autograd
 import math
 #import numpy as np
-from lsunLayerExceptions import InvalidMode, InvalidMus
+from lsunLayerExceptions import InvalidMode, InvalidMus, InvalidAngles
 
 class SetOfOrthonormalTransforms(nn.Module):
     """
@@ -121,7 +121,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         else:
             self.__angles = torch.tensor(angles,dtype=self.dtype,device=self.device)
         if self.__angles.size(0) != len(self.orthonormalTransforms):
-            raise InvalidMus(
+            raise InvalidAngles(
                 '%s : The number of angles should be equal to the number of blocks'\
                 % str(self.__angles)
             )
