@@ -3,7 +3,8 @@ import torch.nn as nn
 import math
 from lsunUtility import Direction
 from lsunLayerExceptions import InvalidNumberOfBlocks, InvalidStride
-from orthonormalTransform import SetOfOrthonormalTransforms
+from orthonormalTransform import SetOfOrthonormalTransforms,OrthonormalTransform
+
 
 class LsunInitialRotation2dLayer(nn.Module):
     """
@@ -41,8 +42,6 @@ class LsunInitialRotation2dLayer(nn.Module):
         self.dtype = dtype
         self.device = device
         self.name = name
-        self.angles = None
-        self.no_dc_leakage = no_dc_leakage        
 
         # Stride
         if stride is None:
@@ -53,6 +52,7 @@ class LsunInitialRotation2dLayer(nn.Module):
         if number_of_blocks is None:
             raise InvalidNumberOfBlocks("The number of blocks must be specified.")
         self.number_of_blocks = number_of_blocks
+        self.__no_dc_leakage = no_dc_leakage        
 
         # Number of channels
         ps = math.ceil(math.prod(self.stride)/2.0)
@@ -76,7 +76,26 @@ class LsunInitialRotation2dLayer(nn.Module):
 
         # Update parameters
         self.mus = mus
-        self.update_parameters()
+        #isGrad = self.orthTransW0.orthonormalTransforms[0].angles.requires_grad
+        # if self.__no_dc_leakage:
+        #    def partial_freeze(grad):
+        #        grad[:,:(ps-1)] = 0.0 
+        #    def register_freeze(m):
+        #        if type(m) == OrthonormalTransform:
+        #            if m.angles.requires_grad:
+        #               m.angles.register_hook(partial_freeze)
+        #    self.orthTransW0.apply(register_freeze)
+            #freeze = self.create_freeze(ps)
+            #self.orthTransW0.orthonormalTransforms[0].angles.register_hook(freeze)
+        #self.update_parameters()
+    
+    #def apply(self, fn):
+    #    super().apply(fn)
+    #    self.is_update_requested = True
+    #    ps = math.ceil(math.prod(self.stride)/2.0)
+    #    if self.__no_dc_leakage:            
+    #        with torch.no_grad():
+    #            self.orthTransW0.angles[:,:(ps-1)] = 0.0
 
     def forward(self,X):
         nSamples = X.size(dim=0)
@@ -87,9 +106,20 @@ class LsunInitialRotation2dLayer(nn.Module):
         pa = math.floor(nDecs/2.0)
 
         # Update parameters
-        if self.is_update_requested:
-            self.number_of_blocks = [ nrows, ncols ]
-            self.update_parameters()
+        #if self.is_update_requested:
+        #    self.number_of_blocks = [ nrows, ncols ]
+        #self.update_parameters()
+        if self.__no_dc_leakage:
+            self.orthTransW0.mus[:,0] = 1.0
+            self.orthTransW0.angles[:,:(ps-1)] = 0.0
+            #
+            #def partial_freeze(grad):
+            #    grad[:,:(ps-1)] = 0.0
+            #def register_freeze(m):
+            #    if type(m) == OrthonormalTransform:
+            #        if m.angles.requires_grad:
+            #            m.angles.register_hook(partial_freeze)
+            #self.orthTransW0.apply(register_freeze)
 
         # Process
         # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
@@ -97,21 +127,33 @@ class LsunInitialRotation2dLayer(nn.Module):
         Zs = self.orthTransW0(Y[:,:ps,:])
         Za = self.orthTransU0(Y[:,ps:,:])
         Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
-    
         return Z
     
+    @property
+    def no_dc_leakage(self):
+        return self.__no_dc_leakage
+
     @property
     def angles(self):
         return torch.cat((self.orthTransW0.angles,self.orthTransU0.angles),dim=1)
 
     @angles.setter
     def angles(self, angles):
-        self.__angles = angles
-        self.is_update_requested = True
+        #self.__angles = angles
+        nDecs = math.prod(self.stride)
+        nAnglesH = (nDecs-2)*nDecs//8
+        #ps = math.ceil(math.prod(self.stride)/2.0)
+        #if self.__no_dc_leakage:            
+        #    angles[:,:(ps-1)] = 0.0
+        #with torch.no_grad():
+        self.orthTransW0.angles = angles[:,:nAnglesH]
+        self.orthTransU0.angles = angles[:,nAnglesH:]
+        #self.is_update_requested = True
 
     @property
     def mus(self):
-        return self.__mus
+        #return self.__mus
+        return torch.cat((self.orthTransW0.mus,self.orthTransU0.mus),dim=1)
     
     @mus.setter
     def mus(self, mus):
@@ -121,34 +163,48 @@ class LsunInitialRotation2dLayer(nn.Module):
             mus = torch.ones(nBlocks,nDecs,dtype=self.dtype)
         elif isinstance(mus, int) or isinstance(mus, float):
             mus = mus*torch.ones(nBlocks,nDecs,dtype=self.dtype)
-        self.__mus = mus.to(self.device)
-        self.is_update_requested = True
+        #self.__mus = mus.to(self.device)
+        ps = math.ceil(nDecs/2.0)        
+        #if self.__no_dc_leakage:
+        #    mus[:,0] = 1.0
+        #with torch.no_grad():
+        self.orthTransW0.mus = mus[:,:ps]
+        self.orthTransU0.mus = mus[:,ps:]       
+        #self.is_update_requested = True
         
-    def update_parameters(self):
-        angles = self.__angles
-        mus = self.__mus
-        ps = int(math.ceil(math.prod(self.stride)/2.0))
-        if angles is None:
-            self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles).to(self.device)
-            self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles).to(self.device)
-        else:
-            if self.no_dc_leakage:
-                mus[:,0] = 1.0
-                self.__mus = mus
-                angles[:,:(ps-1)] = 0.0
-                self.__angles = angles
-            nAngles = angles.size(1)
-            anglesW = angles[:,:nAngles//2]
-            anglesU = angles[:,nAngles//2:]
-            #
-            self.orthTransW0.angles = anglesW
-            self.orthTransU0.angles = anglesU
-        musW = mus[:,:ps]
-        musU = mus[:,ps:]       
-        self.orthTransW0.mus = musW
-        self.orthTransU0.mus = musU
+    #def update_parameters(self):
+        #angles = self.__angles
+        #anglesW = self.orthTransW0.angles
+        #anglesU = self.orthTransU0.angles
+        #mus = self.__mus
+        #musW = self.orthTransW0.mus
+        #musU = self.orthTransU0.mus
+        #ps = math.prod(self.stride)//2
+        #if angles is None:
+        #    self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles).to(self.device)
+        #    self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles).to(self.device)
+        #else:
+        #if self.__no_dc_leakage:
+        #    self.orthTransW0.mus[:,0] = 1.0
+        #    self.orthTransW0.angles[:,:(ps-1)] = nn.init.zeros_(self.orthTransW0.angles[:,:(ps-1)]).to(self.device)
+                #nn.Parameter(torch.zeros_like(self.orthTransW0.angles[:,:(ps-1)]))
+            #self.orthTransW0.angles.register_hook(freeze_)
+            #musW[:,0] = 1.0
+            #self.__mus = mus
+            #anglesW[:,:(ps-1)] = 0.0
+            #self.__angles = angles
+        #nAngles = angles.size(1)
+        #anglesW = angles[:,:nAngles//2]
+        #anglesU = angles[:,nAngles//2:]
         #
-        self.is_update_requested = False
+        #self.orthTransW0.angles = anglesW
+        #self.orthTransU0.angles = anglesU
+        #musW = mus[:,:ps]
+        #musU = mus[:,ps:]       
+        #self.orthTransW0.mus = musW
+        #self.orthTransU0.mus = musU
+        #
+        #self.is_update_requested = False
 
 """
 classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen

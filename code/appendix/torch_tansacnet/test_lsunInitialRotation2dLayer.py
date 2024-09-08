@@ -37,6 +37,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
 
         https://www.eng.niigata-u.ac.jp/~msiplab/
     """
+
     @parameterized.expand(
             itertools.product(stride,nrows,ncols)
             )
@@ -118,7 +119,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertIsInstance(actualZ,torch.Tensor)
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+    
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
@@ -173,7 +174,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertIsInstance(actualZ,torch.Tensor)
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
-
+    
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
@@ -236,7 +237,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertIsInstance(actualZ,torch.Tensor)
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+    
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
@@ -307,7 +308,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         self.assertEqual(actualZ.shape,expctdZ.shape)
         message = 'usegpu=%s, stride=%s, nrows=%d, ncols=%d, mus=%f, datatype=%s' % (usegpu,stride,nrows,ncols,mus,datatype)
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=message)
-
+    
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,mus,datatype)
             )
@@ -395,9 +396,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                      for iblk in range(nblks) ] 
+        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),dim=0) for iblk in range(nblks) ] 
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -405,7 +404,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         for iblk in range(nblks):
             self.assertIsInstance(actualdLdW[iblk],torch.Tensor)
             self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
-
+    
     @parameterized.expand(
             itertools.product(usegpu,stride,nrows,ncols,datatype)
             )
@@ -494,9 +493,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),0) \
-                      for iblk in range(nblks) ]
+        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),0) for iblk in range(nblks) ]
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -598,9 +595,7 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, \
-                                    layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                        for iblk in range(nblks) ]
+        actualdLdW = [ torch.cat((layer.orthTransW0.orthonormalTransforms[iblk].angles.grad, layer.orthTransU0.orthonormalTransforms[iblk].angles.grad),dim=0) for iblk in range(nblks) ]
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -608,21 +603,23 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
         for iblk in range(nblks):
             self.assertIsInstance(actualdLdW[iblk],torch.Tensor)
             self.assertTrue(torch.allclose(actualdLdW[iblk],expctddLdW[iblk],rtol=rtol,atol=atol))
-
+ 
 if __name__ == '__main__':
     unittest.main()
 
+    """
     # Run specific test cases
-    #suite = unittest.TestSuite()
-    #suite.addTest(LsunInitialRotation2dLayerTestCase('testBackwardGrayscale_066'))
+    suite = unittest.TestSuite()
+    suite.addTest(LsunInitialRotation2dLayerTestCase('testForwardGrayscaleWithRandomAngles_053'))
 
-    #runner = unittest.TextTestRunner()
-    #runner.run(suite)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+    """
     
     """
     # TestSuite に特定のテストケースを追加
     suite = unittest.TestSuite()
-    suite.addTest(LsunInitialRotation2dLayerTestCase('testForwardGrayscale_142'))
+    suite.addTest(LsunInitialRotation2dLayerTestCase('testBackwardGrayscale_142'))
 
     # TestRunner でスイートを実行
     runner = unittest.TextTestRunner()
