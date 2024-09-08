@@ -387,10 +387,10 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         self.assertFalse(actualZ.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype,usegpu))
+        list(itertools.product(stride,height,width,nodcleakage,datatype,usegpu))
     )
     def testForwardGrayScaleOvlpFactor11(self,
-            stride, height, width, datatype, usegpu):
+            stride, height, width, nodcleakage, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -412,7 +412,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
 
         # Parameters
         ovlpFactor = [ 1, 1 ]
-        isNoDcLeakage = False # TODO: Handling no_dc_leakage
+        isNoDcLeakage = nodcleakage # False # TODO: Handling no_dc_leakage
         nSamples = 8
         nComponents = 1
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
@@ -470,14 +470,19 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertEqual(actualZ.dtype,datatype) 
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+
+        relerr = torch.abs(actualZ-expctdZ)/torch.abs(expctdZ)
+        abserr = torch.abs(actualZ-expctdZ)
+        msg = 'relerr=%s, abserr=%s, stride=%s, ovlpfactor=%s, height=%d, width=%d, nodcleakage=%s, datatype=%s' % (relerr,abserr,stride,ovlpFactor,height,width,nodcleakage,datatype)
+
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
         self.assertFalse(actualZ.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype,usegpu))
+        list(itertools.product(stride,height,width,nodcleakage,datatype,usegpu))
     )
     def testForwardGrayScaleOvlpFactor33(self,
-            stride, height, width, datatype, usegpu):
+            stride, height, width, nodcleakage, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -499,7 +504,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
 
         # Parameters
         ovlpFactor = [ 3, 3 ]
-        isNoDcLeakage = False # TODO: Handling no_dc_leakage
+        isNoDcLeakage = nodcleakage # False # TODO: Handling no_dc_leakage
         nSamples = 8
         nComponents = 1
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
@@ -582,7 +587,12 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertEqual(actualZ.dtype,datatype) 
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
+
+        relerr = torch.abs(actualZ-expctdZ)/torch.abs(expctdZ)
+        abserr = torch.abs(actualZ-expctdZ)
+        msg = 'relerr=%s, abserr=%s, stride=%s, ovlpfactor=%s, height=%d, width=%d, nodcleakage=%s, datatype=%s' % (relerr,abserr,stride,ovlpFactor,height,width,nodcleakage,datatype)
+
+        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol),msg=msg)
         self.assertFalse(actualZ.requires_grad)
 
     @parameterized.expand(
@@ -995,7 +1005,16 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
 
     # Add specific test methods to the suite
-    suite.addTest(LsunAnalysis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33Initial_215'))
+
+    of11 = [356, 358, 364, 366, 372, 374, 380, 382, 388, 390, 396, 398, 404, 406, 412, 414, 420, 422, 428, 430  ]
+
+    for i in of11:
+        suite.addTest(LsunAnalysis2dNetworkTestCase('testForwardGrayScaleOvlpFactor11_%s' % i))
+
+    of33 = [148, 150, 156, 158, 164, 166, 172, 174, 180, 182, 188, 190, 196, 198, 204, 206, 212, 214, 220, 222, 228, 230, 236, 238, 244, 246, 252, 254, 260, 262, 268, 270, 276, 278, 284, 286, 292, 294, 300, 302, 308, 310, 316, 318, 324, 326, 332, 334, 340, 342, 348, 350, 356, 358, 364, 366, 372, 374, 380, 382, 388, 390, 396, 398, 404, 406, 412, 414, 420, 422, 428, 430]
+
+    for i in of33:
+        suite.addTest(LsunAnalysis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33_%s' % i))
 
     # Create a test runner
     runner = unittest.TextTestRunner()
