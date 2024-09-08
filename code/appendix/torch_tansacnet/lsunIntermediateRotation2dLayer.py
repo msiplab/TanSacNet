@@ -43,8 +43,8 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         self.device = device
         self.__mode = mode
         self.name = name
-        self.angles = None
-        self.no_dc_leakage = no_dc_leakage
+        #self.angles = None
+        #self.no_dc_leakage = no_dc_leakage
 
         # Stride
         if stride is None:
@@ -77,7 +77,7 @@ class LsunIntermediateRotation2dLayer(nn.Module):
 
         # Update parameters
         self.mus = mus
-        self.update_parameters()
+        #self.update_parameters()
 
     def forward(self, X):
         nSamples = X.size(dim=0)
@@ -88,9 +88,9 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         pa = math.floor(nDecs/2.0)
 
         # Update parameters
-        if self.is_update_requested:
-            self.number_of_blocks = [ nrows, ncols ]
-            self.update_parameters()
+        #if self.is_update_requested:
+        #    self.number_of_blocks = [ nrows, ncols ]
+        #    self.update_parameters()
 
         # Process
         # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
@@ -98,7 +98,6 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         Zs = Y[:,:ps,:].clone()
         Za = self.orthTransUnx(Y[:,ps:,:])
         Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
-
         return Z
     
     @property
@@ -111,12 +110,14 @@ class LsunIntermediateRotation2dLayer(nn.Module):
     
     @angles.setter
     def angles(self, angles):
-        self.__angles = angles
-        self.is_update_requested = True
+        #self.__angles = angles
+        self.orthTransUnx.angles = angles
+        #self.is_update_requested = True
     
     @property
     def mus(self):
-        return self.__mus
+        #return self.__mus
+        return self.orthTransUnx.mus
     
     @mus.setter
     def mus(self, mus):
@@ -127,19 +128,20 @@ class LsunIntermediateRotation2dLayer(nn.Module):
             mus = torch.ones(nBlocks,ps,dtype=self.dtype)
         elif isinstance(mus, int) or isinstance(mus, float):
             mus = mus*torch.ones(nBlocks,ps,dtype=self.dtype)
-        self.__mus = mus.to(self.device)
-        self.is_update_requested = True
+        #self.__mus = mus.to(self.device)
+        self.orthTransUnx.mus = mus.to(self.device)
+        #self.is_update_requested = True
     
-    def update_parameters(self):
-        angles = self.__angles
-        mus = self.__mus
-        if angles is None:
-            self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
-        else:
-            self.orthTransUnx.angles = angles
-        self.orthTransUnx.mus = mus
+    #def update_parameters(self):
+    #    angles = self.__angles
+    #    mus = self.__mus
+    #    if angles is None:
+    #        self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
+    #    else:
+    #        self.orthTransUnx.angles = angles
+    #    self.orthTransUnx.mus = mus
         #
-        self.is_update_requested = False
+    #    self.is_update_requested = False
         
 """
     

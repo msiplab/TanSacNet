@@ -41,8 +41,8 @@ class LsunFinalRotation2dLayer(nn.Module):
         self.dtype = dtype
         self.device = device
         self.name = name        
-        self.angles = None
-        self.no_dc_leakage = no_dc_leakage
+        #self.angles = None
+        #self.no_dc_leakage = no_dc_leakage
 
         # Stride
         if stride is None:
@@ -53,6 +53,7 @@ class LsunFinalRotation2dLayer(nn.Module):
         if number_of_blocks is None:
             raise InvalidNumberOfBlocks("The number of blocks must be specified.")
         self.number_of_blocks = number_of_blocks
+        self.__no_dc_leakage = no_dc_leakage
 
         # Number of channels
         ps = math.ceil(math.prod(self.stride)/2)
@@ -76,7 +77,7 @@ class LsunFinalRotation2dLayer(nn.Module):
 
         # Update parameters
         self.mus = mus
-        self.update_parameters()
+        #self.update_parameters()
 
     def forward(self,X):
         nSamples = X.size(dim=0)
@@ -87,9 +88,17 @@ class LsunFinalRotation2dLayer(nn.Module):
         pa = math.floor(nDecs/2.0)
 
         # Update parameters
-        if self.is_update_requested:
-            self.number_of_blocks = [ nrows, ncols ]
-            self.update_parameters()
+        #if self.is_update_requested:
+        #    self.number_of_blocks = [ nrows, ncols ]
+        #    self.update_parameters()
+        if self.__no_dc_leakage:
+            mus__ = self.orthTransW0T.mus
+            mus__[:,0] = 1.0
+            self.orthTransW0T.mus = mus__
+            #
+            angles__ = self.orthTransW0T.angles
+            angles__[:,:(ps-1)] = 0.0
+            self.orthTransW0T.angles = angles__
 
         # Process
         # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
@@ -97,8 +106,11 @@ class LsunFinalRotation2dLayer(nn.Module):
         Zs = self.orthTransW0T(Y[:,:ps,:])
         Za = self.orthTransU0T(Y[:,ps:,:])
         Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
-
         return Z
+    
+    @property
+    def no_dc_leakage(self):
+        return self.__no_dc_leakage
     
     @property
     def angles(self):
@@ -106,12 +118,17 @@ class LsunFinalRotation2dLayer(nn.Module):
 
     @angles.setter
     def angles(self, angles):
-        self.__angles = angles
-        self.is_update_requested = True
+        nDecs = math.prod(self.stride)
+        nAnglesH = (nDecs-2)*nDecs//8
+        #self.__angles = angles
+        self.orthTransW0T.angles = angles[:,:nAnglesH]
+        self.orthTransU0T.angles = angles[:,nAnglesH:]
+        #self.is_update_requested = True
 
     @property
     def mus(self):
-        return self.__mus
+        #return self.__mus
+        return torch.cat((self.orthTransW0T.mus,self.orthTransU0T.mus),dim=1)
     
     @mus.setter
     def mus(self, mus):
@@ -121,34 +138,37 @@ class LsunFinalRotation2dLayer(nn.Module):
             mus = torch.ones(nBlocks,nDecs,dtype=self.dtype)
         elif isinstance(mus, int) or isinstance(mus, float):
             mus = mus*torch.ones(nBlocks,nDecs,dtype=self.dtype)
-        self.__mus = mus.to(self.device)
-        self.is_update_requested = True
+        #self.__mus = mus.to(self.device)
+        ps = math.ceil(nDecs/2.0)
+        self.orthTransW0T.mus = mus[:,:ps]
+        self.orthTransU0T.mus = mus[:,ps:]  
+        #self.is_update_requested = True
 
-    def update_parameters(self):
-        angles = self.__angles
-        mus = self.__mus
-        ps = int(math.ceil(math.prod(self.stride)/2.0))
-        if angles is None:
-            self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles).to(self.device)
-            self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
-        else:
-            if self.no_dc_leakage:
-                mus[:,0] = 1.0
-                self.__mus = mus
-                angles[:,:(ps-1)] = 0.0
-                self.__angles = angles
-            nAngles = angles.size(1)
-            anglesW = angles[:,:nAngles//2]
-            anglesU = angles[:,nAngles//2:]
+    #def update_parameters(self):
+    #    angles = self.__angles
+    #    mus = self.__mus
+    #    ps = int(math.ceil(math.prod(self.stride)/2.0))
+    #    if angles is None:
+    #        self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles).to(self.device)
+    #        self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
+    #    else:
+    #        if self.no_dc_leakage:
+    #            mus[:,0] = 1.0
+    #            self.__mus = mus
+    #            angles[:,:(ps-1)] = 0.0
+    #            self.__angles = angles
+    #        nAngles = angles.size(1)
+    #        anglesW = angles[:,:nAngles//2]
+    #        anglesU = angles[:,nAngles//2:]
             #
-            self.orthTransW0T.angles = anglesW
-            self.orthTransU0T.angles = anglesU
-        musW = mus[:,:ps]
-        musU = mus[:,ps:]       
-        self.orthTransW0T.mus = musW            
-        self.orthTransU0T.mus = musU
+    #        self.orthTransW0T.angles = anglesW
+    #        self.orthTransU0T.angles = anglesU
+    #    musW = mus[:,:ps]
+    #    musU = mus[:,ps:]       
+    #    self.orthTransW0T.mus = musW            
+    #    self.orthTransU0T.mus = musU
         #
-        self.is_update_requested = False
+    #    self.is_update_requested = False
 
 """
 classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen

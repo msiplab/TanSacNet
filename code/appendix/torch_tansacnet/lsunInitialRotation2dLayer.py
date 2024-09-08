@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
 from lsunUtility import Direction
 from lsunLayerExceptions import InvalidNumberOfBlocks, InvalidStride
-from orthonormalTransform import SetOfOrthonormalTransforms,OrthonormalTransform
+from orthonormalTransform import SetOfOrthonormalTransforms #,OrthonormalTransform
 
 
 class LsunInitialRotation2dLayer(nn.Module):
@@ -110,8 +110,13 @@ class LsunInitialRotation2dLayer(nn.Module):
         #    self.number_of_blocks = [ nrows, ncols ]
         #self.update_parameters()
         if self.__no_dc_leakage:
-            self.orthTransW0.mus[:,0] = 1.0
-            self.orthTransW0.angles[:,:(ps-1)] = 0.0
+            mus_ = self.orthTransW0.mus
+            mus_[:,0] = 1.0
+            self.orthTransW0.mus = mus_
+            #            
+            angles_ = self.orthTransW0.angles
+            angles_[:,:(ps-1)] = 0.0
+            self.orthTransW0.angles = angles_
             #
             #def partial_freeze(grad):
             #    grad[:,:(ps-1)] = 0.0
