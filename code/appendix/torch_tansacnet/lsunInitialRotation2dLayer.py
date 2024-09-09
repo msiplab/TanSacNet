@@ -77,16 +77,13 @@ class LsunInitialRotation2dLayer(nn.Module):
         # Update parameters
         self.mus = mus
         #isGrad = self.orthTransW0.orthonormalTransforms[0].angles.requires_grad
-        # if self.__no_dc_leakage:
+        #if self.__no_dc_leakage:
         #    def partial_freeze(grad):
-        #        grad[:,:(ps-1)] = 0.0 
-        #    def register_freeze(m):
-        #        if type(m) == OrthonormalTransform:
-        #            if m.angles.requires_grad:
-        #               m.angles.register_hook(partial_freeze)
-        #    self.orthTransW0.apply(register_freeze)
-            #freeze = self.create_freeze(ps)
-            #self.orthTransW0.orthonormalTransforms[0].angles.register_hook(freeze)
+        #        grad[:,:(ps-1)] = 0.0
+        #    for idx in range(len(self.orthTransW0.orthonormalTransforms)):
+        #        m = self.orthTransW0.orthonormalTransforms[idx]
+        #        if m.angles.requires_grad:
+        #            m.angles.register_hook(partial_freeze)               
         #self.update_parameters()
     
     #def apply(self, fn):
@@ -113,10 +110,11 @@ class LsunInitialRotation2dLayer(nn.Module):
             mus_ = self.orthTransW0.mus
             mus_[:,0] = 1.0
             self.orthTransW0.mus = mus_
-            #            
-            angles_ = self.orthTransW0.angles
-            angles_[:,:(ps-1)] = 0.0
-            self.orthTransW0.angles = angles_
+            #
+            with torch.no_grad():            
+                angles_ = self.orthTransW0.angles
+                angles_[:,:(ps-1)] = 0.0
+                self.orthTransW0.angles = angles_
             #
             #def partial_freeze(grad):
             #    grad[:,:(ps-1)] = 0.0
@@ -150,9 +148,9 @@ class LsunInitialRotation2dLayer(nn.Module):
         #ps = math.ceil(math.prod(self.stride)/2.0)
         #if self.__no_dc_leakage:            
         #    angles[:,:(ps-1)] = 0.0
-        #with torch.no_grad():
-        self.orthTransW0.angles = angles[:,:nAnglesH]
-        self.orthTransU0.angles = angles[:,nAnglesH:]
+        with torch.no_grad():
+            self.orthTransW0.angles = angles[:,:nAnglesH]
+            self.orthTransU0.angles = angles[:,nAnglesH:]
         #self.is_update_requested = True
 
     @property

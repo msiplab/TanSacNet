@@ -311,7 +311,7 @@ class GivensRotations4Synthesizer(autograd.Function):
         ctx.mark_non_differentiable(mus)        
         ctx.save_for_backward(input,angles,mus)
         omgs = SingleOrthonormalMatrixGenerationSystem(dtype=input.dtype,partial_difference=False)
-        R = omgs(angles,mus) #.to(input.device)
+        R = omgs(angles,mus).to(input.device)
         return R.T @ input
     
     @staticmethod

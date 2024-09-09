@@ -96,9 +96,10 @@ class LsunFinalRotation2dLayer(nn.Module):
             mus__[:,0] = 1.0
             self.orthTransW0T.mus = mus__
             #
-            angles__ = self.orthTransW0T.angles
-            angles__[:,:(ps-1)] = 0.0
-            self.orthTransW0T.angles = angles__
+            with torch.no_grad():
+                angles_ = self.orthTransW0T.angles
+                angles_[:,:(ps-1)] = 0.0
+                self.orthTransW0T.angles = angles_
 
         # Process
         # nSamples x nRows x nCols x nChs -> (nRows x nCols) x nChs x nSamples
@@ -121,8 +122,9 @@ class LsunFinalRotation2dLayer(nn.Module):
         nDecs = math.prod(self.stride)
         nAnglesH = (nDecs-2)*nDecs//8
         #self.__angles = angles
-        self.orthTransW0T.angles = angles[:,:nAnglesH]
-        self.orthTransU0T.angles = angles[:,nAnglesH:]
+        with torch.no_grad():
+            self.orthTransW0T.angles = angles[:,:nAnglesH]
+            self.orthTransU0T.angles = angles[:,nAnglesH:]
         #self.is_update_requested = True
 
     @property

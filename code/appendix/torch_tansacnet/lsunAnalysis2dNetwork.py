@@ -1,4 +1,4 @@
-import torch
+#import torch
 import torch.nn as nn
 from lsunBlockDct2dLayer import LsunBlockDct2dLayer 
 from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
