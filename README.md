@@ -81,7 +81,7 @@ parts of your network.
      Faculty of Engineering, Niigata University,
      8050 2-no-cho Ikarashi, Nishi-ku,
      Niigata, 950-2181, JAPAN
-     http://msiplab.eng.niigata-u.ac.jp/
+     https://www.eng.niigata-u.ac.jp/~msiplab/
  
 ## References
 
@@ -96,8 +96,8 @@ This work was supported by JSPS KAKENHI Grant Number JP22H00512.
 
 ### Developpers
 * Yasas GODAGE,  2022-
-* Eisuke KOBAYASHI, 2022-
+* Eisuke KOBAYASHI, 2022-2023
  
 ### Test contributers
-* 
+* Motoyasu SUZUKI, 2024- 
 
