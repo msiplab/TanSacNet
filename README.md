@@ -99,5 +99,6 @@ This work was supported by JSPS KAKENHI Grant Number JP22H00512.
 * Eisuke KOBAYASHI, 2022-2023
  
 ### Test contributers
-* Motoyasu SUZUKI, 2024- 
+* Motoyasu SUZUKI, 2024-
+* Seiyu HITOMI, 2024-
 
