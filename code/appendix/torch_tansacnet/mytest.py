@@ -8,6 +8,9 @@ MYTEST is a test suite that runs the test cases in TanSacNet package
 
 This test script works with the unittest module.
 
+Requirements:
+    torch, torch_dct, parameterized
+
 Copyright (c) 2024, Shogo MURAMATSU
 
 All rights reserved.
