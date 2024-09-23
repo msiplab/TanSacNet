@@ -377,10 +377,10 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertFalse(actualZ.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype,usegpu))
+        list(itertools.product(stride,height,width,nodcleakage,datatype,usegpu))
     )
     def testForwardGrayScaleOvlpFactor11(self,
-        stride, height, width, datatype, usegpu):
+        stride, height, width, nodcleakage, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -402,7 +402,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Parameters
         ovlpFactor = [ 1, 1 ]
-        isNoDcLeakage = False # TODO: Handling no_dc_leakage
+        isNoDcLeakage = nodcleakage # False # TODO: Handling no_dc_leakage
         nSamples = 8
         nComponents = 1
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
@@ -460,10 +460,10 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertFalse(actualZ.requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(stride,height,width,datatype,usegpu))
+        list(itertools.product(stride,height,width,nodcleakage, datatype,usegpu))
     )
     def testForwardGrayScaleOvlpFactor33(self,
-        stride, height, width, datatype, usegpu):
+        stride, height, width, nodcleakage, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -485,7 +485,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
 
         # Parameters
         ovlpFactor = [3, 3]
-        isNoDcLeakage = False # TODO: Handling no_dc_leakage
+        isNoDcLeakage = nodcleakage # False # TODO: Handling no_dc_leakage
         nSamples = 8
         nComponents = 1
         nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
@@ -673,67 +673,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
     
-"""
-    @parameterized.expand(
-        list(itertools.product(nchs,stride,ppord,datatype))
-    )
-    def testForwardGrayScaleOverlappingWithNoDcLeackage(self,
-            nchs, stride, ppord, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
-        else:
-            device = torch.device("cpu")            
-        #gen = OrthonormalMatrixGenerationSystem(dtype=datatype)
-
-        # Initialization function of angle parameters
-        def init_angles(m):
-            if type(m) == OrthonormalTransform:
-                torch.nn.init.normal_(m.angles)
-
-        # Parameters
-        nVm = 1
-        height = 8
-        width = 16
-        ppOrd = ppord
-        nSamples = 8
-        nrows = int(math.ceil(height/stride[Direction.VERTICAL]))
-        ncols = int(math.ceil(width/stride[Direction.HORIZONTAL]))
-        nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
-
-        # nSamples x nRows x nCols x nChsTotal
-        X = torch.cat(
-            [math.sqrt(nDecs)*torch.ones(nSamples,nrows,ncols,1,dtype=datatype,device=device,requires_grad=True),
-            torch.zeros(nSamples,nrows,ncols,nChsTotal-1,dtype=datatype,device=device,requires_grad=True)],
-            dim=3)
-
-        # Expected values        
-        # nSamples x nRows x nCols x nDecs
-        expctdZ = torch.ones(nSamples,nComponents,height,width,dtype=datatype).to(device)
-        
-        # Instantiation of target class
-        network = LsunSynthesis2dNetwork(
-            number_of_channels=nchs,
-            stride=stride,
-            polyphase_order=ppOrd,
-            number_of_vanishing_moments=nVm
-        )
-        network = network.to(device)
-
-        # Initialization of angle parameters
-        network.apply(init_angles)
-
-        # Actual values
-        with torch.no_grad():
-            actualZ = network.forward(X)
-
-        # Evaluation
-        self.assertEqual(actualZ.dtype,datatype)
-        self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-        self.assertFalse(actualZ.requires_grad)    
-        
+"""       
     @parameterized.expand(
         list(itertools.product(nchs,stride,nvm,nlevels,datatype))
     )
