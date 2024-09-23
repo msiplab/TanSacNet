@@ -55,7 +55,7 @@ class LsunBlockDct2dLayer(nn.Module):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(X.reshape(arrayshape),norm='ortho')
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         #cee = Y[:,0::2,0::2].reshape(Y.size(0),-1)
         #coo = Y[:,1::2,1::2].reshape(Y.size(0),-1)
