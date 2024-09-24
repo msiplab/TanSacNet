@@ -4,7 +4,7 @@ from lsunBlockDct2dLayer import LsunBlockDct2dLayer
 from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
 from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-#from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
+from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 from lsunUtility import Direction
 
@@ -147,8 +147,12 @@ class LsunAnalysis2dNetwork(nn.Module):
                     mode='Analysis',
                     mus=-1))
             # Channel Separation for intermediate stages
-        #    if self.number_of_levels > 0:
-        #        stages[iStage].add_module(strLv+'Sp',LsunChannelSeparation2dLayer())
+            if self.number_of_levels > 0:
+                stages[iStage].add_module(strLv+'Sp',LsunChannelSeparation2dLayer())
+
+            # Update size
+            nrows = nrows//stride[Direction.VERTICAL]
+            ncols = ncols//stride[Direction.HORIZONTAL]    
 
         # Stack modules as a list
         self.layers = nn.ModuleList(stages)
@@ -159,25 +163,25 @@ class LsunAnalysis2dNetwork(nn.Module):
             for m in self.layers:
                 y = m.forward(x) 
             return y
-        #else: # Tree structure
-        #    stride = self.stride
-        #    nSamples = x.size(0)
-        #    nComponents = x.size(1)
-        #    nrows = int(x.size(2)/stride[Direction.VERTICAL])
-        #    ncols = int(x.size(3)/stride[Direction.HORIZONTAL])
-        #    y = []
-        #    iLevel = 1                   
-        #    for m in self.layers:
-        #        yac, ydc = m.forward(x)
-        #        y.insert(0,yac)
-        #        if iLevel < self.number_of_levels:
-        #            x = ydc.view(nSamples,nComponents,nrows,ncols)
-        #            nrows = int(nrows/stride[Direction.VERTICAL])
-        #            ncols = int(ncols/stride[Direction.HORIZONTAL])     
-        #            iLevel += 1             
-        #        else:
-        #            y.insert(0,ydc)
-        #   return tuple(y)
+        else: # Tree structure
+            stride = self.stride
+            nSamples = x.size(0)
+            nComponents = x.size(1)
+            nrows = x.size(2)//stride[Direction.VERTICAL]
+            ncols = x.size(3)//stride[Direction.HORIZONTAL]
+            y = []
+            iLevel = 1                   
+            for m in self.layers:
+                yac, ydc = m.forward(x)
+                y.insert(0,yac)
+                if iLevel < self.number_of_levels:
+                    x = ydc.view(nSamples,nComponents,nrows,ncols)
+                    nrows = nrows//stride[Direction.VERTICAL]
+                    ncols = ncols//stride[Direction.HORIZONTAL]   
+                    iLevel += 1
+                else:
+                    y.insert(0,ydc)
+            return tuple(y)
     
     """
     @property
