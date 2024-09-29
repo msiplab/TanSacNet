@@ -4,7 +4,7 @@ from lsunBlockIdct2dLayer import LsunBlockIdct2dLayer
 from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
 from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-#from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
+from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
 from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 from lsunUtility import Direction
 
@@ -77,9 +77,13 @@ class LsunSynthesis2dNetwork(nn.Module):
         if input_size[Direction.VERTICAL] < 1 or input_size[Direction.HORIZONTAL] < 1:
             raise InvalidInputSize(
             '%d x %d : Positive integers are only supported.'\
-            % (input_size[Direction.VERTICAL], input_size[Direction.HORIZONTAL]))        
-        nrows = input_size[Direction.VERTICAL]//stride[Direction.VERTICAL]
-        ncols = input_size[Direction.HORIZONTAL]//stride[Direction.HORIZONTAL]
+            % (input_size[Direction.VERTICAL], input_size[Direction.HORIZONTAL]))
+        if number_of_levels > 0:   
+            nrows = input_size[Direction.VERTICAL]//(stride[Direction.VERTICAL]**number_of_levels)
+            ncols = input_size[Direction.HORIZONTAL]//(stride[Direction.HORIZONTAL]**number_of_levels)
+        else:
+            nrows = input_size[Direction.VERTICAL]//stride[Direction.VERTICAL]
+            ncols = input_size[Direction.HORIZONTAL]//stride[Direction.HORIZONTAL]
         self.input_size = input_size
         
         # Instantiation of layers
@@ -94,8 +98,8 @@ class LsunSynthesis2dNetwork(nn.Module):
             strLv = 'Lv%0d_'%iLevel
             
             # Channel Concatanation 
-            #if self.number_of_levels > 0:
-            #    stages[iStage].add_module(strLv+'Cc',LsunChannelConcatenation2dLayer())
+            if self.number_of_levels > 0:
+                stages[iStage].add_module(strLv+'Cc',LsunChannelConcatenation2dLayer())
             
             # Vertical concatenation
             for iOrderV in range(overlapping_factor[Direction.VERTICAL]-1,1,-2):  
@@ -149,7 +153,11 @@ class LsunSynthesis2dNetwork(nn.Module):
             stages[iStage].add_module(prefix+strLv+'E0~',LsunBlockIdct2dLayer(
                 stride=self.stride
                 ))    
-        
+            
+            # Update size
+            nrows *= stride[Direction.VERTICAL]
+            ncols *= stride[Direction.HORIZONTAL]   
+
         # Stack modules as a list
         self.layers = nn.ModuleList(stages)
             
@@ -159,23 +167,23 @@ class LsunSynthesis2dNetwork(nn.Module):
             for m in self.layers:
                 xdc = m.forward(x)
             return xdc
-        #else: # tree structure
-        #    stride = self.stride
-        #    nSamples = x[0].size(0)
-        #    nrows = x[0].size(1)
-        #    ncols = x[0].size(2)
-        #    iLevel = self.number_of_levels
-        #    for m in self.layers:
-        #        if iLevel == self.number_of_levels:
-        #            xdc = x[0]
-        #        xac = x[self.number_of_levels-iLevel+1]
-        #        y = m[0].forward(xac,xdc)
-        #        y = m[1::].forward(y)
-        #        nrows *= stride[Direction.VERTICAL]
-        #        ncols *= stride[Direction.HORIZONTAL]
-        #        xdc = y.reshape(nSamples,nrows,ncols,1)             
-        #        iLevel -= 1
-        #    return xdc.view(nSamples,1,nrows,ncols)
+        else: # tree structure
+            stride = self.stride
+            nSamples = x[0].size(0)
+            nrows = x[0].size(1)
+            ncols = x[0].size(2)
+            iLevel = self.number_of_levels
+            for m in self.layers:
+                if iLevel == self.number_of_levels:
+                    xdc = x[0]
+                xac = x[self.number_of_levels-iLevel+1]
+                y = m[0].forward(xac,xdc)
+                y = m[1::].forward(y)
+                nrows *= stride[Direction.VERTICAL]
+                ncols *= stride[Direction.HORIZONTAL]
+                xdc = y.reshape(nSamples,nrows,ncols,1)             
+                iLevel -= 1
+            return xdc.view(nSamples,1,nrows,ncols)
 
     """
     @property

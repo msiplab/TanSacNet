@@ -18,7 +18,7 @@ datatype = [ torch.float, torch.double ]
 height = [ 8, 16, 32 ]
 width = [ 8, 16, 32 ]
 nodcleakage = [ False, True ]
-#nlevels = [ 1, 2, 3 ]
+nlevels = [ 1, 2, 3 ]
 usegpu = [ True, False ]
 
 class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
@@ -673,113 +673,123 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
     
-"""       
     @parameterized.expand(
-        list(itertools.product(nchs,stride,nvm,nlevels,datatype))
+        list(itertools.product(height,width,nlevels,datatype,usegpu))
     )
     def testForwardGrayScaleMultiLevels(self,
-            nchs, stride, nvm, nlevels, datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+            height, width, nlevels, datatype, usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")      
-        gen = OrthonormalMatrixGenerationSystem(dtype=datatype)
+            device = torch.device("cpu")
+        rtol, atol = 1e-3, 1e-4
+
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
 
         # Initialization function of angle parameters
-        angle0 = 2.0*math.pi*random.random()
+        angle0 = 2.0 * math.pi * random.random()
         def init_angles(m):
             if type(m) == OrthonormalTransform:
-                torch.nn.init.constant_(m.angles,angle0)
+                torch.nn.init.constant_(m.angles, angle0)
 
         # Parameters
-        nVm = nvm
-        height = 8
-        width = 16
-        ppOrd = [ 2, 2 ]
+        stride = [2, 2]
+        ovlpFactor = [3, 3]
+        isNoDcLeakage = False # TODO: Handling no_dc_leakage
         nSamples = 8
-        nrows = int(math.ceil(height/(stride[Direction.VERTICAL]**nlevels)))
-        ncols = int(math.ceil(width/(stride[Direction.HORIZONTAL]**nlevels)))        
         nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
-
-        # nSamples x nRows x nCols x nChsTotal
+        nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
+        nrows = height // (stride[Direction.VERTICAL]**nlevels)
+        ncols = width // (stride[Direction.HORIZONTAL]**nlevels)
+        # nSamples x nRows x nCols x nDecs
         nrows_ = nrows
         ncols_ = ncols
         X = []
         for iLevel in range(1,nlevels+1):
             if iLevel == 1:
                 X.append(torch.randn(nSamples,nrows_,ncols_,1,dtype=datatype,device=device,requires_grad=True)) 
-            X.append(torch.randn(nSamples,nrows_,ncols_,nChsTotal-1,dtype=datatype,device=device,requires_grad=True))     
+            X.append(torch.randn(nSamples,nrows_,ncols_,nDecs-1,dtype=datatype,device=device,requires_grad=True))     
             nrows_ *= stride[Direction.VERTICAL]
             ncols_ *= stride[Direction.HORIZONTAL]
         X = tuple(X)
-
-        # Expected values        
+        nAngles = (nDecs-2)*nDecs//4
+        angles = angle0*torch.ones(nrows_*ncols_,nAngles,dtype=datatype,device=device)            
+        if isNoDcLeakage:
+            angles[:,:(ps-1)] = 0
+        nAnglesH = nAngles//2
+        W0T = genW(angles[:,:nAnglesH]).transpose(1,2)
+        U0T = genU(angles[:,nAnglesH:]).transpose(1,2)
+        Uh1T = -genU(angles[:,nAnglesH:]).transpose(1,2)
+        Uh2T = -genU(angles[:,nAnglesH:]).transpose(1,2)
+        Uv1T = -genU(angles[:,nAnglesH:]).transpose(1,2)
+        Uv2T = -genU(angles[:,nAnglesH:]).transpose(1,2)
+        
+        # Expected values
         # nSamples x nRows x nCols x nDecs
-        ps,pa = nchs
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nchs = (ps, pa)
         # Multi-level reconstruction
+        nrows_ = nrows
+        ncols_ = ncols
         for iLevel in range(nlevels,0,-1):
-            angles = angle0*torch.ones(int((nChsTotal-2)*nChsTotal/4)).to(device) #,dtype=datatype)
-            nAngsW = int(len(angles)/2)
-            angsW,angsU = angles[:nAngsW],angles[nAngsW:]
-            angsW,angsU = angles[:nAngsW],angles[nAngsW:]
-            if nVm > 0:
-                angsW[:(ps-1)] = torch.zeros_like(angsW[:(ps-1)])
             # Extract scale channel
             if iLevel == nlevels:
                 Xdc = X[0]
             Xac = X[nlevels-iLevel+1]
             Z = torch.cat((Xdc,Xac),dim=3)
             # Vertical atom concatenation
-            for ordV in range(int(ppOrd[Direction.VERTICAL]/2)):
-                Uv2T = -gen(angsU).T
-                Z = intermediate_rotation(Z,nchs,Uv2T)
-                Z = block_butterfly(Z,nchs)
-                Z = block_shift(Z,nchs,1,[0,1,0,0]) # target=sum, shift=down
-                Z = block_butterfly(Z,nchs)/2.
-                Uv1T = -gen(angsU).T
-                Z = intermediate_rotation(Z,nchs,Uv1T)
-                Z = block_butterfly(Z,nchs)
-                Z = block_shift(Z,nchs,0,[0,-1,0,0]) # target=diff, shift=up
-                Z = block_butterfly(Z,nchs)/2.
+            for ordV in range(ovlpFactor[Direction.VERTICAL]//2):        
+                Z = intermediate_rotation_(Z,nchs,Uv2T)
+                Z = block_butterfly_(Z,nchs)
+                Z = block_shift_(Z,nchs,1,[0,1,0,0]) # target=sum, shift=down
+                Z = block_butterfly_(Z,nchs)/2.
+                Z = intermediate_rotation_(Z,nchs,Uv1T)
+                Z = block_butterfly_(Z,nchs)
+                Z = block_shift_(Z,nchs,0,[0,-1,0,0]) # target=diff, shift=up
+                Z = block_butterfly_(Z,nchs)/2.
             # Horizontal atom concatenation
-            for ordH in range(int(ppOrd[Direction.HORIZONTAL]/2)):
-                Uh2T = -gen(angsU).T
-                Z = intermediate_rotation(Z,nchs,Uh2T)
-                Z = block_butterfly(Z,nchs)
-                Z = block_shift(Z,nchs,1,[0,0,1,0]) # target=sum, shift=right
-                Z = block_butterfly(Z,nchs)/2.
-                Uh1T = -gen(angsU).T
-                Z = intermediate_rotation(Z,nchs,Uh1T)
-                Z = block_butterfly(Z,nchs)
-                Z = block_shift(Z,nchs,0,[0,0,-1,0]) # target=diff, shift=left
-                Z = block_butterfly(Z,nchs)/2.
+            for ordH in range(ovlpFactor[Direction.HORIZONTAL]//2):        
+                Z = intermediate_rotation_(Z,nchs,Uh2T)
+                Z = block_butterfly_(Z,nchs)
+                Z = block_shift_(Z,nchs,1,[0,0,1,0]) # target=sum, shift=right
+                Z = block_butterfly_(Z,nchs)/2.
+                Z = intermediate_rotation_(Z,nchs,Uh1T)
+                Z = block_butterfly_(Z,nchs)
+                Z = block_shift_(Z,nchs,0,[0,0,-1,0]) # target=diff, shift=left
+                Z = block_butterfly_(Z,nchs)/2.
+            
             # Final rotation
-            W0T,U0T = gen(angsW).T,gen(angsU).T        
-            Ys = Z[:,:,:,:ps].view(-1,ps).T
-            Ya = Z[:,:,:,ps:].view(-1,pa).T
-            ms,ma = int(math.ceil(nDecs/2.)),int(math.floor(nDecs/2.))        
-            Zsa = torch.cat(
-                    ( W0T[:ms,:] @ Ys, 
-                      U0T[:ma,:] @ Ya ),dim=0)
-            V = Zsa.T.view(nSamples,nrows,ncols,nDecs)
-            A = permuteIdctCoefs_(V,stride)
-            Y = idct_2d(A)
+            for iSample in range(nSamples):
+                Vi = Z[iSample,:,:,:].clone()
+                Ys = Vi[:,:,:ps].view(-1,ps)
+                Ya = Vi[:,:,ps:].view(-1,pa)
+                for iblk in range(nrows_*ncols_):
+                    Ys[iblk,:] = W0T[iblk,:] @ Ys[iblk,:]
+                    Ya[iblk,:] = U0T[iblk,:] @ Ya[iblk,:]
+                Yi = torch.cat((Ys,Ya),dim=1).view(nrows_,ncols_,nDecs)
+                Z[iSample,:,:,:] = Yi                 
+            # Block IDCT (nSamples x nRows x nCols x nDecs)
+            A = permuteIdctCoefs_(Z,stride)
+            Y = dct.idct_2d(A,norm='ortho')
             # Update
-            nrows *= stride[Direction.VERTICAL]
-            ncols *= stride[Direction.HORIZONTAL]            
-            Xdc = Y.reshape(nSamples,nrows,ncols,1)
+            nrows_ *= stride[Direction.VERTICAL]
+            ncols_ *= stride[Direction.HORIZONTAL]            
+            Xdc = Y.reshape(nSamples,nrows_,ncols_,1)
         expctdZ = Xdc.view(nSamples,nComponents,height,width)
-        
+
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
-            number_of_channels=nchs,
+            input_size=[height,width],
             stride=stride,
-            polyphase_order=ppOrd,
-            number_of_vanishing_moments=nVm,
-            number_of_levels=nlevels
+            overlapping_factor=ovlpFactor,
+            number_of_levels=nlevels,
+            no_dc_leakage=isNoDcLeakage
         )
         network = network.to(device)
 
@@ -795,6 +805,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
 
+"""
     @parameterized.expand(
         list(itertools.product(nchs,stride,nvm,nlevels,datatype))        
     )
@@ -920,7 +931,7 @@ def intermediate_rotation_(X,nchs,R):
         Ya = Y[iSample,:,:,ps:].view(-1,pa)
         for iblk in range(nrows*ncols):
             Ya[iblk,:] = R[iblk,:,:] @ Ya[iblk,:]
-        Y[iSample,:,:,ps:] = Ya.view(nrows,ncols,pa)
+        Y[iSample,:,:,ps:] = Ya.clone().view(nrows,ncols,pa)
     return Y
 
 if __name__ == '__main__':
@@ -931,7 +942,8 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
 
     # Add specific test methods to the suite
-    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33_198'))
+    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleMultiLevels_009'))
+    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleMultiLevels_011'))    
 
     # Create a test runner
     runner = unittest.TextTestRunner()
