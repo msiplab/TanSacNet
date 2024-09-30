@@ -674,10 +674,10 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertFalse(actualZ.requires_grad)
     
     @parameterized.expand(
-        list(itertools.product(height,width,nlevels,datatype,usegpu))
+        list(itertools.product(height,width,nlevels,nodcleakage,datatype,usegpu))
     )
     def testForwardGrayScaleMultiLevels(self,
-            height, width, nlevels, datatype, usegpu):
+            height, width, nlevels, nodcleakage, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -700,7 +700,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Parameters
         stride = [2, 2]
         ovlpFactor = [3, 3]
-        isNoDcLeakage = False # TODO: Handling no_dc_leakage
+        isNoDcLeakage = nodcleakage # False 
         nSamples = 8
         nComponents = 1
         nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
