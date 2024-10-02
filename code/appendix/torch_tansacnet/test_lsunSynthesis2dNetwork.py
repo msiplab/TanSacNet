@@ -719,6 +719,11 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         X = tuple(X)
         nAngles = (nDecs-2)*nDecs//4
         angles = angle0*torch.ones(nrows_*ncols_,nAngles,dtype=datatype,device=device)            
+
+        # Expected values
+        ps = math.ceil(nDecs/2)
+        pa = math.floor(nDecs/2)
+        nchs = (ps, pa)
         if isNoDcLeakage:
             angles[:,:(ps-1)] = 0
         nAnglesH = nAngles//2
@@ -729,11 +734,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         Uv1T = -genU(angles[:,nAnglesH:]).transpose(1,2)
         Uv2T = -genU(angles[:,nAnglesH:]).transpose(1,2)
         
-        # Expected values
         # nSamples x nRows x nCols x nDecs
-        ps = math.ceil(nDecs/2)
-        pa = math.floor(nDecs/2)
-        nchs = (ps, pa)
         # Multi-level reconstruction
         nrows_ = nrows
         ncols_ = ncols
