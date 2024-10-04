@@ -25,7 +25,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
     """
     LSUNANLAYSIS2DNETWORKTESTCASE Test cases for LsunAnalysis2dNetwork
     
-    Requirements: Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
     Copyright (c) 2024, Shogo MURAMATSU
     
@@ -839,58 +839,64 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             self.assertTrue(torch.allclose(actualZ[iStage],expctdZ[iStage],rtol=rtol,atol=atol))
             self.assertFalse(actualZ[iStage].requires_grad)
 
-"""
     @parameterized.expand(
-        list(itertools.product(nchs,stride,nvm,nlevels,datatype))        
+        list(itertools.product(nlevels,nodcleakage,datatype,usegpu))
     )
     def testBackwardGrayScale(self,
-        nchs,stride,nvm,nlevels,datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        nlevels, nodcleakage, datatype, usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return 
         else:
-            device = torch.device("cpu")              
+            device = torch.device("cpu")
+        rtol, atol = 1e-3, 1e-4
 
         # Initialization function of angle parameters
+        angle0 = 2.0*math.pi*random.random()
         def init_angles(m):
             if type(m) == OrthonormalTransform:
-                torch.nn.init.zeros_(m.angles)             
+                torch.nn.init.constant_(m.angles,angle0)
 
         # Parameters
-        nVm = nvm
-        height = 8 
-        width = 16
-        ppOrd = [ 2, 2 ]
-        nSamples = 8
-        nrows = int(math.ceil(height/(stride[Direction.VERTICAL]**nlevels)))
-        ncols = int(math.ceil(width/(stride[Direction.HORIZONTAL]**nlevels)))        
+        stride_ = [2,2]
+        ovlpfactor_ = [3,3]
+        isNoDcLeakage = nodcleakage
+        nlevels_ = nlevels        
+        nSamples = 4
         nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        nrows = 2
+        ncols = 3
+        height_ = nrows*(stride_[Direction.VERTICAL]**nlevels_)
+        width_ = ncols*(stride_[Direction.HORIZONTAL]**nlevels_)
+        
+        # Source (nSamples x nComponents x height_ x width_)
+        X = torch.randn(nSamples,nComponents,height_,width_,dtype=datatype,device=device,requires_grad=True)
 
-        # Source (nSamples x nComponents x ((Stride[0]**nlevels) x nRows) x ((Stride[1]**nlevels) x nCols))
-        X = torch.randn(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
-
-        # Coefficients nSamples x nRows x nCols x nChsTotal
+        # Coefficients nSamples x nRows x nCols x nDecs
         nrows_ = nrows
         ncols_ = ncols
         dLdZ = []
         for iLevel in range(1,nlevels+1):
             if iLevel == 1:
                 dLdZ.append(torch.randn(nSamples,nrows_,ncols_,dtype=datatype,device=device)) 
-            dLdZ.append(torch.randn(nSamples,nrows_,ncols_,nChsTotal-1,dtype=datatype,device=device))     
-            nrows_ *= stride[Direction.VERTICAL]
-            ncols_ *= stride[Direction.HORIZONTAL]
+            dLdZ.append(torch.randn(nSamples,nrows_,ncols_,nDecs-1,dtype=datatype,device=device))     
+            nrows_ *= stride_[Direction.VERTICAL]
+            ncols_ *= stride_[Direction.HORIZONTAL]
         dLdZ = tuple(dLdZ)
 
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
-                number_of_channels=nchs,
-                stride=stride,
-                polyphase_order=ppOrd,
-                number_of_vanishing_moments=nVm,
-                number_of_levels=nlevels
-            ).to(device)
+                input_size=[height_,width_],
+                stride=stride_,
+                overlapping_factor=ovlpfactor_,
+                number_of_levels=nlevels_,
+                no_dc_leakage=isNoDcLeakage
+            )
+        network = network.to(device)
 
         # Initialization of angle parameters
         network.apply(init_angles)
@@ -898,11 +904,12 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Expected values
         adjoint = network.T
         expctddLdX = adjoint(dLdZ)
-        
+
         # Actual values
         Z = network(X)
         for iCh in range(len(Z)):
             Z[iCh].backward(dLdZ[iCh],retain_graph=True)
+
         actualdLdX = X.grad
 
         # Evaluation
@@ -910,6 +917,9 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
         for iCh in range(len(Z)):
             self.assertTrue(Z[iCh].requires_grad)
+
+"""
+    Local functions
 """
 
 def permuteDctCoefs_(x):
@@ -959,10 +969,10 @@ if __name__ == '__main__':
 
     # Add specific test methods to the suite
 
-    of = [ 9, 1 ]
+    of = [ 577, 579, 581, 583, 585, 587, 589, 591, 593, 595, 597, 599, 601, 603, 605, 607, 609, 611, 613, 615, 617, 619, 621, 623, 625, 627, 629, 631, 633, 635, 637, 639, 641, 643, 645, 647, 649, 651, 653, 655, 657, 659, 661, 663, 665, 667, 669, 671, 673, 675, 677, 679, 681, 683, 685, 687, 689, 691, 693, 695, 697, 699, 701, 703, 705, 707, 709, 711, 713, 715, 717, 719]
 
     for i in of:
-        suite.addTest(LsunAnalysis2dNetworkTestCase('testForwardGrayScaleMultiLevels_{:03d}'.format(i)))
+        suite.addTest(LsunAnalysis2dNetworkTestCase('testBackwardGrayScale_{:03d}'.format(i)))
                                                     
 
     #of33 = [148, 150, 156, 158, 164, 166, 172, 174, 180, 182, 188, 190, 196, 198, 204, 206, 212, 214, 220, 222, 228, 230, 236, 238, 244, 246, 252, 254, 260, 262, 268, 270, 276, 278, 284, 286, 292, 294, 300, 302, 308, 310, 316, 318, 324, 326, 332, 334, 340, 342, 348, 350, 356, 358, 364, 366, 372, 374, 380, 382, 388, 390, 396, 398, 404, 406, 412, 414, 420, 422, 428, 430]
