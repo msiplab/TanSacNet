@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.autograd as autograd
-from lsunLayerExceptions import InvalidDirection, InvalidTargetChannels
-from lsunUtility import Direction
+from .lsunLayerExceptions import InvalidDirection, InvalidTargetChannels
+from .lsunUtility import Direction
 
 class LsunAtomExtension2dLayer(nn.Module):
     """

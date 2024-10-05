@@ -4,8 +4,8 @@ from parameterized import parameterized
 import torch
 import torch.nn as nn
 import math
-from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
-from lsunUtility import Direction
+from torch_tansacnet.lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
+from torch_tansacnet.lsunUtility import Direction
 
 
 stride = [ [2, 2], [4, 4], [8, 8 ] ]

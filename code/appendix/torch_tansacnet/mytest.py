@@ -1,6 +1,7 @@
+#import subprocess
+#import sys
 import unittest
 import importlib
-#import sys
 import os
 
 """
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     #args = sys.argv
 
     # 現在のディレクトリを取得
-    current_dir = os.path.dirname(__file__)
+    current_dir = os.path.dirname(__file__)    
 
     # ディレクトリ内のすべての test_*.py ファイルをリスト化
     test_modules = [f[:-3] for f in os.listdir(current_dir) if f.startswith("test_") and f.endswith(".py") ]

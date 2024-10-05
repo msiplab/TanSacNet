@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.autograd as autograd
 import math
 #import numpy as np
-from lsunLayerExceptions import InvalidMode, InvalidMus, InvalidAngles
+from .lsunLayerExceptions import InvalidMode, InvalidMus, InvalidAngles
 
 class SetOfOrthonormalTransforms(nn.Module):
     """

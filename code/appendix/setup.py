@@ -11,5 +11,9 @@ setup(
         'torch-dct>=0.1.6',
         'scipy>=1.8.1',
         'parameterized>=0.9.0',
-    ]
+    ],
+    author='Shogo MURAMATSU',
+    author_email='shogo@eng.niigata-u.ac.jp',
+    description='TANSACNet: Tangent Space Adaptive Control Networks',
+    url='https://github.com/msiplab/TANSACNet'
 )

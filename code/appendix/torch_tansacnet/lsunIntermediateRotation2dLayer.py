@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import math
-from lsunUtility import Direction
-from lsunLayerExceptions import InvalidMode, InvalidNumberOfBlocks, InvalidStride
-from orthonormalTransform import SetOfOrthonormalTransforms
+from .lsunUtility import Direction
+from .lsunLayerExceptions import InvalidMode, InvalidNumberOfBlocks, InvalidStride
+from .orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunIntermediateRotation2dLayer(nn.Module):
     """

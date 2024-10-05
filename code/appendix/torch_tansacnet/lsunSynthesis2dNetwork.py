@@ -1,12 +1,12 @@
 #import torch
 import torch.nn as nn
-from lsunBlockIdct2dLayer import LsunBlockIdct2dLayer 
-from lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
-from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
-from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
-from lsunUtility import Direction
+from .lsunBlockIdct2dLayer import LsunBlockIdct2dLayer 
+from .lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
+from .lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
+from .lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from .lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
+from .lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
+from .lsunUtility import Direction
 
 class LsunSynthesis2dNetwork(nn.Module):
     """
@@ -187,7 +187,7 @@ class LsunSynthesis2dNetwork(nn.Module):
 
     @property
     def T(self):
-        from lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
+        from .lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
         import re
 
         # Create analyzer as the adjoint of SELF

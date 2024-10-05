@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import math
 from random import *
-from orthonormalTransform import OrthonormalTransform, SingleOrthonormalMatrixGenerationSystem
-from lsunLayerExceptions import InvalidMode, InvalidMus
+from torch_tansacnet.orthonormalTransform import OrthonormalTransform, SingleOrthonormalMatrixGenerationSystem
+from torch_tansacnet.lsunLayerExceptions import InvalidMode, InvalidMus
 
 datatype = [ torch.float32, torch.float64 ]
 ncols = [ 1, 2, 4 ]

@@ -3,8 +3,8 @@ import unittest
 from parameterized import parameterized
 import math
 import torch
-from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-from lsunUtility import Direction, OrthonormalMatrixGenerationSystem
+from torch_tansacnet.lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from torch_tansacnet.lsunUtility import Direction, OrthonormalMatrixGenerationSystem
 
 stride = [ [2, 2], [4, 4] ]
 mus = [ 1, -1 ]

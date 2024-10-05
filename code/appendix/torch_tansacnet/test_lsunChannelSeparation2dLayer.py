@@ -3,7 +3,7 @@ import unittest
 from parameterized import parameterized
 import torch
 import torch.nn as nn
-from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
+from torch_tansacnet.lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
 
 nchs = [ [3, 3], [4, 4], [32, 32] ]
 datatype = [ torch.float32, torch.float64 ]

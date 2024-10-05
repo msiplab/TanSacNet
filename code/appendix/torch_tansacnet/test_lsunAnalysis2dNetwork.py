@@ -7,10 +7,10 @@ import torch_dct as dct
 
 import math
 import random
-from lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
-from lsunUtility import Direction, OrthonormalMatrixGenerationSystem
-from orthonormalTransform import OrthonormalTransform
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
+from torch_tansacnet.lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
+from torch_tansacnet.lsunUtility import Direction, OrthonormalMatrixGenerationSystem
+from torch_tansacnet.orthonormalTransform import OrthonormalTransform
+from torch_tansacnet.lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
 
 stride = [ [2, 1], [1, 2], [2, 2], [2, 4], [4, 1], [4, 4] ]
 ovlpfactor = [ [1, 1], [3, 3], [5, 5], [1, 3], [3, 1] ]

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch_dct as dct
 import math
-from lsunUtility import Direction, permuteDctCoefs
+from .lsunUtility import Direction, permuteDctCoefs
     
 class LsunBlockDct2dLayer(nn.Module):
     """

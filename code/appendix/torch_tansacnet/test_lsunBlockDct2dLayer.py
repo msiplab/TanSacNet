@@ -7,8 +7,8 @@ import torch.nn as nn
 import scipy.fftpack as fftpack
 
 import math
-from lsunBlockDct2dLayer import LsunBlockDct2dLayer
-from lsunUtility import Direction
+from torch_tansacnet.lsunBlockDct2dLayer import LsunBlockDct2dLayer
+from torch_tansacnet.lsunUtility import Direction
 
 stride = [ [1, 1], [2, 2], [2, 4], [4, 1], [4, 4] ]
 datatype = [ torch.float32, torch.float64 ]

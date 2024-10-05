@@ -1,12 +1,12 @@
 #import torch
 import torch.nn as nn
-from lsunBlockDct2dLayer import LsunBlockDct2dLayer 
-from lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
-from lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
-from lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
-from lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
-from lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
-from lsunUtility import Direction
+from .lsunBlockDct2dLayer import LsunBlockDct2dLayer 
+from .lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
+from .lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
+from .lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from .lsunChannelSeparation2dLayer import LsunChannelSeparation2dLayer
+from .lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
+from .lsunUtility import Direction
 
 class LsunAnalysis2dNetwork(nn.Module):
     """
@@ -185,7 +185,7 @@ class LsunAnalysis2dNetwork(nn.Module):
 
     @property
     def T(self):
-        from lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
+        from .lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
         import re
 
         # Create synthesizer as the adjoint of SELF

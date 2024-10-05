@@ -3,7 +3,7 @@ import unittest
 from parameterized import parameterized
 import torch
 import torch.nn as nn
-from lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
+from torch_tansacnet.lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
 
 nchs = [ [3, 3], [4, 4], [32, 32] ]
 datatype = [ torch.float32, torch.float64 ]

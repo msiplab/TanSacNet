@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import math
-from lsunUtility import Direction
-from lsunLayerExceptions import InvalidNumberOfBlocks, InvalidStride
-from orthonormalTransform import SetOfOrthonormalTransforms #,OrthonormalTransform
+from .lsunUtility import Direction
+from .lsunLayerExceptions import InvalidNumberOfBlocks, InvalidStride
+from .orthonormalTransform import SetOfOrthonormalTransforms #,OrthonormalTransform
 
 
 class LsunInitialRotation2dLayer(nn.Module):

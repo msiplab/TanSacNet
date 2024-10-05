@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import math
 from random import *
-from lsunUtility import OrthonormalMatrixGenerationSystem
+from torch_tansacnet.lsunUtility import OrthonormalMatrixGenerationSystem
 
 nblks = [ 1, 2, 4 ]
 
