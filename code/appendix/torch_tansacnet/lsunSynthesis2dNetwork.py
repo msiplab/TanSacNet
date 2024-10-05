@@ -12,7 +12,7 @@ class LsunSynthesis2dNetwork(nn.Module):
     """
     LSUNSYNTHESIS2DNETWORK
     
-    Requirements: Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
     Copyright (c) 2024, Shogo MURAMATSU
     
@@ -185,7 +185,6 @@ class LsunSynthesis2dNetwork(nn.Module):
                 iLevel -= 1
             return xdc.view(nSamples,1,nrows,ncols)
 
-    """
     @property
     def T(self):
         from lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
@@ -193,6 +192,7 @@ class LsunSynthesis2dNetwork(nn.Module):
 
         # Create analyzer as the adjoint of SELF
         analyzer = LsunAnalysis2dNetwork(
+            input_size=self.input_size,
             stride=self.stride,
             overlapping_factor=self.overlapping_factor,
             no_dc_leakage=self.no_dc_leakage,
@@ -211,15 +211,11 @@ class LsunSynthesis2dNetwork(nn.Module):
             istage_ana = int(re.sub('^layers\.|\.Lv\d_.+$','',key))            
             istage_syn = (nlevels-1)-istage_ana
             angs = syn_state_dict[key]
-            ana_state_dict[key\
-                .replace('layers.%d'%istage_ana,'layers.%d'%istage_syn)\
-                .replace('~','')\
-                .replace('T.angles','.angles') ] = angs
-        
+            ana_state_dict[key.replace('layers.%d'%istage_ana,'layers.%d'%istage_syn).replace('~','').replace('T.orthonormalTransforms','.orthonormalTransforms') ] = angs
+
         # Load state dictionary
         analyzer.load_state_dict(ana_state_dict)
 
         # Return adjoint
         return analyzer.to(angs.device)
-    """
 

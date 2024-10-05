@@ -25,7 +25,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
     """
     LSUNSYNHESIS2DNETWORKTESTCASE Test cases for LsunSynthesis2dNetwork
     
-    Requirements: Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
     Copyright (c) 2024, Shogo MURAMATSU
     
@@ -806,64 +806,135 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
         self.assertFalse(actualZ.requires_grad)
 
-"""
     @parameterized.expand(
-        list(itertools.product(nchs,stride,nvm,nlevels,datatype))        
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage,datatype,usegpu))
     )
     def testBackwardGrayScale(self,
-        nchs,stride,nvm,nlevels,datatype):
-        rtol,atol = 1e-3,1e-6
-        if isdevicetest:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")   
+        stride,ovlpfactor,height,width,nodcleakage,datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
         else:
-            device = torch.device("cpu")              
+            device = torch.device("cpu")
+        rtol, atol = 1e-3, 1e-4
 
         # Initialization function of angle parameters
+        angle0 = 2.0*math.pi*random.random()
         def init_angles(m):
             if type(m) == OrthonormalTransform:
-                torch.nn.init.zeros_(m.angles)             
+                torch.nn.init.constant_(m.angles,angle0)       
 
         # Parameters
-        nVm = nvm
-        height = 8 
-        width = 16
-        ppOrd = [ 2, 2 ]
+        stride_ = stride
+        ovlpfactor_ = ovlpfactor
+        isNoDcLeakage = nodcleakage 
+        nlevels_ = 0
         nSamples = 8
-        nrows = int(math.ceil(height/(stride[Direction.VERTICAL]**nlevels)))
-        ncols = int(math.ceil(width/(stride[Direction.HORIZONTAL]**nlevels)))        
         nComponents = 1
-        nDecs = stride[0]*stride[1] #math.prod(stride)
-        nChsTotal = sum(nchs)
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        nrows = height//stride_[Direction.VERTICAL]
+        ncols = width//stride_[Direction.HORIZONTAL]
 
-        # Coefficients nSamples x nRows x nCols x nChsTotal
-        nrows_ = nrows
-        ncols_ = ncols
-        X = []
-        for iLevel in range(1,nlevels+1):
-            if iLevel == 1:
-                X.append(torch.randn(nSamples,nrows_,ncols_,dtype=datatype,device=device,requires_grad=True)) 
-            X.append(torch.randn(nSamples,nrows_,ncols_,nChsTotal-1,dtype=datatype,device=device,requires_grad=True))     
-            nrows_ *= stride[Direction.VERTICAL]
-            ncols_ *= stride[Direction.HORIZONTAL]
-        X = tuple(X)
+        # Coefficients nSamples x nRows x nCols x nDecs
+        X = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device,requires_grad=True)
 
-        # Source (nSamples x nComponents x ((Stride[0]**nlevels) x nRows) x ((Stride[1]**nlevels) x nCols))
+        # nSamples x nComponents x height x width
         dLdZ = torch.randn(nSamples,nComponents,height,width,dtype=datatype,device=device)
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
-                number_of_channels=nchs,
-                stride=stride,
-                polyphase_order=ppOrd,
-                number_of_vanishing_moments=nVm,
-                number_of_levels=nlevels
-            ).to(device)
+            input_size=[height,width],
+            stride=stride_,
+            overlapping_factor=ovlpfactor_,
+            number_of_levels=nlevels_,
+            no_dc_leakage=isNoDcLeakage
+        )
+        network = network.to(device)
 
         # Initialization of angle parameters
         network.apply(init_angles)
 
         # Expected values
-        adjoint = network.T
+        adjoint = network.T           
+        expctddLdX = adjoint(dLdZ)
+        
+        # Actual values
+        Z = network(X)
+        Z.backward(dLdZ,retain_graph=True)
+        actualdLdX = X.grad
+      
+        # Evaluation
+        self.assertEqual(actualdLdX.dtype,datatype)
+        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        self.assertTrue(Z.requires_grad)
+
+    @parameterized.expand(
+        list(itertools.product(nlevels,nodcleakage,datatype,usegpu))
+    )
+    def testBackwardGrayScaleMultiLevels(self,
+        nlevels,nodcleakage,datatype,usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-3, 1e-4
+
+        # Initialization function of angle parameters
+        angle0 = 2.0*math.pi*random.random()
+        def init_angles(m):
+            if type(m) == OrthonormalTransform:
+                torch.nn.init.constant_(m.angles,angle0)       
+
+        # Parameters
+        stride_ = [2, 2]
+        ovlpfactor_ = [3, 3]
+        isNoDcLeakage = nodcleakage 
+        nlevels_ = nlevels
+        nSamples = 4
+        nComponents = 1
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        nrows = 2
+        ncols = 3
+        height_ = nrows*(stride_[Direction.VERTICAL]**nlevels_)
+        width_ = ncols*(stride_[Direction.HORIZONTAL]**nlevels_) 
+
+        # Coefficients nSamples x nRows x nCols x nDecs
+        nrows_ = nrows
+        ncols_ = ncols
+        X = []
+        for iLevel in range(1,nlevels_+1):
+            if iLevel == 1:
+                X.append(torch.randn(nSamples,nrows_,ncols_,1,dtype=datatype,device=device,requires_grad=True)) 
+            X.append(torch.randn(nSamples,nrows_,ncols_,nDecs-1,dtype=datatype,device=device,requires_grad=True))     
+            nrows_ *= stride_[Direction.VERTICAL]
+            ncols_ *= stride_[Direction.HORIZONTAL]
+        X = tuple(X)
+
+        # nSamples x nComponents x height x width
+        dLdZ = torch.randn(nSamples,nComponents,height_,width_,dtype=datatype,device=device)
+
+        # Instantiation of target class
+        network = LsunSynthesis2dNetwork(
+            input_size=[height_,width_],
+            stride=stride_,
+            overlapping_factor=ovlpfactor_,
+            number_of_levels=nlevels_,
+            no_dc_leakage=isNoDcLeakage
+        )
+        network = network.to(device)
+
+        # Initialization of angle parameters
+        network.apply(init_angles)
+
+        # Expected values
+        adjoint = network.T           
         expctddLdX = adjoint(dLdZ)
         
         # Actual values
@@ -873,12 +944,17 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         for iCh in range(len(X)):
             actualdLdX.append(X[iCh].grad)
 
+      
         # Evaluation
         for iCh in range(len(X)):
+            #print('actual(',iCh,'): ',actualdLdX[iCh].shape)
+            #print('expctd(',iCh,'): ',expctddLdX[iCh].shape)
             self.assertEqual(actualdLdX[iCh].dtype,datatype)
             self.assertTrue(torch.allclose(actualdLdX[iCh],expctddLdX[iCh],rtol=rtol,atol=atol))
         self.assertTrue(Z.requires_grad)
 
+"""
+    Local functions
 """
 
 def permuteIdctCoefs_(x,block_size):
@@ -943,9 +1019,12 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
 
     # Add specific test methods to the suite
-    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleMultiLevels_009'))
-    suite.addTest(LsunSynthesis2dNetworkTestCase('testForwardGrayScaleMultiLevels_011'))    
 
+    of = [ 1159 ]
+           
+    for i in of:
+        suite.addTest(LsunSynthesis2dNetworkTestCase('testBackwardGrayScale_{:02d}'.format(i)))
+                                                    
     # Create a test runner
     runner = unittest.TextTestRunner()
 
