@@ -810,7 +810,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 nrows = nrows//stride_[Direction.VERTICAL]
                 ncols = ncols//stride_[Direction.HORIZONTAL]
             else: # Xdc
-                coefs.insert(0,Z[:,:,:,0])              
+                coefs.insert(0,Z[:,:,:,0].unsqueeze(3))              
         expctdZ = tuple(coefs)
 
         #for iStage in range(nlevels+1):
@@ -840,9 +840,74 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             self.assertFalse(actualZ[iStage].requires_grad)
 
     @parameterized.expand(
-        list(itertools.product(nlevels,nodcleakage,datatype,usegpu))
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage,datatype,usegpu))
     )
     def testBackwardGrayScale(self,
+        stride,ovlpfactor,height,width,nodcleakage, datatype, usegpu):
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device("cuda:0")
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device("cpu")
+        rtol, atol = 1e-3, 1e-4
+
+        # Initialization function of angle parameters
+        angle0 = 2.0*math.pi*random.random()
+        def init_angles(m):
+            if type(m) == OrthonormalTransform:
+                torch.nn.init.constant_(m.angles,angle0)
+
+        # Parameters
+        stride_ = stride
+        ovlpfactor_ = ovlpfactor
+        isNoDcLeakage = nodcleakage
+        nlevels_ = 0        
+        nSamples = 8
+        nComponents = 1
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        nrows = height//stride_[Direction.VERTICAL]
+        ncols = width//stride_[Direction.HORIZONTAL]
+
+        # Source (nSamples x nComponents x height_ x width_)
+        X = torch.randn(nSamples,nComponents,height,width,dtype=datatype,device=device,requires_grad=True)
+
+        # Coefficients nSamples x nRows x nCols x nDecs
+        dLdZ = torch.randn(nSamples,nrows,ncols,nDecs,dtype=datatype,device=device) 
+
+        # Instantiation of target class
+        network = LsunAnalysis2dNetwork(
+                input_size=[height,width],
+                stride=stride_,
+                overlapping_factor=ovlpfactor_,
+                number_of_levels=nlevels_,
+                no_dc_leakage=isNoDcLeakage
+            )
+        network = network.to(device)
+
+        # Initialization of angle parameters
+        network.apply(init_angles)
+
+        # Expected values
+        adjoint = network.T
+        expctddLdX = adjoint(dLdZ)
+
+        # Actual values
+        Z = network(X)
+        Z.backward(dLdZ,retain_graph=True)
+        actualdLdX = X.grad
+
+        # Evaluation
+        self.assertEqual(actualdLdX.dtype,datatype)
+        self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
+        self.assertTrue(Z.requires_grad)
+
+    @parameterized.expand(
+        list(itertools.product(nlevels,nodcleakage,datatype,usegpu))
+    )
+    def testBackwardGrayScaleMultiLevels(self,
         nlevels, nodcleakage, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
@@ -882,7 +947,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         dLdZ = []
         for iLevel in range(1,nlevels+1):
             if iLevel == 1:
-                dLdZ.append(torch.randn(nSamples,nrows_,ncols_,dtype=datatype,device=device)) 
+                dLdZ.append(torch.randn(nSamples,nrows_,ncols_,1,dtype=datatype,device=device)) 
             dLdZ.append(torch.randn(nSamples,nrows_,ncols_,nDecs-1,dtype=datatype,device=device))     
             nrows_ *= stride_[Direction.VERTICAL]
             ncols_ *= stride_[Direction.HORIZONTAL]
@@ -969,16 +1034,10 @@ if __name__ == '__main__':
 
     # Add specific test methods to the suite
 
-    of = [ 577, 579, 581, 583, 585, 587, 589, 591, 593, 595, 597, 599, 601, 603, 605, 607, 609, 611, 613, 615, 617, 619, 621, 623, 625, 627, 629, 631, 633, 635, 637, 639, 641, 643, 645, 647, 649, 651, 653, 655, 657, 659, 661, 663, 665, 667, 669, 671, 673, 675, 677, 679, 681, 683, 685, 687, 689, 691, 693, 695, 697, 699, 701, 703, 705, 707, 709, 711, 713, 715, 717, 719]
+    of = [ 23 ]
 
     for i in of:
-        suite.addTest(LsunAnalysis2dNetworkTestCase('testBackwardGrayScale_{:03d}'.format(i)))
-                                                    
-
-    #of33 = [148, 150, 156, 158, 164, 166, 172, 174, 180, 182, 188, 190, 196, 198, 204, 206, 212, 214, 220, 222, 228, 230, 236, 238, 244, 246, 252, 254, 260, 262, 268, 270, 276, 278, 284, 286, 292, 294, 300, 302, 308, 310, 316, 318, 324, 326, 332, 334, 340, 342, 348, 350, 356, 358, 364, 366, 372, 374, 380, 382, 388, 390, 396, 398, 404, 406, 412, 414, 420, 422, 428, 430]
-
-    #for i in of33:
-    #    suite.addTest(LsunAnalysis2dNetworkTestCase('testForwardGrayScaleOvlpFactor33_%s' % i))
+        suite.addTest(LsunAnalysis2dNetworkTestCase('testBackwardGrayScaleMultiLevels_{:02d}'.format(i)))
 
     # Create a test runner
     runner = unittest.TextTestRunner()

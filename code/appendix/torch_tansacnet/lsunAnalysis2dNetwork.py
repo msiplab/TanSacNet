@@ -180,7 +180,7 @@ class LsunAnalysis2dNetwork(nn.Module):
                     ncols = ncols//stride[Direction.HORIZONTAL]   
                     iLevel += 1
                 else:
-                    y.insert(0,ydc)
+                    y.insert(0,ydc.unsqueeze(3))
             return tuple(y)
 
     @property
