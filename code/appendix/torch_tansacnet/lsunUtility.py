@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import math
 
 class Direction:
@@ -16,6 +17,22 @@ def rot_(vt, vb, angle):
     vt = vt - u
     vb = vb + u
     return vt, vb
+
+class ForwardTruncationLayer(nn.Module):
+    """
+    FORWARDTRUNCATIONLAYER Forward truncation layer
+    
+    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    """
+    _forward_pre_hooks_with_kwargs = None
+
+class AdjointTruncationLayer(nn.Module):
+    """
+    ADJOINTTRUNCATIONLAYER Adjoint truncation layer
+    
+    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    """
+    _forward_pre_hooks_with_kwargs = None
 
 class OrthonormalMatrixGenerationSystem:
     """
