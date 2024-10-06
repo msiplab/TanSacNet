@@ -20,24 +20,41 @@ It is easy to incorporate them into flexible configurations and
 parts of your network.
 
 ## Package structure
-               
-           tansacnet -+- results
-                      |
-                      +- data
-                      |
-                      +- code -+- examples -+- ...
-                               |
-                               +- tansacnet -+- testcase -+- lsun
-                                             |            |
-                                             |            +- utility 
-                                             |
-                                             +- lsun
-                                             |
-                                             +- utility       
+
+        tansacnet
+        ├── code
+        │   ├── appendix
+        │   │   ├── setup.py
+        │   │   └── torch_tansacnet
+        │   │       ├── mytest.py 
+        │   │       ...
+        │   ├── examples
+        │   │   ├── lsun
+        │   │   │   ├── main_lsun.mlx
+        │   │   │   ├── main_lsun.ipynb
+        │   │   │   ...        
+        │   │   ...
+        │   └── +tansacnet
+        │       ├── +testcase
+        │       │   ├── +lsun
+        │       │   │   ├── lsunBlockDct2dLayerTestCase.m
+        │       │   │   ...
+        │       │   └── +utility
+        │       │       ├── OrthonormalMatrixGenerationSystemTestCase.m
+        │       │       ...
+        │       ├── +lsun
+        │       │   ├── +mexxrcs     
+        │       │   ├── lsunBlockDct2dLayer.m
+        │       │   ...
+        │       └── +utility
+        │           ├── OrthonormalMatrixGenerationSystem.m
+        │           ...
+        ├── data
+        └── results
 
 ## Requirements
  
- * MATLAB R2022b/R2023b is recommended.
+ * MATLAB R2024b is recommended.
  * Signal Processing Toolbox
  * Image Processing Toolbox
  * Optimization Toolbox
