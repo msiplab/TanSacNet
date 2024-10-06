@@ -4,7 +4,7 @@ function lsunLgraph = ...
 %
 % Requirements: MATLAB R2022a
 %
-% Copyright (c) 2022, Shogo MURAMATSU
+% Copyright (c) 2022-2024, Shogo MURAMATSU
 %
 % All rights reserved.
 %
@@ -112,6 +112,17 @@ for iLv = 1:nLevels
             ];
     end
     
+    % NOTE on the modification of parameter Mus 
+    %
+    % Modified default parameter settings so that the default setting becomes a block DCT.
+    % Note that in addition to the change in default design values, design parameters are no longer compatible with previous releases.
+    % Redesign is strongly recommended!
+    %
+    % Reference:
+    % S. Muramatsu, T. Kobayashi, M. Hiki and H. Kikuchi, "Boundary Operation of 2-D Nonseparable Linear-Phase Paraunitary Filter Banks," in IEEE Transactions on Image Processing, vol. 21, no. 4, pp. 2314-2318, April 2012, doi: 10.1109/TIP.2011.2181527.
+    %
+    % Date: 6 Setp. 2024
+    %
     for iCmp = 1:nComponents
         strCmp = sprintf('Cmp%0d_',iCmp);
         % Atom extension in horizontal
@@ -124,7 +135,7 @@ for iLv = 1:nLevels
                 lsunAtomExtension2dLayer('Name',[prefix strLv strCmp 'Qh' num2str(iOrderH) 'ls'],...
                 'Stride',stride,'Direction','Left','TargetChannels','Sum')
                 lsunIntermediateRotation2dLayer('Name',[prefix strLv strCmp 'Vh' num2str(iOrderH) ],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis')
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',-1) % Revised default Mus to -1 on 6 Sept. 2024
                 ];
             synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
                 lsunAtomExtension2dLayer('Name',[prefix strLv strCmp 'Qh' num2str(iOrderH-1) 'rd~'],...
@@ -134,7 +145,7 @@ for iLv = 1:nLevels
                 lsunAtomExtension2dLayer('Name',[prefix strLv strCmp 'Qh' num2str(iOrderH) 'ls~'],...
                 'Stride',stride,'Direction','Right','TargetChannels','Sum')
                 lsunIntermediateRotation2dLayer('Name',[prefix strLv strCmp 'Vh' num2str(iOrderH) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis')
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',-1) % Revised default Mus to -1 on 6 Sept. 2024
                 ];
         end
         % Atom extension in vertical
@@ -147,7 +158,7 @@ for iLv = 1:nLevels
                 lsunAtomExtension2dLayer('Name',[prefix strLv strCmp 'Qv' num2str(iOrderV) 'us'],...
                 'Stride',stride,'Direction','Up','TargetChannels','Sum')
                 lsunIntermediateRotation2dLayer('Name',[prefix strLv strCmp 'Vv' num2str(iOrderV)],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis')
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',-1) % Revised default Mus to -1 on 6 Sept. 2024
                 ];
             synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
                 lsunAtomExtension2dLayer('Name',[prefix strLv strCmp 'Qv' num2str(iOrderV-1) 'dd~'],...
@@ -157,7 +168,7 @@ for iLv = 1:nLevels
                 lsunAtomExtension2dLayer('Name',[prefix strLv strCmp 'Qv' num2str(iOrderV) 'us~'],...
                 'Stride',stride,'Direction','Down','TargetChannels','Sum')
                 lsunIntermediateRotation2dLayer('Name',[prefix strLv strCmp 'Vv' num2str(iOrderV) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis')
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',-1) % Revised default Mus to -1 on 6 Sept. 2024
                 ];
         end
         
