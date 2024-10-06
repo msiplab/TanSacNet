@@ -164,9 +164,9 @@ class LsunSynthesis2dNetwork(nn.Module):
     def forward(self,x):
         
         if self.number_of_levels == 0: # Flat structure
-            for m in self.layers:
-                xdc = m.forward(x)
-            return xdc
+            m = self.layers[0]
+            x = m.forward(x)
+            return x
         else: # tree structure
             stride = self.stride
             nSamples = x[0].size(0)

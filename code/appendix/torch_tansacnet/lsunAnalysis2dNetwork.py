@@ -160,9 +160,9 @@ class LsunAnalysis2dNetwork(nn.Module):
     def forward(self,x):
 
         if self.number_of_levels == 0: # Flat structure
-            for m in self.layers:
-                y = m.forward(x) 
-            return y
+            m = self.layers[0]
+            x = m.forward(x)
+            return x
         else: # Tree structure
             stride = self.stride
             nSamples = x.size(0)
@@ -170,7 +170,7 @@ class LsunAnalysis2dNetwork(nn.Module):
             nrows = x.size(2)//stride[Direction.VERTICAL]
             ncols = x.size(3)//stride[Direction.HORIZONTAL]
             y = []
-            iLevel = 1                   
+            iLevel = 1       
             for m in self.layers:
                 yac, ydc = m.forward(x)
                 y.insert(0,yac)
