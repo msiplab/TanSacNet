@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.autograd as autograd
-#import math
+import math
 #import numpy as np
 from .lsunLayerExceptions import InvalidMode, InvalidMus, InvalidAngles
 
@@ -389,7 +389,7 @@ class SingleOrthonormalMatrixGenerationSystem:
         nAngles = len(angles)
 
         # Number of dimensions
-        nDims = int((1+torch.sqrt(1+8*nAngles))/2)
+        nDims = int((1+math.sqrt(1+8*nAngles))/2)
 
         # Setup of mus, which is send to the same device with angles
         if isinstance(mus, int) or isinstance(mus, float):
@@ -409,24 +409,25 @@ class SingleOrthonormalMatrixGenerationSystem:
         return matrix 
 
     def fcn_orthmtxgen_diff(self, angles, nDims, index_pd_angle):
-        matrix = torch.zeros(nDims,dtype=self.dtype,device=angles.device,requires_grad=False)
+        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device,requires_grad=False)
         iAng = 0
         for iTop in range(nDims-1):
             vt = matrix[iTop,:]
             for iBtm in range(iTop+1,nDims):
-                if iAng >= index_pd_angle:
-                    angle = angles[iAng]
-                    if iAng == index_pd_angle:
-                        angle = angle + torch.pi/2. #math.pi/2.
-                    c = torch.cos(angle)
-                    s = torch.sin(angle)
-                    vb = matrix[iBtm,:]
-                    #
-                    u  = s*(vt + vb)
-                    vt = (c + s)*vt
-                    vb = (c - s)*vb
-                    vt = vt - u
-                    matrix[iBtm,:] = vb + u
+                angle = angles[iAng]
+                if iAng == index_pd_angle:
+                    angle = angle + torch.pi/2. #math.pi/2.
+                c = torch.cos(angle)
+                s = torch.sin(angle)
+                vb = matrix[iBtm,:]
+                #
+                u  = s*(vt + vb)
+                vt = (c + s)*vt
+                vb = (c - s)*vb
+                vt = vt - u
+                if iAng == index_pd_angle:
+                    matrix = torch.zeros_like(matrix,dtype=self.dtype,device=angles.device,requires_grad=False)
+                matrix[iBtm,:] = vb + u
                 iAng = iAng + 1
             matrix[iTop,:] = vt
 
