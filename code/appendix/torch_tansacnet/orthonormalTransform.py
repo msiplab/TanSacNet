@@ -58,12 +58,22 @@ class SetOfOrthonormalTransforms(nn.Module):
 
     def forward(self, X):
         Z = torch.empty_like(X)
-
-        # TODO: Parallel processing
-        for iblk, layer in enumerate(self.orthonormalTransforms):
-           X_iblk = X[iblk]
-           Z_iblk = layer(X_iblk)
-           Z[iblk] = Z_iblk
+       
+        if self.device.type == 'cuda':
+            # TODO: #7 Stream processing on GPU
+            streams = [torch.cuda.Stream() for _ in range(len(self.orthonormalTransforms))]
+            for iblk, layer in enumerate(self.orthonormalTransforms):
+                with torch.cuda.stream(streams[iblk]):
+                    X_iblk = X[iblk]
+                    Z_iblk = layer(X_iblk)
+                    Z[iblk] = Z_iblk
+            torch.cuda.synchronize()
+        else:
+            # TODO: #6 Multiprocessing on CPU
+            for iblk, layer in enumerate(self.orthonormalTransforms):
+                X_iblk = X[iblk]
+                Z_iblk = layer(X_iblk)
+                Z[iblk] = Z_iblk
 
         return Z
     
@@ -279,7 +289,7 @@ class GivensRotations4Analyzer(autograd.Function):
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:        
             #omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=False)
             #R = omgs(angles,mus).to(grad_output.device)
-            dLdX = R.T @ grad_output # dLdX = dZdX @ dLdZ
+            dLdX = R.T @ grad_output # dLdX = dZdX @ dLdZ # FIXME: #5 Userwarning on CUDA context setting
         # 
         if ctx.needs_input_grad[0]:
             grad_input = dLdX

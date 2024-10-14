@@ -1505,7 +1505,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
     @parameterized.expand(
         list(itertools.product(mode,ncols,usegpu))
     )
-    def testBackword8x8RandAngMusPdAng7(self,mode,ncols,usegpu):
+    def testBackward8x8RandAngMusPdAng7(self,mode,ncols,usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
