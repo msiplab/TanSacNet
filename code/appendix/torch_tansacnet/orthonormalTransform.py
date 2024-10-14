@@ -57,6 +57,8 @@ class SetOfOrthonormalTransforms(nn.Module):
 
     def forward(self, X):
         Z = torch.empty_like(X)
+        # TODO: Parallel processing, e.g., torch.nn.DataParallel
+        # TODO: JIT compilation, e.g., torch.jit.script
         for iblk, layer in enumerate(self.orthonormalTransforms):
            X_iblk = X[iblk]
            Z_iblk = layer(X_iblk)
@@ -261,31 +263,34 @@ class GivensRotations4Analyzer(autograd.Function):
     @staticmethod
     def forward(ctx, input, angles, mus):
         ctx.mark_non_differentiable(mus)
-        ctx.save_for_backward(input,angles,mus)
+        #ctx.save_for_backward(input,angles,mus)
         omgs = SingleOrthonormalMatrixGenerationSystem(dtype=input.dtype,partial_difference=False)
         R = omgs(angles,mus).to(input.device)
+        ctx.save_for_backward(input,angles,mus,R)
         return R @ input
     
     @staticmethod
     def backward(ctx, grad_output):
-        input, angles, mus = ctx.saved_tensors
+        #input, angles, mus = ctx.saved_tensors
+        input, angles, mus, R = ctx.saved_tensors
         grad_input = grad_angles = grad_mus = None
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:        
-            omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=False)
-            R = omgs(angles,mus).to(grad_output.device)
+            #omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=False)
+            #R = omgs(angles,mus).to(grad_output.device)
             dLdX = R.T @ grad_output # dLdX = dZdX @ dLdZ
         # 
         if ctx.needs_input_grad[0]:
             grad_input = dLdX
         if ctx.needs_input_grad[1]:
-            omgs.partial_difference=True
-            grad_angles = torch.zeros_like(angles,dtype=input.dtype)
+            #omgs.partial_difference=True
+            omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=True)            
+            grad_angles = torch.zeros_like(angles,dtype=input.dtype,requires_grad=False)
             for iAngle in range(len(grad_angles)):
                 dRi = omgs(angles,mus,index_pd_angle=iAngle).to(grad_output.device)
                 #grad_angles[iAngle] = torch.sum(dLdX * (dRi @ input))
                 grad_angles[iAngle] = torch.sum(grad_output * (dRi @ input))
         if ctx.needs_input_grad[2]:
-            grad_mus = torch.zeros_like(mus,dtype=grad_output.dtype)                
+            grad_mus = torch.zeros_like(mus,dtype=grad_output.dtype,requires_grad=False)                
         return grad_input, grad_angles, grad_mus
 
 class GivensRotations4Synthesizer(autograd.Function):
@@ -309,31 +314,34 @@ class GivensRotations4Synthesizer(autograd.Function):
     @staticmethod
     def forward(ctx, input, angles, mus):
         ctx.mark_non_differentiable(mus)        
-        ctx.save_for_backward(input,angles,mus)
+        #ctx.save_for_backward(input,angles,mus)
         omgs = SingleOrthonormalMatrixGenerationSystem(dtype=input.dtype,partial_difference=False)
         R = omgs(angles,mus).to(input.device)
+        ctx.save_for_backward(input,angles,mus,R)
         return R.T @ input
     
     @staticmethod
     def backward(ctx, grad_output):
-        input, angles, mus = ctx.saved_tensors
+        #input, angles, mus = ctx.saved_tensors
+        input, angles, mus, R = ctx.saved_tensors
         grad_input = grad_angles = grad_mus = None
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=False)
-            R = omgs(angles,mus).to(grad_output.device)
+            #omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=False)
+            #R = omgs(angles,mus).to(grad_output.device)
             dLdX = R @ grad_output # dLdX = dZdX @ dLdZ
         #            
         if ctx.needs_input_grad[0]:
             grad_input = dLdX
         if ctx.needs_input_grad[1]:
-            omgs.partial_difference=True
-            grad_angles = torch.zeros_like(angles,dtype=input.dtype)
+            #omgs.partial_difference=True
+            omgs = SingleOrthonormalMatrixGenerationSystem(dtype=grad_output.dtype,partial_difference=True)
+            grad_angles = torch.zeros_like(angles,dtype=input.dtype,requires_grad=False)
             for iAngle in range(len(grad_angles)):
                 dRi = omgs(angles,mus,index_pd_angle=iAngle).to(grad_output.device)
                 #grad_angles[iAngle] = torch.sum(dLdX * (dRi.T @ input))
                 grad_angles[iAngle] = torch.sum(grad_output * (dRi.T @ input))
         if ctx.needs_input_grad[2]:
-            grad_mus = torch.zeros_like(mus,dtype=grad_output.dtype)
+            grad_mus = torch.zeros_like(mus,dtype=grad_output.dtype,requires_grad=False)
         return grad_input, grad_angles, grad_mus
 
 
@@ -362,6 +370,7 @@ class SingleOrthonormalMatrixGenerationSystem:
         self.dtype = dtype
         self.partial_difference = partial_difference
 
+
     def __call__(self,
         angles=0,
         mus=1,
@@ -384,13 +393,13 @@ class SingleOrthonormalMatrixGenerationSystem:
 
         # Setup of mus, which is send to the same device with angles
         if isinstance(mus, int) or isinstance(mus, float):
-            mus = mus * torch.ones(nDims,dtype=self.dtype,device=angles.device)
+            mus = mus * torch.ones(nDims,dtype=self.dtype,device=angles.device,requires_grad=False)
         elif not torch.is_tensor(mus): #isinstance(mus, list):
-            mus = torch.tensor(mus,dtype=self.dtype,device=angles.device)
+            mus = torch.tensor(mus,dtype=self.dtype,device=angles.device,requires_grad=False)
         else:
             mus = mus.to(dtype=self.dtype,device=angles.device)
 
-        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device)
+        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device,requires_grad=False)
         iAng = 0
         for iTop in range(nDims-1):
             vt = matrix[iTop,:]
@@ -407,10 +416,10 @@ class SingleOrthonormalMatrixGenerationSystem:
                 vb = (c - s)*vb
                 vt = vt - u
                 if self.partial_difference and iAng == index_pd_angle:
-                    matrix = torch.zeros_like(matrix,dtype=self.dtype)
+                    matrix = torch.zeros_like(matrix,dtype=self.dtype,requires_grad=False)
                 matrix[iBtm,:] = vb + u
                 iAng = iAng + 1
             matrix[iTop,:] = vt
         matrix = mus.view(-1,1) * matrix
 
-        return matrix.clone()
+        return matrix #.clone()
