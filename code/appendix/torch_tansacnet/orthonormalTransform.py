@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.autograd as autograd
+#import torch.multiprocessing as mp
 import math
 #import numpy as np
 from .lsunLayerExceptions import InvalidMode, InvalidMus, InvalidAngles
@@ -9,7 +10,7 @@ class SetOfOrthonormalTransforms(nn.Module):
     """
     SETOFORTHONORMALTRANSFORMS
     
-    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
     Copyright (c) 2024, Shogo MURAMATSU
 
@@ -57,12 +58,13 @@ class SetOfOrthonormalTransforms(nn.Module):
 
     def forward(self, X):
         Z = torch.empty_like(X)
-        # TODO: Parallel processing, e.g., torch.nn.DataParallel
-        # TODO: JIT compilation, e.g., torch.jit.script
+
+        # TODO: Parallel processing
         for iblk, layer in enumerate(self.orthonormalTransforms):
            X_iblk = X[iblk]
            Z_iblk = layer(X_iblk)
            Z[iblk] = Z_iblk
+
         return Z
     
     @property
