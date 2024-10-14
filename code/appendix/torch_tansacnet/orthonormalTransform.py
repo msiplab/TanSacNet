@@ -344,6 +344,56 @@ class GivensRotations4Synthesizer(autograd.Function):
             grad_mus = torch.zeros_like(mus,dtype=grad_output.dtype,requires_grad=False)
         return grad_input, grad_angles, grad_mus
 
+@torch.jit.script
+def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
+    matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
+    #matrix.requires_grad = False
+    iAng = 0
+    for iTop in range(nDims-1):
+        vt = matrix[iTop,:]
+        for iBtm in range(iTop+1,nDims):
+            angle = angles[iAng]
+            if iAng == index_pd_angle:
+                angle = angle + torch.pi/2. #math.pi/2.
+            c = torch.cos(angle)
+            s = torch.sin(angle)
+            vb = matrix[iBtm,:]
+            #
+            u  = s*(vt + vb)
+            vt = (c + s)*vt
+            vb = (c - s)*vb
+            vt = vt - u
+            if iAng == index_pd_angle:
+                matrix = torch.zeros_like(matrix,dtype=angles.dtype,device=angles.device)
+                #matrix.requires_grad = False
+            matrix[iBtm,:] = vb + u
+            iAng = iAng + 1
+        matrix[iTop,:] = vt
+
+    return matrix 
+    
+@torch.jit.script
+def fcn_orthmtxgen(nDims: int, angles: torch.Tensor):
+    matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
+    #matrix.requires_grad = False
+    iAng = 0
+    for iTop in range(nDims-1):
+        vt = matrix[iTop,:]
+        for iBtm in range(iTop+1,nDims):
+            angle = angles[iAng]
+            c = torch.cos(angle)
+            s = torch.sin(angle)
+            vb = matrix[iBtm,:]
+            #
+            u  = s*(vt + vb)
+            vt = (c + s)*vt
+            vb = (c - s)*vb
+            vt = vt - u
+            matrix[iBtm,:] = vb + u
+            iAng = iAng + 1
+        matrix[iTop,:] = vt
+
+    return matrix
 
 class SingleOrthonormalMatrixGenerationSystem:
     """
@@ -400,16 +450,21 @@ class SingleOrthonormalMatrixGenerationSystem:
             mus = mus.to(dtype=self.dtype,device=angles.device)
 
         if self.partial_difference:
-            matrix = self.fcn_orthmtxgen_diff(angles, nDims, index_pd_angle)
+            #matrix = self.fcn_orthmtxgen_diff(nDims, angles, index_pd_angle)
+            matrix = fcn_orthmtxgen_diff(nDims, angles, index_pd_angle)            
         else:
-            matrix = self.fcn_orthmtxgen(angles, nDims)
+            #matrix = self.fcn_orthmtxgen(nDims, angles)
+            matrix = fcn_orthmtxgen(nDims, angles)            
 
         matrix = mus.view(-1,1) * matrix
 
         return matrix 
 
-    def fcn_orthmtxgen_diff(self, angles, nDims, index_pd_angle):
-        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device,requires_grad=False)
+    """
+    @torch.jit.script
+    def fcn_orthmtxgen_diff(self, nDims: int, angles: torch.Tensor, index_pd_angle: int):
+        matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
+        #matrix.requires_grad = False
         iAng = 0
         for iTop in range(nDims-1):
             vt = matrix[iTop,:]
@@ -426,15 +481,18 @@ class SingleOrthonormalMatrixGenerationSystem:
                 vb = (c - s)*vb
                 vt = vt - u
                 if iAng == index_pd_angle:
-                    matrix = torch.zeros_like(matrix,dtype=self.dtype,device=angles.device,requires_grad=False)
+                    matrix = torch.zeros_like(matrix,dtype=angles.dtype,device=angles.device)
+                    #matrix.requires_grad = False
                 matrix[iBtm,:] = vb + u
                 iAng = iAng + 1
             matrix[iTop,:] = vt
 
-        return matrix
+        return matrix 
     
-    def fcn_orthmtxgen(self,angles, nDims):
-        matrix = torch.eye(nDims,dtype=self.dtype,device=angles.device,requires_grad=False)
+    @torch.jit.script
+    def fcn_orthmtxgen(self, nDims: int, angles: torch.Tensor):
+        matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
+        #matrix.requires_grad = False
         iAng = 0
         for iTop in range(nDims-1):
             vt = matrix[iTop,:]
@@ -453,3 +511,4 @@ class SingleOrthonormalMatrixGenerationSystem:
             matrix[iTop,:] = vt
 
         return matrix
+    """
