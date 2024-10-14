@@ -37,9 +37,9 @@ class ForwardTruncationLayer(nn.Module):
         self.nlevels = nlevels
 
     def forward(self, X):
-        nrows = X.size(1)//self.stride[Direction.VERTICAL]
-        ncols = X.size(2)//self.stride[Direction.HORIZONTAL]
-        nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
+        #nrows = X.size(1)//self.stride[Direction.VERTICAL]
+        #ncols = X.size(2)//self.stride[Direction.HORIZONTAL]
+        #nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
         Z = X[:,:,:,:self.number_of_channels]
         return Z
 
