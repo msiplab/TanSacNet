@@ -22,9 +22,26 @@ class ForwardTruncationLayer(nn.Module):
     """
     FORWARDTRUNCATIONLAYER Forward truncation layer
     
-    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     """
-    _forward_pre_hooks_with_kwargs = None
+    def __init__(self,
+                 number_of_channels=1,
+                 stride=[2,2],
+                 datatype=torch.float,
+                 nlevels=0):
+        super(ForwardTruncationLayer, self).__init__()
+
+        self.number_of_channels = number_of_channels
+        self.stride = stride
+        self.datatype = datatype
+        self.nlevels = nlevels
+
+    def forward(self, X):
+        nrows = X.size(1)//self.stride[Direction.VERTICAL]
+        ncols = X.size(2)//self.stride[Direction.HORIZONTAL]
+        nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
+        Z = X[:,:,:,:self.number_of_channels]
+        return Z
 
 class AdjointTruncationLayer(nn.Module):
     """
@@ -38,7 +55,7 @@ class OrthonormalMatrixGenerationSystem:
     """
     ORTHONORMALMATRIXGENERATIONSYSTEM Orthonormal matrix generator
     
-    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
     Copyright (c) 2024, Shogo MURAMATSU
     
