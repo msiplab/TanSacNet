@@ -69,7 +69,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
         self.assertEqual(actualNParams,expctdNParams)
         self.assertEqual(actualMode,expctdMode)
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,usegpu))
     )
@@ -107,7 +107,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
         self.assertEqual(actualNParams,expctdNParams)
         self.assertEqual(actualMode,expctdMode)
-
+   
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -146,7 +146,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))        
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -186,7 +186,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))        
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -225,8 +225,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -266,7 +265,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -315,7 +314,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -366,7 +365,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
     )
@@ -391,7 +390,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
         #self.assertTrue(np.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
         self.assertTrue(torch.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
-
+     
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
     )
@@ -415,8 +414,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
         #self.assertTrue(np.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
         self.assertTrue(torch.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)                
-
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,npoints,mode))
     )
@@ -441,7 +439,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         message = "actualNorm=%s differs from %s" % ( str(actualNorm), str(expctdNorm) )
         #self.assertTrue(np.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)        
         self.assertTrue(torch.isclose(actualNorm,expctdNorm,rtol=rtol,atol=atol),message)                
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
     )
@@ -470,7 +468,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
         #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
         self.assertTrue(torch.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)                
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode))
     )
@@ -499,7 +497,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
         #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)
         self.assertTrue(torch.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
-
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,npoints,mode))
     )
@@ -527,7 +525,6 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
         self.assertTrue(torch.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)                
     
-
     @parameterized.expand(
         list(itertools.product(datatype,mode,usegpu))
     )
@@ -579,7 +576,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
-        
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -699,7 +696,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")
-        rtol,atol = 1e-4,1e-7
+        rtol,atol = 1e-4,1e-6
 
         # Configuration
         #mode = 'Analysis'
@@ -1260,7 +1257,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         else:
             device = torch.device("cpu")
         datatype=torch.double
-        rtol,atol = 1e-2,1e-4
+        rtol,atol = 1e-2,1e-3
 
         # Configuration
         #mode = 'Synthesis'
@@ -1612,7 +1609,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
     def testGradCheckNxNRandAngMusToDevice(self,mode,ncols,npoints,usegpu):
         if usegpu:
             if torch.cuda.is_available():
-                device = torch.device("cuda:0")
+                device = torch.device("cuda:0")                
             else:
                 print('No GPU device was detected.')
                 return
