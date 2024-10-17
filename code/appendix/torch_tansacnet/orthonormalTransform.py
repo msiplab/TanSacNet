@@ -59,7 +59,7 @@ class SetOfOrthonormalTransforms(nn.Module):
 
     def forward(self, X):
         Z = torch.empty_like(X)
-        """
+        #"""
         if self.device.type == 'cuda':
             # TODO: #7 Stream processing on GPU
             streams = [torch.cuda.Stream() for _ in range(len(self.orthonormalTransforms))]
@@ -71,11 +71,11 @@ class SetOfOrthonormalTransforms(nn.Module):
             torch.cuda.synchronize()
         else:
             # TODO: #6 Multiprocessing on CPU
-        """
-        for iblk, layer in enumerate(self.orthonormalTransforms):
-            X_iblk = X[iblk]
-            Z_iblk = layer(X_iblk)
-            Z[iblk] = Z_iblk
+        #"""
+            for iblk, layer in enumerate(self.orthonormalTransforms):
+                X_iblk = X[iblk]
+                Z_iblk = layer(X_iblk)
+                Z[iblk] = Z_iblk
 
         return Z
     
@@ -150,8 +150,8 @@ class SetOfOrthonormalTransforms(nn.Module):
         if dtype is not None:
             self.dtype = dtype
         super(SetOfOrthonormalTransforms, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
-        self.__angles.to(device=self.device,dtype=self.dtype,*args, **kwargs)
-        self.__mus.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        for m in self.orthonormalTransforms:
+            m.to(device=self.device, dtype=self.dtype, *args, **kwargs)
         return self
 
 class OrthonormalTransform(nn.Module):
@@ -211,7 +211,7 @@ class OrthonormalTransform(nn.Module):
         self.checkMus()
 
     def forward(self,X):
-        angles = self.angles
+        angles = self.angles #.to(dtype=self.dtype,device=self.device)
         mus = self.__mus
         mode = self.__mode
         if mode=='Analysis':
