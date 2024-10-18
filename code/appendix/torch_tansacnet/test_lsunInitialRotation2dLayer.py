@@ -189,8 +189,8 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")        
         rtol, atol = 1e-5, 1e-6
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Parameters
         nSamples = 8
@@ -252,8 +252,8 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")        
         rtol, atol = 1e-5, 1e-6
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Parameters
         nSamples = 8
@@ -323,8 +323,8 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-4, 1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype,partial_difference=True,mode='normal')
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype,partial_difference=True,mode='normal')
 
         # Parameters
         nSamples = 8
@@ -419,8 +419,8 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-4, 1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype,partial_difference=True,mode='normal')
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype,partial_difference=True,mode='normal')
 
         # Parameters
         nSamples = 8
@@ -516,8 +516,8 @@ class LsunInitialRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-4, 1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,partial_difference=True,mode='normal')
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype,partial_difference=True,mode='normal')
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype,partial_difference=True,mode='normal')
 
         # Parameters
         nSamples = 8

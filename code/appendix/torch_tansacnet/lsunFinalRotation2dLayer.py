@@ -15,7 +15,7 @@ class LsunFinalRotation2dLayer(nn.Module):
     コンポーネント別に出力(nComponents):
         nSamples x nRows x nCols x nChs
 
-    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
     Copyright (c) 2024, Shogo MURAMATSU
 
@@ -72,8 +72,8 @@ class LsunFinalRotation2dLayer(nn.Module):
         nblks = self.number_of_blocks[Direction.VERTICAL]*self.number_of_blocks[Direction.HORIZONTAL]
         self.orthTransW0T = SetOfOrthonormalTransforms(name=self.name+"_W0T",nblks=nblks,n=ps,mode='Synthesis',device=self.device,dtype=self.dtype)
         self.orthTransU0T = SetOfOrthonormalTransforms(name=self.name+"_U0T",nblks=nblks,n=pa,mode='Synthesis',device=self.device,dtype=self.dtype) 
-        self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles).to(self.device)
-        self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles).to(self.device)
+        self.orthTransW0T.angles = nn.init.zeros_(self.orthTransW0T.angles) #,dtype=self.dtype,device=self.device)
+        self.orthTransU0T.angles = nn.init.zeros_(self.orthTransU0T.angles) #,dtype=self.dtype,device=self.device)
 
         # Update parameters
         self.mus = mus
@@ -146,6 +146,16 @@ class LsunFinalRotation2dLayer(nn.Module):
         self.orthTransU0T.mus = mus[:,ps:]  
         #self.is_update_requested = True
 
+    def to(self, device=None, dtype=None,*args, **kwargs):
+        if device is not None:
+            self.device = device
+        if dtype is not None:
+            self.dtype = dtype
+        super(LsunFinalRotation2dLayer, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        self.orthTransW0T.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        self.orthTransU0T.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        return self
+   
     #def update_parameters(self):
     #    angles = self.__angles
     #    mus = self.__mus

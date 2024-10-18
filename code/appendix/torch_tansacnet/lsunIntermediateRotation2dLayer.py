@@ -15,7 +15,7 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         コンポーネント別に出力(nComponents):    
             nSamples x nRows x nCols x nChs
 
-    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
     Copyright (c) 2024, Shogo MURAMATSU
 
@@ -36,7 +36,6 @@ class LsunIntermediateRotation2dLayer(nn.Module):
                  stride=None,
                  mus=None,
                  number_of_blocks=None,
-                 no_dc_leakage=False,
                  name=''):
         super(LsunIntermediateRotation2dLayer, self).__init__()
         self.dtype = dtype
@@ -73,7 +72,7 @@ class LsunIntermediateRotation2dLayer(nn.Module):
             self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_UnT",nblks=nblks,n=pa,mode='Synthesis',device=self.device,dtype=self.dtype)
         else:
             self.orthTransUnx = SetOfOrthonormalTransforms(name=self.name+"_Un",nblks=nblks,n=pa,mode='Analysis',device=self.device,dtype=self.dtype)
-        self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles).to(self.device)
+        self.orthTransUnx.angles = nn.init.zeros_(self.orthTransUnx.angles) #,dtype=self.dtype,device=self.device)
 
         # Update parameters
         self.mus = mus
@@ -131,6 +130,15 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         #self.__mus = mus.to(self.device)
         self.orthTransUnx.mus = mus.to(self.device)
         #self.is_update_requested = True
+
+    def to(self, device=None, dtype=None,*args, **kwargs):
+        if device is not None:
+            self.device = device
+        if dtype is not None:
+            self.dtype = dtype
+        super(LsunIntermediateRotation2dLayer, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        self.orthTransUnx.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        return self
     
     #def update_parameters(self):
     #    angles = self.__angles

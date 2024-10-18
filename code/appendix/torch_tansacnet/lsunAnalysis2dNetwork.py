@@ -1,4 +1,4 @@
-#import torch
+import torch
 import torch.nn as nn
 from .lsunBlockDct2dLayer import LsunBlockDct2dLayer 
 from .lsunInitialRotation2dLayer import LsunInitialRotation2dLayer 
@@ -32,11 +32,15 @@ class LsunAnalysis2dNetwork(nn.Module):
         overlapping_factor=[1,1],
         no_dc_leakage=True,
         number_of_levels=0,
-        prefix=''
+        prefix='',
+        dtype=torch.get_default_dtype(),
+        device=torch.get_default_device()
         ):
         super(LsunAnalysis2dNetwork, self).__init__()
 
         # Check and set parameters
+        self.dtype = dtype
+        self.device = device
      
         # Stride
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
@@ -102,8 +106,8 @@ class LsunAnalysis2dNetwork(nn.Module):
                 stride=self.stride,
                 number_of_blocks=[nrows,ncols], 
                 mus=1,               
-                no_dc_leakage=self.no_dc_leakage
-               ))
+                no_dc_leakage=self.no_dc_leakage,
+                dtype=self.dtype,device=self.device))
 
             # Horizontal extension
             for iOrderH in range(2,overlapping_factor[Direction.HORIZONTAL],2):
@@ -115,7 +119,8 @@ class LsunAnalysis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],                                         
                     mode='Analysis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(prefix+strLv+'Qh%dls'%iOrderH,LsunAtomExtension2dLayer(
                     stride=self.stride,
                     direction='Left',
@@ -124,7 +129,8 @@ class LsunAnalysis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],                     
                     mode='Analysis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 
             # Vertical extension
             for iOrderV in range(2,overlapping_factor[Direction.VERTICAL],2):            
@@ -136,7 +142,8 @@ class LsunAnalysis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],                                             
                     mode='Analysis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(prefix+strLv+'Qv%dus'%iOrderV,LsunAtomExtension2dLayer(
                     stride=self.stride,
                     direction='Up',
@@ -145,7 +152,9 @@ class LsunAnalysis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],                         
                     mode='Analysis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
+ 
             # Channel Separation for intermediate stages
             if self.number_of_levels > 0:
                 stages[iStage].add_module(strLv+'Sp',LsunChannelSeparation2dLayer())
@@ -194,9 +203,11 @@ class LsunAnalysis2dNetwork(nn.Module):
             stride=self.stride,
             overlapping_factor=self.overlapping_factor,
             no_dc_leakage=self.no_dc_leakage,
-            number_of_levels=self.number_of_levels           
-        )
-
+            number_of_levels=self.number_of_levels,
+            dtype=self.dtype,
+            device=self.device
+            )
+        
         if self.number_of_levels == 0:
             nlevels = 1
         else:
@@ -215,4 +226,15 @@ class LsunAnalysis2dNetwork(nn.Module):
         synthesizer.load_state_dict(syn_state_dict)
 
         # Return adjoint
-        return synthesizer.to(angs.device)
+        return synthesizer #.to(dtype=self.dtype,device=self.device)
+
+    def to(self, device=None, dtype=None,*args, **kwargs):
+        if device is not None:
+            self.device = device
+        if dtype is not None:
+            self.dtype = dtype
+        self = super(LsunAnalysis2dNetwork, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        for s in self.layers:
+            for m in s:
+                m.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        return self

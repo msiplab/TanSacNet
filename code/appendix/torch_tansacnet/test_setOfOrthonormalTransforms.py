@@ -1576,7 +1576,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         nPoints = npoints
         nAngles = int(nPoints*(nPoints-1)/2)
         angs = (math.pi/6.)*torch.randn(nblks,nAngles,dtype=datatype,device=device)
-        mus = (-1)**torch.randint(high=2,size=(nblks,nPoints),dtype=datatype)
+        mus = (-1)**torch.randint(high=2,size=(nblks,nPoints),dtype=datatype,device=device)
 
         # Expected values
         X = torch.randn(nblks,nPoints,nsamples,dtype=datatype,device=device,requires_grad=True)

@@ -118,7 +118,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
                 input_size = [ height, width ],
-                stride=stride
+                stride=stride,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -311,7 +312,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         network = LsunSynthesis2dNetwork(
             input_size=[height,width],
             stride=stride,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -363,7 +365,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             input_size=[height,width],
             stride=stride,
             overlapping_factor=ovlpfactor,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -445,7 +448,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             input_size=[height,width],
             stride=stride,
             overlapping_factor=ovlpFactor,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -553,7 +557,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             input_size=[height,width],
             stride=stride,
             overlapping_factor=ovlpFactor,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -659,7 +664,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             input_size=[height,width],
             stride=stride,
             overlapping_factor=ovlpFactor,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -790,7 +796,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             stride=stride,
             overlapping_factor=ovlpFactor,
             number_of_levels=nlevels,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -850,7 +857,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             stride=stride_,
             overlapping_factor=ovlpfactor_,
             number_of_levels=nlevels_,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -926,7 +934,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             stride=stride_,
             overlapping_factor=ovlpfactor_,
             number_of_levels=nlevels_,
-            no_dc_leakage=isNoDcLeakage
+            no_dc_leakage=isNoDcLeakage,
+            dtype=datatype
         )
         network = network.to(device)
 
@@ -1012,7 +1021,7 @@ def intermediate_rotation_(X,nchs,R):
     return Y
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(failfast=True)
 
     """
     # Create a test suite

@@ -1,4 +1,4 @@
-#import torch
+import torch
 import torch.nn as nn
 from .lsunBlockIdct2dLayer import LsunBlockIdct2dLayer 
 from .lsunFinalRotation2dLayer import LsunFinalRotation2dLayer 
@@ -32,11 +32,15 @@ class LsunSynthesis2dNetwork(nn.Module):
         overlapping_factor=[1,1],
         no_dc_leakage=True,
         number_of_levels=0,
-        prefix=''
+        prefix='',
+        dtype=torch.get_default_dtype(),
+        device=torch.get_default_device()
         ):
         super(LsunSynthesis2dNetwork, self).__init__()
         
         # Check and set parameters
+        self.dtype = dtype
+        self.device = device
         
         # Stride
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
@@ -107,7 +111,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],
                     mode='Synthesis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(strLv+'Qv~%dus'%(iOrderV),LsunAtomExtension2dLayer(
                     stride=self.stride,
                     direction='Down',
@@ -116,7 +121,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],
                     mode='Synthesis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(strLv+'Qv~%ddd'%(iOrderV-1),LsunAtomExtension2dLayer(
                     stride=self.stride,
                     direction='Up',
@@ -128,7 +134,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],
                     mode='Synthesis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(strLv+'Qh~%dls'%(iOrderH),LsunAtomExtension2dLayer(
                     stride=self.stride,
                     direction='Right',
@@ -137,7 +144,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                     stride=self.stride,
                     number_of_blocks=[nrows,ncols],
                     mode='Synthesis',
-                    mus=-1))
+                    mus=-1,
+                    dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(strLv+'Qh~%drd'%(iOrderH-1),LsunAtomExtension2dLayer(
                     stride=self.stride,
                     direction='Left',
@@ -147,8 +155,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                 stride=self.stride,
                 number_of_blocks=[nrows,ncols],
                 mus=1,
-                no_dc_leakage=self.no_dc_leakage
-                ))
+                no_dc_leakage=self.no_dc_leakage,
+                dtype=self.dtype,device=self.device))
             
             stages[iStage].add_module(prefix+strLv+'E0~',LsunBlockIdct2dLayer(
                 stride=self.stride
@@ -196,7 +204,9 @@ class LsunSynthesis2dNetwork(nn.Module):
             stride=self.stride,
             overlapping_factor=self.overlapping_factor,
             no_dc_leakage=self.no_dc_leakage,
-            number_of_levels=self.number_of_levels            
+            number_of_levels=self.number_of_levels,
+            dtype=self.dtype,
+            device=self.device            
         )
 
         if self.number_of_levels == 0:
@@ -217,5 +227,16 @@ class LsunSynthesis2dNetwork(nn.Module):
         analyzer.load_state_dict(ana_state_dict)
 
         # Return adjoint
-        return analyzer.to(angs.device)
-
+        return analyzer #.to(dtype=self.dtype,device=self.device)
+    
+    
+    def to(self, device=None, dtype=None,*args, **kwargs):
+        if device is not None:
+            self.device = device
+        if dtype is not None:
+            self.dtype = dtype
+        super(LsunSynthesis2dNetwork, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        for s in self.layers:
+            for m in s:
+                m.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        return self

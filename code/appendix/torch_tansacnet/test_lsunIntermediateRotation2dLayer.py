@@ -184,7 +184,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-5, 1e-6
 
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
         
         # Parameters
         nSamples = 8
@@ -298,7 +298,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-5, 1e-6
 
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Parameters
         nSamples = 8

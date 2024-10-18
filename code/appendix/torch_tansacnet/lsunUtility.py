@@ -71,10 +71,12 @@ class OrthonormalMatrixGenerationSystem:
 
     def __init__(self,
                  dtype=torch.get_default_dtype(),
+                 device=torch.get_default_device(),
                  partial_difference=False,
                  mode='normal'):
         super(OrthonormalMatrixGenerationSystem, self).__init__()
         self.dtype = dtype
+        self.device = device
         self.partial_difference = partial_difference
         self.mode = mode
 
@@ -101,12 +103,12 @@ class OrthonormalMatrixGenerationSystem:
             angles = torch.zeros(nMatrices_,nAngles_)   
         if isinstance(angles, int) or isinstance(angles, float):
             angle_ = angles
-            angles = torch.zeros(1,1,dtype=self.dtype)
+            angles = torch.zeros(1,1,dtype=self.dtype,device=self.device)
             angles[0,0] = angle_
         elif not torch.is_tensor(angles):
-            angles = torch.tensor(angles,dtype=self.dtype)
+            angles = torch.tensor(angles,dtype=self.dtype,device=self.device)
         else:
-            angles = angles.to(dtype=self.dtype) 
+            angles = angles.to(dtype=self.dtype,device=self.device) 
         nAngles = angles.size(1)
         nMatrices = angles.size(0)
 
@@ -119,15 +121,15 @@ class OrthonormalMatrixGenerationSystem:
         # Number of dimensions
         nDims = self.number_of_dimensions
 
-        # Setup of mus, which is send to the same device with angles
+        # Setup of mus
         if isinstance(mus, int) or isinstance(mus, float):
             mu_ = mus
-            mus = torch.ones(nMatrices,nDims,dtype=self.dtype,device=angles.device)
+            mus = torch.ones(nMatrices,nDims,dtype=self.dtype,device=self.device)
             mus = mu_ * mus
         elif not torch.is_tensor(mus): #isinstance(mus, list):
-            mus = torch.tensor(mus,dtype=self.dtype,device=angles.device)
+            mus = torch.tensor(mus,dtype=self.dtype,device=self.device)
         else:
-            mus = mus.to(dtype=self.dtype,device=angles.device) 
+            mus = mus.to(dtype=self.dtype,device=self.device) 
         if mus.size(0) != nMatrices:
             if mus.size(0) == 1:
                 mus = torch.tile(mus, (nMatrices,1))
@@ -153,7 +155,7 @@ class OrthonormalMatrixGenerationSystem:
         is_pd = self.partial_difference
         nDims = self.number_of_dimensions
         nMatrices = angles.size(0)
-        matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+        matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=self.device), (nMatrices,1, 1))
         # 
         for iMtx in range(nMatrices):
             iAng = 0
@@ -184,10 +186,10 @@ class OrthonormalMatrixGenerationSystem:
         #
         nDims = self.number_of_dimensions
         nMatrices = angles.size(0)
-        matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+        matrix = torch.tile(torch.eye(nDims,dtype=self.dtype,device=self.device), (nMatrices,1, 1))
         if index_pd_angle == None: # Initialization 
-            self.matrixpst = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
-            self.matrixpre = torch.tile(torch.eye(nDims,dtype=self.dtype,device=angles.device), (nMatrices,1, 1))
+            self.matrixpst = torch.tile(torch.eye(nDims,dtype=self.dtype,device=self.device), (nMatrices,1, 1))
+            self.matrixpre = torch.tile(torch.eye(nDims,dtype=self.dtype,device=self.device), (nMatrices,1, 1))
             for iMtx in range(nMatrices):
                 iAng = 0
                 matrixpst_iMtx = self.matrixpst[iMtx]
@@ -207,8 +209,8 @@ class OrthonormalMatrixGenerationSystem:
             self.nextangle = 0
         else: # Sequential differentiation
             for iMtx in range(nMatrices):
-                matrixrev = torch.eye(nDims,dtype=self.dtype,device=angles.device)
-                matrixdif = torch.zeros(nDims,nDims,dtype=self.dtype,device=angles.device)
+                matrixrev = torch.eye(nDims,dtype=self.dtype,device=self.device)
+                matrixdif = torch.zeros(nDims,nDims,dtype=self.dtype,device=self.device)
                 iAng = 0
                 matrixpst_iMtx = self.matrixpst[iMtx]
                 matrixpre_iMtx = self.matrixpre[iMtx]
@@ -216,7 +218,7 @@ class OrthonormalMatrixGenerationSystem:
                 mus_iMtx = mus[iMtx]
                 for iTop in range(nDims - 1):
                     rt = matrixrev[iTop, :]
-                    dt = torch.zeros(nDims,dtype=self.dtype,device=angles.device)
+                    dt = torch.zeros(nDims,dtype=self.dtype,device=self.device)
                     dt[iTop] = 1
                     for iBtm in range(iTop + 1, nDims):
                         if iAng == index_pd_angle:
@@ -225,7 +227,7 @@ class OrthonormalMatrixGenerationSystem:
                             rt, rb = rot_(rt, rb, -angle)
                             matrixrev[iTop, :] = rt
                             matrixrev[iBtm, :] = rb
-                            db = torch.zeros(nDims,dtype=self.dtype,device=angles.device)
+                            db = torch.zeros(nDims,dtype=self.dtype,device=self.device)
                             db[iBtm] = 1
                             dangle = angle + torch.pi / 2.0
                             dt, db = rot_(dt, db, dangle)
@@ -241,6 +243,15 @@ class OrthonormalMatrixGenerationSystem:
             self.nextangle += 1
 
         return matrix
+    
+    def to(self, dtype=None, device=None):
+        if dtype is not None:
+            self.dtype = dtype
+        if device is not None:
+            self.device = device
+        self.angle = self.angle.to(dtype=self.dtype,device=self.device)
+        self.mus = self.mus.to(dtype=self.dtype,device=self.device)
+        return self
 
 def permuteDctCoefs(x):
     cee = x[:,0::2,0::2].reshape(x.size(0),-1)

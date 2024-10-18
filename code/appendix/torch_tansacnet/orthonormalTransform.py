@@ -49,17 +49,17 @@ class SetOfOrthonormalTransforms(nn.Module):
         
         # Angles
         nAngs = int(n*(n-1)/2)
-        self.__angles = torch.empty(nblks,nAngs).to(dtype=self.dtype,device=self.device)
+        self.__angles = torch.empty(nblks,nAngs,dtype=self.dtype,device=self.device)
 
         # Mus
-        self.__mus = torch.empty(nblks,n).to(dtype=self.dtype,device=self.device)
+        self.__mus = torch.empty(nblks,n,dtype=self.dtype,device=self.device)
 
         # OrthonormalTransforms
-        self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mode=self.mode).to(dtype=self.dtype,device=self.device) for _ in range(nblks)])
+        self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
 
     def forward(self, X):
         Z = torch.empty_like(X)
-        #"""
+        """
         if self.device.type == 'cuda':
             # TODO: #7 Stream processing on GPU
             streams = [torch.cuda.Stream() for _ in range(len(self.orthonormalTransforms))]
@@ -71,11 +71,11 @@ class SetOfOrthonormalTransforms(nn.Module):
             torch.cuda.synchronize()
         else:
             # TODO: #6 Multiprocessing on CPU
-        #"""
-            for iblk, layer in enumerate(self.orthonormalTransforms):
-                X_iblk = X[iblk]
-                Z_iblk = layer(X_iblk)
-                Z[iblk] = Z_iblk
+        """
+        for iblk, layer in enumerate(self.orthonormalTransforms):
+            X_iblk = X[iblk]
+            Z_iblk = layer(X_iblk)
+            Z[iblk] = Z_iblk
 
         return Z
     
@@ -115,7 +115,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         if torch.is_tensor(mus):
             self.__mus = mus.to(dtype=self.dtype,device=self.device)
         else:
-            self.__mus = torch.tensor(mus).to(dtype=self.dtype,device=self.device)
+            self.__mus = torch.tensor(mus,dtype=self.dtype,device=self.device)
         if self.__mus.size(0) != len(self.orthonormalTransforms):
             raise InvalidMus(
                 '%s : The number of mus should be equal to the number of blocks'\
@@ -135,7 +135,7 @@ class SetOfOrthonormalTransforms(nn.Module):
         if torch.is_tensor(angles):
             self.__angles = angles.to(dtype=self.dtype,device=self.device)
         else:
-            self.__angles = torch.tensor(angles).to(dtype=self.dtype,device=self.device)
+            self.__angles = torch.tensor(angles,dtype=self.dtype,device=self.device)
         if self.__angles.size(0) != len(self.orthonormalTransforms):
             raise InvalidAngles(
                 '%s : The number of angles should be equal to the number of blocks'\
@@ -150,6 +150,8 @@ class SetOfOrthonormalTransforms(nn.Module):
         if dtype is not None:
             self.dtype = dtype
         super(SetOfOrthonormalTransforms, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        self.__angles.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        self.__mus.to(device=self.device,dtype=self.dtype,*args, **kwargs)
         for m in self.orthonormalTransforms:
             m.to(device=self.device, dtype=self.dtype, *args, **kwargs)
         return self
@@ -182,8 +184,8 @@ class OrthonormalTransform(nn.Module):
 
         super(OrthonormalTransform, self).__init__()
         self.dtype = dtype
-        self.nPoints = n
         self.device = device
+        self.nPoints = n
         self.__name = name
 
         # Mode
@@ -197,17 +199,17 @@ class OrthonormalTransform(nn.Module):
 
         # Angles
         nAngs = int(n*(n-1)/2)
-        self.angles = nn.Parameter(torch.zeros(nAngs).to(dtype=self.dtype,device=self.device))
+        self.angles = nn.Parameter(torch.zeros(nAngs,dtype=self.dtype,device=self.device))
 
         # Mus
         if torch.is_tensor(mus):
             self.__mus = mus.to(dtype=self.dtype,device=self.device)
         elif mus == 1:
-            self.__mus = torch.ones(1,self.nPoints).to(dtype=self.dtype,device=self.device)
+            self.__mus = torch.ones(1,self.nPoints,dtype=self.dtype,device=self.device)
         elif mus == -1:
-            self.__mus = -torch.ones(1,self.nPoints).to(dtype=self.dtype,device=self.device)
+            self.__mus = -torch.ones(1,self.nPoints,dtype=self.dtype,device=self.device)
         else:
-            self.__mus = torch.tensor(mus).to(dtype=self.dtype,device=self.device)
+            self.__mus = torch.tensor(mus,dtype=self.dtype,device=self.device)
         self.checkMus()
 
     def forward(self,X):
@@ -252,15 +254,15 @@ class OrthonormalTransform(nn.Module):
         if torch.is_tensor(mus):
             self.__mus = mus.to(dtype=self.dtype,device=self.device)
         elif mus == 1:
-            self.__mus = torch.ones(self.nPoints).to(dtype=self.dtype,device=self.device)
+            self.__mus = torch.ones(self.nPoints,dtype=self.dtype,device=self.device)
         elif mus == -1:
-            self.__mus = -torch.ones(self.nPoints).to(dtype=self.dtype,device=self.device)
+            self.__mus = -torch.ones(self.nPoints,dtype=self.dtype,device=self.device)
         else:
-            self.__mus = torch.tensor(mus).to(dtype=self.dtype,device=self.device)
+            self.__mus = torch.tensor(mus,dtype=self.dtype,device=self.device)
         self.checkMus()
 
     def checkMus(self):
-        if torch.not_equal(torch.abs(self.__mus),torch.ones(self.nPoints).to(device=self.device)).any():
+        if torch.not_equal(torch.abs(self.__mus),torch.ones(self.nPoints,device=self.device)).any():
             raise InvalidMus(
                 '%s : Elements in mus should be either of 1 or -1'\
                 % str(self.__mus)
@@ -317,7 +319,7 @@ class GivensRotations4Analyzer(autograd.Function):
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
             for iAngle in range(len(grad_angles)):
                 #dRi = omgs(angles,mus,index_pd_angle=iAngle) 
-                dRi = fcn_singleOrthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle)
+                dRi = fcn_singleOrthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
                 grad_angles[iAngle] = torch.sum(grad_output * (dRi @ input))
         if ctx.needs_input_grad[2]:
             grad_mus = torch.zeros_like(mus,device=angles.device,requires_grad=False)               
@@ -364,7 +366,7 @@ class GivensRotations4Synthesizer(autograd.Function):
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False) 
             for iAngle in range(len(grad_angles)):
                 #dRi = omgs(angles,mus,index_pd_angle=iAngle)
-                dRi = fcn_singleOrthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle)
+                dRi = fcn_singleOrthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #9 Sequential processing
                 grad_angles[iAngle] = torch.sum(grad_output * (dRi.T @ input))
         if ctx.needs_input_grad[2]:
             grad_mus = torch.zeros_like(mus,device=angles.device,requires_grad=False) 
@@ -372,7 +374,7 @@ class GivensRotations4Synthesizer(autograd.Function):
 
 @torch.jit.script
 def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
-    matrix = torch.eye(nDims).to(dtype=angles.dtype,device=angles.device)
+    matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
     iAng = 0
     for iTop in range(nDims-1):
         vt = matrix[iTop,:]
@@ -389,7 +391,7 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
             vb = (c - s)*vb
             vt = vt - u
             if iAng == index_pd_angle:
-                matrix = torch.zeros_like(matrix).to(dtype=angles.dtype,device=angles.device)
+                matrix = torch.zeros_like(matrix,dtype=angles.dtype,device=angles.device)
             matrix[iBtm,:] = vb + u
             iAng = iAng + 1
         matrix[iTop,:] = vt
@@ -398,7 +400,7 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
     
 @torch.jit.script
 def fcn_orthmtxgen(nDims: int, angles: torch.Tensor):
-    matrix = torch.eye(nDims).to(dtype=angles.dtype,device=angles.device)
+    matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
     iAng = 0
     for iTop in range(nDims-1):
         vt = matrix[iTop,:]

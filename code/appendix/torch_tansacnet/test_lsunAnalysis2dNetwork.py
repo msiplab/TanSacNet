@@ -40,22 +40,25 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
     """
 
     @parameterized.expand(
-        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage))
+        list(itertools.product(stride,ovlpfactor,height,width,nodcleakage,datatype))
     )
-    def testConstructor(self, stride,ovlpfactor,height,width,nodcleakage):
+    def testConstructor(self, stride,ovlpfactor,height,width,nodcleakage,datatype):
 
         # Expcted values
         expctdStride = stride
         expctdOvlpFactor = ovlpfactor
         expctdInputSize = [ height, width ]
-        expctdNoDcLeakage = nodcleakage        
+        expctdNoDcLeakage = nodcleakage
+        expctdDtype = datatype
+        expctdDevice = torch.device('cpu')       
 
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
             input_size = [ height, width ],
             stride = stride,
             overlapping_factor = ovlpfactor,
-            no_dc_leakage = nodcleakage
+            no_dc_leakage = nodcleakage,
+            dtype = datatype
         )
 
         # Actual values
@@ -63,13 +66,17 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         actualOvlpFactor = network.overlapping_factor
         actualInputSize = network.input_size
         actualNoDcLeakage = network.no_dc_leakage 
+        actualDtype = network.dtype
+        actualDevice = network.device
 
         # Evaluation
         self.assertTrue(isinstance(network, nn.Module))
         self.assertEqual(actualStride,expctdStride)
         self.assertEqual(actualOvlpFactor,expctdOvlpFactor)
         self.assertEqual(actualInputSize,expctdInputSize)
-        self.assertEqual(actualNoDcLeakage,expctdNoDcLeakage)                
+        self.assertEqual(actualNoDcLeakage,expctdNoDcLeakage)       
+        self.assertEqual(actualDtype,expctdDtype)     
+        self.assertEqual(actualDevice,expctdDevice)    
 
     @parameterized.expand(
          list(itertools.product(stride,height,width,datatype,usegpu))
@@ -119,7 +126,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Instantiation of target class
         network = LsunAnalysis2dNetwork(
                 input_size=[height,width],
-                stride=stride
+                stride=stride,
+                dtype=datatype
             )
         network = network.to(device)
             
@@ -262,8 +270,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol,atol = 1e-4,1e-5
         
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -314,7 +322,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         network = LsunAnalysis2dNetwork(
                 input_size=[height,width],
                 stride=stride,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -372,7 +381,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 input_size=[height,width],
                 stride=stride,
                 overlapping_factor=ovlpfactor,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -401,8 +411,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol,atol = 1e-4,1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -459,7 +469,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 input_size=[height,width],
                 stride=stride,
                 overlapping_factor=ovlpFactor,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -493,8 +504,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol,atol = 1e-4,1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -576,7 +587,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 input_size=[height,width],
                 stride=stride,
                 overlapping_factor=ovlpFactor,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -610,8 +622,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol,atol = 1e-4,1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -691,7 +703,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 input_size=[height,width],
                 stride=stride,
                 overlapping_factor=ovlpFactor,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -720,8 +733,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-3, 1e-4
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
+        genU = OrthonormalMatrixGenerationSystem(device=device,dtype=datatype)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -822,7 +835,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 stride=stride_,
                 overlapping_factor=ovlpFactor,
                 number_of_levels=nlevels,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -883,7 +897,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 stride=stride_,
                 overlapping_factor=ovlpfactor_,
                 number_of_levels=nlevels_,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype=datatype
             )
         network = network.to(device)
 
@@ -959,7 +974,8 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 stride=stride_,
                 overlapping_factor=ovlpfactor_,
                 number_of_levels=nlevels_,
-                no_dc_leakage=isNoDcLeakage
+                no_dc_leakage=isNoDcLeakage,
+                dtype = datatype
             )
         network = network.to(device)
 
@@ -1026,7 +1042,7 @@ def intermediate_rotation_(X,nchs,R):
     return Y
     
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main() #failfast=True)
 
     """
     # Create a test suite
