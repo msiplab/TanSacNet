@@ -58,20 +58,8 @@ class SetOfOrthonormalTransforms(nn.Module):
         self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
 
     def forward(self, X):
+        # TODO: #6 Multiprocessing on CPU
         Z = torch.empty_like(X)
-        """
-        if self.device.type == 'cuda':
-            # TODO: #7 Stream processing on GPU
-            streams = [torch.cuda.Stream() for _ in range(len(self.orthonormalTransforms))]
-            for iblk, layer in enumerate(self.orthonormalTransforms):
-                with torch.cuda.stream(streams[iblk]):
-                    X_iblk = X[iblk]
-                    Z_iblk = layer(X_iblk)
-                    Z[iblk] = Z_iblk
-            torch.cuda.synchronize()
-        else:
-            # TODO: #6 Multiprocessing on CPU
-        """
         for iblk, layer in enumerate(self.orthonormalTransforms):
             X_iblk = X[iblk]
             Z_iblk = layer(X_iblk)

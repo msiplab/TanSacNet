@@ -170,7 +170,8 @@ class LsunSynthesis2dNetwork(nn.Module):
         self.layers = nn.ModuleList(stages)
             
     def forward(self,x):
-        
+        # TODO: #11 Stream processing
+
         if self.number_of_levels == 0: # Flat structure
             m = self.layers[0]
             x = m.forward(x)
