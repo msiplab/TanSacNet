@@ -360,7 +360,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
 
         genU = OrthonormalMatrixGenerationSystem(
             partial_difference=True,mode='normal',
-            dtype=datatype)
+            dtype=datatype,device=device)
         
         # Parameters
         nSamples = 8
@@ -445,7 +445,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
 
         genU = OrthonormalMatrixGenerationSystem(
             partial_difference=True,mode='normal',
-            dtype=datatype)
+            dtype=datatype,device=device)
         
         # Parameters
         nSamples = 8
@@ -533,7 +533,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
 
         genU = OrthonormalMatrixGenerationSystem(
             partial_difference=True,mode='normal',
-            dtype=datatype)
+            dtype=datatype,device=device)
         
         # Parameters
         nSamples = 8

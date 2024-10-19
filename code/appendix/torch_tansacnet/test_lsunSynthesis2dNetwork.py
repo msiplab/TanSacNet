@@ -266,8 +266,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")    
         rtol,atol = 1e-4,1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -394,8 +394,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-4, 1e-5
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
 
         # Initialization function of angle parameters
         angle0 = 2.0*math.pi*random.random()
@@ -478,8 +478,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-3, 1e-4
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
 
         # Initialization function of angle parameters
         angle0 = 2.0 * math.pi * random.random()
@@ -587,8 +587,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-3, 1e-4
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
 
         # Initialization function of angle parameters
         angle0 = 2.0 * math.pi * random.random()
@@ -694,8 +694,8 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             device = torch.device("cpu")
         rtol, atol = 1e-3, 1e-4
 
-        genW = OrthonormalMatrixGenerationSystem(dtype=datatype)
-        genU = OrthonormalMatrixGenerationSystem(dtype=datatype)
+        genW = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
+        genU = OrthonormalMatrixGenerationSystem(dtype=datatype,device=device)
 
         # Initialization function of angle parameters
         angle0 = 2.0 * math.pi * random.random()
