@@ -68,15 +68,36 @@ class AdjointTruncationLayer(nn.Module):
         self.nlevels = nlevels
 
     def forward(self, X):
-        nsamples = X.size(0)
-        nrows = X.size(1)
-        ncols = X.size(2)
         nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
-        if self.number_of_channels == nDecs:
-            Z = X
+        if self.nlevels == 0:
+            nsamples = X.size(0)
+            nrows = X.size(1)
+            ncols = X.size(2)
+            Z = torch.zeros(nsamples,nrows,ncols,nDecs,dtype=X.dtype,device=X.device,requires_grad=X.requires_grad)
+            Z[:,:,:,:self.number_of_channels] = X
+        """
         else:
-            Z = torch.cat((X,torch.zeros(nsamples,nrows,ncols,nDecs-self.number_of_channels,dtype=X.dtype,device=X.device)),dim=-1)
-
+            nsamples = X[0].size(0)
+            nrows_ = X[0].size(1)
+            ncols_ = X[0].size(2)
+            Z = []
+            for istage in range(self.nlevels+1):
+                X_i = X[istage]
+                if istage == 0:
+                    Z.append(torch.zeros(nsamples,nrows_,ncols_,1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad)) 
+                Z.append(torch.zeros(nsamples,nrows_,ncols_,nDecs-1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad))     
+                nrows_ *= self.stride[Direction.VERTICAL]
+                ncols_ *= self.stride[Direction.HORIZONTAL]
+            if self.number_of_channels == 1:
+                Z[0] = X
+            else:
+                target_stage = (self.number_of_channels-1)//(nDecs-1) + 1
+                number_of_channels_at_target_stage = (self.number_of_channels - 1) % (nDecs-1) 
+                for istage in range(target_stage):
+                    Z[istage] = X[istage]
+                Z[target_stage][:,:,:,:number_of_channels_at_target_stage] = X[target_stage].clone()
+            Z = tuple(Z)
+        """
         return Z
 
 class OrthonormalMatrixGenerationSystem:
