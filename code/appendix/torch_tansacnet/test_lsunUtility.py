@@ -63,7 +63,8 @@ class LsunUtilityTestCase(unittest.TestCase):
             if torch.cuda.is_available():
                 device = torch.device('cuda')
             else:
-                device = torch.device('cpu')
+                print('No GPU device was detected.')
+                return 
         else:
             device = torch.device('cpu')
         
@@ -89,7 +90,58 @@ class LsunUtilityTestCase(unittest.TestCase):
         layer = ForwardTruncationLayer(
             number_of_channels = number_of_channels_,
             stride = stride_,
-            datatype = datatype_,
+            nlevels = nlevels_
+        )
+        layer = layer.to(device)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer(X)
+
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype_)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ))
+
+    @parameterized.expand(
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
+    )
+    def testAdjointTruncationLayer(self,
+                                   stride,datatype,nsamples,number_of_channels,usegpu): 
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device('cuda')
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device('cpu')
+        
+        # Parameters       
+        stride_ = stride
+        datatype_ = datatype
+        height_ = 4
+        width_ = 4
+        nlevels_ = 0
+        nsamples_ = nsamples
+        number_of_channels_ = number_of_channels
+
+        # nSamples x nRows x nCols x nDecs
+        nrows = height_//stride_[Direction.VERTICAL]
+        ncols = width_//stride_[Direction.HORIZONTAL]
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        X = torch.randn(nsamples_,nrows,ncols,number_of_channels_,dtype=datatype_,device=device,requires_grad=True)
+
+        # Expected values
+        if number_of_channels_ == nDecs:
+            expctdZ = X
+        else:
+            expctdZ = torch.cat((X,torch.zeros(nsamples_,nrows,ncols,nDecs-number_of_channels_,dtype=datatype_,device=device)),dim=3)
+
+        # Instantiation of target class
+        layer = AdjointTruncationLayer(
+            number_of_channels = number_of_channels_,
+            stride = stride_,
             nlevels = nlevels_
         )
         layer = layer.to(device)
@@ -104,12 +156,7 @@ class LsunUtilityTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ))
 
     """
-    def testForwardTruncationLayerMultiLevels(self): # TODO: Implement ForwardTruncationLayer
-    
-    def testAdjointTruncationLayer(self): # TODO: Implement AdjointTrunationLayer
-        layer = AdjointTruncationLayer()
-        self.assertIsInstance(layer, nn.Module)
-        self.assertIsNone(layer._forward_pre_hooks_with_kwargs)
+    def testForwardTruncationLayerMultiLevels(self): # TODO: Implement ForwardTruncationL
 
     def testAdjointTruncationLayerMultiLevels(self): # TODO: Implement AdjointTrunationLayer
 

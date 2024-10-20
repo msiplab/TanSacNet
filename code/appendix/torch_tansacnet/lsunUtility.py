@@ -27,19 +27,14 @@ class ForwardTruncationLayer(nn.Module):
     def __init__(self,
                  number_of_channels=1,
                  stride=[2,2],
-                 datatype=torch.float,
                  nlevels=0):
         super(ForwardTruncationLayer, self).__init__()
 
         self.number_of_channels = number_of_channels
         self.stride = stride
-        self.datatype = datatype
         self.nlevels = nlevels
 
     def forward(self, X):
-        #nrows = X.size(1)//self.stride[Direction.VERTICAL]
-        #ncols = X.size(2)//self.stride[Direction.HORIZONTAL]
-        #nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
         Z = X[:,:,:,:self.number_of_channels]
         return Z
 
@@ -49,7 +44,27 @@ class AdjointTruncationLayer(nn.Module):
     
     Requirements: Python 3.10/11.x, PyTorch 2.3.x
     """
-    _forward_pre_hooks_with_kwargs = None
+    def __init__(self,
+                 number_of_channels=1,
+                 stride=[2,2],
+                 nlevels=0):
+        super(AdjointTruncationLayer, self).__init__()
+
+        self.number_of_channels = number_of_channels
+        self.stride = stride
+        self.nlevels = nlevels
+
+    def forward(self, X):
+        nsamples = X.size(0)
+        nrows = X.size(1)
+        ncols = X.size(2)
+        nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
+        if self.number_of_channels == nDecs:
+            Z = X
+        else:
+            Z = torch.cat((X,torch.zeros(nsamples,nrows,ncols,nDecs-self.number_of_channels,dtype=X.dtype,device=X.device)),dim=-1)
+
+        return Z
 
 class OrthonormalMatrixGenerationSystem:
     """
