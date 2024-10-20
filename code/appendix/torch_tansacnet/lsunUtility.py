@@ -35,7 +35,21 @@ class ForwardTruncationLayer(nn.Module):
         self.nlevels = nlevels
 
     def forward(self, X):
+        #if self.nlevels == 0:
         Z = X[:,:,:,:self.number_of_channels]
+        """
+        else:
+            nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
+            target_stage = (self.number_of_channels-1)//(nDecs-1) 
+            Z = []
+            Z.append(X[0][:,:,:,:self.number_of_channels])
+            if target_stage >= 0:
+                number_of_channels_at_target_stage = self.number_of_channels - nDecs - (target_stage-1)*(nDecs-1)
+                for istage in range(target_stage):
+                    Z.append(X[istage])
+                Z.append(X[target_stage][:,:,:,:number_of_channels_at_target_stage])
+            Z = tuple(Z)
+        """
         return Z
 
 class AdjointTruncationLayer(nn.Module):

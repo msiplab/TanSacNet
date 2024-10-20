@@ -156,11 +156,203 @@ class LsunUtilityTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ))
 
     """
-    def testForwardTruncationLayerMultiLevels(self): # TODO: Implement ForwardTruncationL
+    @parameterized.expand(
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,nlevels,usegpu))
+    )
+    def testForwardTruncationLayerMultiLevelsAtStage0(self,
+                                   stride,datatype,nsamples,number_of_channels,nlevels,usegpu): 
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device('cuda')
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device('cpu')
+        
+        # Parameters       
+        stride_ = stride
+        datatype_ = datatype
+        height_ = 24
+        width_ = 32
+        nlevels_ = nlevels
+        nsamples_ = nsamples
+        number_of_channels_at_target_stage = number_of_channels
 
-    def testAdjointTruncationLayerMultiLevels(self): # TODO: Implement AdjointTrunationLayer
+        target_stage = 0 
 
+        # nSamples x nRows x nCols x nDecs
+        nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
+        nrows = height_ // (stride[Direction.VERTICAL]**nlevels_)
+        ncols = width_ // (stride[Direction.HORIZONTAL]**nlevels_)
+        nrows_ = nrows
+        ncols_ = ncols
+        X = []
+        for iLevel in range(1,nlevels+1):
+            if iLevel == 1:
+                X.append(torch.randn(nsamples_,nrows_,ncols_,1,dtype=datatype_,device=device,requires_grad=True)) 
+            X.append(torch.randn(nsamples_,nrows_,ncols_,nDecs-1,dtype=datatype_,device=device,requires_grad=True))     
+            nrows_ *= stride[Direction.VERTICAL]
+            ncols_ *= stride[Direction.HORIZONTAL]
+        X = tuple(X)
+
+        # Expected values
+        number_of_channels_ = number_of_channels_at_target_stage 
+        expctdZ = []
+        expctdZ.append(X[0][:,:,:,:number_of_channels_at_target_stage])
+        expctdZ = tuple(expctdZ)
+
+        # Instantiation of target class
+        layer = ForwardTruncationLayer(
+            number_of_channels = number_of_channels_,
+            stride = stride_,
+            nlevels = nlevels_
+        )
+        layer = layer.to(device)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer(X)
+
+        # Evaluation
+        self.assertEqual(actualZ[0].dtype,datatype)        
+        self.assertEqual(actualZ[0].shape,expctdZ[0].shape) 
+        self.assertTrue(torch.allclose(actualZ[0],expctdZ[0]))
+
+    @parameterized.expand(
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
+    )
+    def testForwardTruncationLayerMultiLevelsAtStage1(self,
+                                   stride,datatype,nsamples,number_of_channels,usegpu): 
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device('cuda')
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device('cpu')
+        
+        # Parameters       
+        stride_ = stride
+        datatype_ = datatype
+        height_ = 24
+        width_ = 32
+        nlevels_ = 3
+        nsamples_ = nsamples
+        number_of_channels_at_target_stage = number_of_channels
+
+        target_stage = 1 
+
+        # nSamples x nRows x nCols x nDecs
+        nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
+        nrows = height_ // (stride[Direction.VERTICAL]**nlevels_)
+        ncols = width_ // (stride[Direction.HORIZONTAL]**nlevels_)
+        nrows_ = nrows
+        ncols_ = ncols
+        X = []
+        for iLevel in range(1,nlevels_+1):
+            if iLevel == 1:
+                X.append(torch.randn(nsamples_,nrows_,ncols_,1,dtype=datatype_,device=device,requires_grad=True)) 
+            X.append(torch.randn(nsamples_,nrows_,ncols_,nDecs-1,dtype=datatype_,device=device,requires_grad=True))     
+            nrows_ *= stride[Direction.VERTICAL]
+            ncols_ *= stride[Direction.HORIZONTAL]
+        X = tuple(X)
+
+        # Expected values
+        number_of_channels_ = number_of_channels_at_target_stage + nDecs
+        expctdZ = []
+        for istage in range(target_stage):
+            expctdZ.append(X[istage])
+        expctdZ.append(X[target_stage][:,:,:,:number_of_channels_at_target_stage])
+        expctdZ = tuple(expctdZ)
+
+        # Instantiation of target class
+        layer = ForwardTruncationLayer(
+            number_of_channels = number_of_channels_,
+            stride = stride_,
+            nlevels = nlevels_
+        )
+        layer = layer.to(device)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer(X)
+
+        # Evaluation
+        for iStage in range(target_stage):
+            self.assertEqual(actualZ[iStage].dtype,datatype)        
+            self.assertEqual(actualZ[iStage].shape,expctdZ[iStage].shape) 
+            self.assertTrue(torch.allclose(actualZ[iStage],expctdZ[iStage]))
+
+    @parameterized.expand(
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
+    )
+    def testForwardTruncationLayerMultiLevelsAtStage2(self,
+                                   stride,datatype,nsamples,number_of_channels,usegpu): 
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device('cuda')
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device('cpu')
+        
+        # Parameters       
+        stride_ = stride
+        datatype_ = datatype
+        height_ = 24
+        width_ = 32
+        nlevels_ = 3
+        nsamples_ = nsamples
+        number_of_channels_at_target_stage = number_of_channels
+
+        target_stage = 2 
+
+        # nSamples x nRows x nCols x nDecs
+        nDecs = stride[Direction.VERTICAL] * stride[Direction.HORIZONTAL]
+        nrows = height_ // (stride[Direction.VERTICAL]**nlevels_)
+        ncols = width_ // (stride[Direction.HORIZONTAL]**nlevels_)
+        nrows_ = nrows
+        ncols_ = ncols
+        X = []
+        for iLevel in range(1,nlevels_+1):
+            if iLevel == 1:
+                X.append(torch.randn(nsamples_,nrows_,ncols_,1,dtype=datatype_,device=device,requires_grad=True)) 
+            X.append(torch.randn(nsamples_,nrows_,ncols_,nDecs-1,dtype=datatype_,device=device,requires_grad=True))     
+            nrows_ *= stride[Direction.VERTICAL]
+            ncols_ *= stride[Direction.HORIZONTAL]
+        X = tuple(X)
+
+        # Expected values
+        number_of_channels_ = number_of_channels_at_target_stage + nDecs + (nDecs-1)
+        expctdZ = []
+        for istage in range(target_stage):
+            expctdZ.append(X[istage])
+        expctdZ.append(X[target_stage][:,:,:,:number_of_channels_at_target_stage])
+        expctdZ = tuple(expctdZ)
+
+        # Instantiation of target class
+        layer = ForwardTruncationLayer(
+            number_of_channels = number_of_channels_,
+            stride = stride_,
+            nlevels = nlevels_
+        )
+        layer = layer.to(device)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer(X)
+
+        # Evaluation
+        for iStage in range(target_stage):
+            self.assertEqual(actualZ[iStage].dtype,datatype)        
+            self.assertEqual(actualZ[iStage].shape,expctdZ[iStage].shape) 
+            self.assertTrue(torch.allclose(actualZ[iStage],expctdZ[iStage]))
+
+    #def testAdjointTruncationLayerMultiLevels(self): # TODO: Implement AdjointTrunationLayer
     """
-
+    
 if __name__ == '__main__':
     unittest.main()
