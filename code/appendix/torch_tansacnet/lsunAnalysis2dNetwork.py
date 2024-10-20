@@ -167,7 +167,40 @@ class LsunAnalysis2dNetwork(nn.Module):
         self.layers = nn.ModuleList(stages)
         
     def forward(self,x):
+        
+        if self.device.type == 'cuda':
+            return self.forward_cuda(x)
+        else:
+            return self.forward_cpu(x)
+           
+    def forward_cuda(self,x):   
         # TODO: #10 Stream processing
+
+        if self.number_of_levels == 0: # Flat structure
+            m = self.layers[0]
+            x = m.forward(x)
+            return x
+        else: # Tree structure
+            stride = self.stride
+            nSamples = x.size(0)
+            nComponents = x.size(1)
+            nrows = x.size(2)//stride[Direction.VERTICAL]
+            ncols = x.size(3)//stride[Direction.HORIZONTAL]
+            y = []
+            iLevel = 1       
+            for m in self.layers:
+                yac, ydc = m.forward(x)
+                y.insert(0,yac)
+                if iLevel < self.number_of_levels:
+                    x = ydc.view(nSamples,nComponents,nrows,ncols)
+                    nrows = nrows//stride[Direction.VERTICAL]
+                    ncols = ncols//stride[Direction.HORIZONTAL]   
+                    iLevel += 1
+                else:
+                    y.insert(0,ydc.unsqueeze(3))
+            return tuple(y)        
+        
+    def forward_cpu(self,x):
         
         if self.number_of_levels == 0: # Flat structure
             m = self.layers[0]
@@ -191,8 +224,8 @@ class LsunAnalysis2dNetwork(nn.Module):
                     iLevel += 1
                 else:
                     y.insert(0,ydc.unsqueeze(3))
-            return tuple(y)
-
+            return tuple(y)     
+        
     @property
     def T(self):
         from .lsunSynthesis2dNetwork import LsunSynthesis2dNetwork

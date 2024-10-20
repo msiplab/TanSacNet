@@ -169,7 +169,15 @@ class LsunSynthesis2dNetwork(nn.Module):
         # Stack modules as a list
         self.layers = nn.ModuleList(stages)
             
+
     def forward(self,x):
+        
+        if self.device.type == 'cuda':
+            return self.forward_cuda(x)
+        else:
+            return self.forward_cpu(x)      
+         
+    def forward_cuda(self,x):
         # TODO: #11 Stream processing
 
         if self.number_of_levels == 0: # Flat structure
@@ -193,6 +201,30 @@ class LsunSynthesis2dNetwork(nn.Module):
                 xdc = y.reshape(nSamples,nrows,ncols,1)             
                 iLevel -= 1
             return xdc.view(nSamples,1,nrows,ncols)
+        
+    def forward_cpu(self,x):
+
+        if self.number_of_levels == 0: # Flat structure
+            m = self.layers[0]
+            x = m.forward(x)
+            return x
+        else: # tree structure
+            stride = self.stride
+            nSamples = x[0].size(0)
+            nrows = x[0].size(1)
+            ncols = x[0].size(2)
+            iLevel = self.number_of_levels
+            for m in self.layers:
+                if iLevel == self.number_of_levels:
+                    xdc = x[0]
+                xac = x[self.number_of_levels-iLevel+1]
+                y = m[0].forward(xac,xdc)
+                y = m[1::].forward(y)
+                nrows *= stride[Direction.VERTICAL]
+                ncols *= stride[Direction.HORIZONTAL]
+                xdc = y.reshape(nSamples,nrows,ncols,1)             
+                iLevel -= 1
+            return xdc.view(nSamples,1,nrows,ncols)    
 
     @property
     def T(self):
@@ -229,7 +261,6 @@ class LsunSynthesis2dNetwork(nn.Module):
 
         # Return adjoint
         return analyzer #.to(dtype=self.dtype,device=self.device)
-    
     
     def to(self, device=None, dtype=None,*args, **kwargs):
         if device is not None:
