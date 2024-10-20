@@ -6,6 +6,13 @@ import math
 #import numpy as np
 from .lsunLayerExceptions import InvalidMode, InvalidMus, InvalidAngles
 
+"""
+import torch.multiprocessing as mp
+def worker(layer, X_iblk, queue, iblk):
+    Z_iblk = layer(X_iblk)
+    queue.put((iblk, Z_iblk))
+"""
+
 class SetOfOrthonormalTransforms(nn.Module):
     """
     SETOFORTHONORMALTRANSFORMS
@@ -57,9 +64,27 @@ class SetOfOrthonormalTransforms(nn.Module):
         # OrthonormalTransforms
         self.orthonormalTransforms = nn.ModuleList([OrthonormalTransform(n=self.nPoints,mode=self.mode,dtype=self.dtype,device=self.device) for _ in range(nblks)])
 
-    def forward(self, X):
-        # TODO: #6 Multiprocessing on CPU
+    def forward(self,x):
+        
+        if self.device.type == 'cuda':
+            return self.forward_cuda(x)
+        else:
+            return self.forward_cpu(x)
+        
+    def forward_cuda(self, X):
         Z = torch.empty_like(X)
+        # TODO: #6 Multiprocessing
+        
+        for iblk, layer in enumerate(self.orthonormalTransforms):
+            X_iblk = X[iblk]
+            Z_iblk = layer(X_iblk)
+            Z[iblk] = Z_iblk
+
+        return Z
+
+    def forward_cpu(self, X):
+        Z = torch.empty_like(X)
+
         for iblk, layer in enumerate(self.orthonormalTransforms):
             X_iblk = X[iblk]
             Z_iblk = layer(X_iblk)
