@@ -95,8 +95,9 @@ class AdjointTruncationLayer(nn.Module):
                     else:
                         Z.append(X_i)
                 else:
-                    nrows_ *= self.stride[Direction.VERTICAL]
-                    ncols_ *= self.stride[Direction.HORIZONTAL]
+                    if istage > 1:
+                        nrows_ *= self.stride[Direction.VERTICAL]
+                        ncols_ *= self.stride[Direction.HORIZONTAL]
                     Z.append(torch.zeros(nsamples,nrows_,ncols_,nDecs-1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad))                        
             Z = tuple(Z)
         return Z

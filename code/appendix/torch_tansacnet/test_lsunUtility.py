@@ -483,7 +483,9 @@ class LsunUtilityTestCase(unittest.TestCase):
                 if number_of_channels_at_target_stage > 0:
                     expctdZ[1][:,:,:,number_of_channels_at_target_stage:] *= 0
                 else:   
-                    expctdZ[1] *= 0        
+                    expctdZ[1] *= 0
+            elif istage > 1:   
+                expctdZ[istage] *= 0 
         expctdZ = tuple(expctdZ)
 
         # Instantiation of target class
@@ -497,15 +499,12 @@ class LsunUtilityTestCase(unittest.TestCase):
             actualZ = layer(Y)
 
         # Evaluation
-        self.assertEqual(actualZ[0].dtype,datatype)        
-        self.assertEqual(actualZ[0].shape,expctdZ[0].shape) 
-        self.assertTrue(torch.allclose(actualZ[0],expctdZ[0]))    
-        if number_of_channels_at_target_stage > 0:
-            self.assertEqual(actualZ[1].dtype,datatype)                
-            self.assertEqual(actualZ[1].shape,expctdZ[1].shape) 
-            self.assertTrue(torch.allclose(actualZ[1],expctdZ[1])) 
+        for istage in range(nlevels_+1):
+            self.assertEqual(actualZ[istage].dtype,datatype)                
+            self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape,istage) 
+            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage])) 
     
-    """  
+    """
     @parameterized.expand(
         list(itertools.product(stride,datatype,nsamples,usegpu))
     )
