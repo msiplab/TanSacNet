@@ -502,14 +502,13 @@ class LsunUtilityTestCase(unittest.TestCase):
         for istage in range(nlevels_+1):
             self.assertEqual(actualZ[istage].dtype,datatype)                
             self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape,istage) 
-            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage])) 
+            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage]),istage) 
     
-    """
     @parameterized.expand(
-        list(itertools.product(stride,datatype,nsamples,usegpu))
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
     )
     def testAdjointTruncationLayerMultiLevelsAtStage2(self,
-                                   stride,datatype,number_of_channels,nsamples,usegpu): 
+                                   stride,datatype,nsamples,number_of_channels,usegpu): 
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device('cuda')
@@ -526,7 +525,7 @@ class LsunUtilityTestCase(unittest.TestCase):
         width_ = 192
         nlevels_ = 3
         nsamples_ = nsamples
-        number_of_channels_at_target_stage = number_of_channels
+        number_of_channels_at_target_stage = number_of_channels 
 
         target_stage = 2  
 
@@ -546,7 +545,6 @@ class LsunUtilityTestCase(unittest.TestCase):
         X = tuple(X)
 
         # Input values
-        number_of_channels_ = number_of_channels_at_target_stage + nDecs 
         Y = []
         Y.append(X[0])
         Y.append(X[1])
@@ -555,19 +553,21 @@ class LsunUtilityTestCase(unittest.TestCase):
 
         # Expected values
         nrows_ = nrows
-        ncols_ = ncols        
+        ncols_ = ncols
         expctdZ = []
         for istage in range(nlevels_+1):
             expctdZ.append(X[istage].clone())
             if istage == target_stage:
-                expctdZ[istage][:,:,:,number_of_channels_at_target_stage:] *= 0
-            else:   
-                expctdZ[istage] *= 0        
+                if number_of_channels_at_target_stage > 0:
+                    expctdZ[istage][:,:,:,number_of_channels_at_target_stage:] *= 0
+                else:   
+                    expctdZ[istage] *= 0
+            elif istage > target_stage:   
+                expctdZ[istage] *= 0 
         expctdZ = tuple(expctdZ)
 
         # Instantiation of target class
         layer = AdjointTruncationLayer(
-            number_of_channels = number_of_channels_,
             stride = stride_,
             nlevels = nlevels_
         )
@@ -577,19 +577,16 @@ class LsunUtilityTestCase(unittest.TestCase):
             actualZ = layer(Y)
 
         # Evaluation
-        self.assertEqual(actualZ[0].dtype,datatype)        
-        self.assertEqual(actualZ[0].shape,expctdZ[0].shape) 
-        self.assertTrue(torch.allclose(actualZ[0],expctdZ[0]))    
-        for istage in range(1,target_stage+1): 
+        for istage in range(nlevels_+1):
             self.assertEqual(actualZ[istage].dtype,datatype)                
-            self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape) 
-            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage]))  
+            self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape,istage) 
+            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage]),istage) 
     
     @parameterized.expand(
-        list(itertools.product(stride,datatype,nsamples,usegpu))
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
     )
     def testAdjointTruncationLayerMultiLevelsAtStage3(self,
-                                   stride,datatype,nsamples,usegpu): 
+                                   stride,datatype,nsamples,number_of_channels,usegpu): 
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device('cuda')
@@ -606,7 +603,7 @@ class LsunUtilityTestCase(unittest.TestCase):
         width_ = 192
         nlevels_ = 3
         nsamples_ = nsamples
-        number_of_channels_at_target_stage = 1
+        number_of_channels_at_target_stage = number_of_channels 
 
         target_stage = 3  
 
@@ -621,34 +618,32 @@ class LsunUtilityTestCase(unittest.TestCase):
             if istage == 0:
                 X.append(torch.randn(nsamples_,nrows_,ncols_,1,dtype=datatype_,device=device,requires_grad=True)) 
             X.append(torch.randn(nsamples_,nrows_,ncols_,nDecs-1,dtype=datatype_,device=device,requires_grad=True))     
-            nrows_ *= stride[Direction.VERTICAL]
-            ncols_ *= stride[Direction.HORIZONTAL]
+            nrows_ *= stride_[Direction.VERTICAL]
+            ncols_ *= stride_[Direction.HORIZONTAL]
         X = tuple(X)
 
         # Input values
-        number_of_channels_ = number_of_channels_at_target_stage + nDecs + (nDecs-1)
         Y = []
         for istage in range(target_stage):
             Y.append(X[istage])
         Y.append(X[target_stage][:,:,:,:number_of_channels_at_target_stage])
         Y = tuple(Y)
 
-        # Expceted values
+        # Expected values
         nrows_ = nrows
-        ncols_ = ncols        
+        ncols_ = ncols
         expctdZ = []
         for istage in range(nlevels_+1):
-            if istage == 0:
-                expctdZ.append(torch.zeros(nsamples_,nrows_,ncols_,1,dtype=datatype_,device=device,requires_grad=True)) 
-            expctdZ.append(torch.zeros(nsamples_,nrows_,ncols_,nDecs-1,dtype=datatype_,device=device,requires_grad=True))     
-            nrows_ *= stride_[Direction.VERTICAL]
-            ncols_ *= stride_[Direction.HORIZONTAL]
-        expctdZ[0] = Y[0]
-        expctdZ[1] = Y[1]
-        expctdZ[2] = Y[2]
-        expctdZ[3][:,:,:,:number_of_channels_at_target_stage] = Y[3]
+            expctdZ.append(X[istage].clone())
+            if istage == target_stage:
+                if number_of_channels_at_target_stage > 0:
+                    expctdZ[istage][:,:,:,number_of_channels_at_target_stage:] *= 0
+                else:   
+                    expctdZ[istage] *= 0
+            elif istage > target_stage:   
+                expctdZ[istage] *= 0 
         expctdZ = tuple(expctdZ)
-        
+
         # Instantiation of target class
         layer = AdjointTruncationLayer(
             stride = stride_,
@@ -660,14 +655,11 @@ class LsunUtilityTestCase(unittest.TestCase):
             actualZ = layer(Y)
 
         # Evaluation
-        self.assertEqual(actualZ[0].dtype,datatype)        
-        self.assertEqual(actualZ[0].shape,expctdZ[0].shape) 
-        self.assertTrue(torch.allclose(actualZ[0],expctdZ[0]))    
-        for istage in range(1,target_stage+1): 
+        for istage in range(nlevels_+1):
             self.assertEqual(actualZ[istage].dtype,datatype)                
-            self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape) 
-            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage]))  
-
+            self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape,istage) 
+            self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage]),istage) 
+    """
     @parameterized.expand(
         list(itertools.product(number_of_channels,datatype,nsamples,usegpu))
     )
