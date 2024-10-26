@@ -90,7 +90,10 @@ class AdjointTruncationLayer(nn.Module):
                     nrows_ = X_i.size(1)
                     ncols_ = X_i.size(2)
                     number_of_channels = X_i.size(3)
-                    Z.append(torch.cat((X_i,torch.zeros(nsamples,nrows_,ncols_,nDecs-1-number_of_channels,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad)),dim=-1))
+                    if number_of_channels < nDecs -1:
+                        Z.append(torch.cat((X_i,torch.zeros(nsamples,nrows_,ncols_,nDecs-1-number_of_channels,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad)),dim=-1))
+                    else:
+                        Z.append(X_i)
                 else:
                     nrows_ *= self.stride[Direction.VERTICAL]
                     ncols_ *= self.stride[Direction.HORIZONTAL]

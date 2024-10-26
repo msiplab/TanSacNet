@@ -448,7 +448,7 @@ class LsunUtilityTestCase(unittest.TestCase):
         width_ = 192
         nlevels_ = 3
         nsamples_ = nsamples
-        number_of_channels_at_target_stage = number_of_channels
+        number_of_channels_at_target_stage = number_of_channels - 1
 
         # target_stage = 1  
 
@@ -468,7 +468,6 @@ class LsunUtilityTestCase(unittest.TestCase):
         X = tuple(X)
 
         # Input values
-        number_of_channels_ = number_of_channels_at_target_stage 
         Y = []
         Y.append(X[0])
         if number_of_channels_at_target_stage > 1:
@@ -505,7 +504,7 @@ class LsunUtilityTestCase(unittest.TestCase):
         if number_of_channels_at_target_stage > 1:
             self.assertEqual(actualZ[1].dtype,datatype)                
             self.assertEqual(actualZ[1].shape,expctdZ[1].shape) 
-            #self.assertTrue(torch.allclose(actualZ[1],expctdZ[1]))  
+            self.assertTrue(torch.allclose(actualZ[1],expctdZ[1]))  
     """
     @parameterized.expand(
         list(itertools.product(stride,datatype,nsamples,usegpu))
