@@ -58,12 +58,10 @@ class AdjointTruncationLayer(nn.Module):
     Requirements: Python 3.10/11.x, PyTorch 2.3.x
     """
     def __init__(self,
-                 number_of_channels=1,
                  stride=[2,2],
                  nlevels=0):
         super(AdjointTruncationLayer, self).__init__()
 
-        self.number_of_channels = number_of_channels
         self.stride = stride
         self.nlevels = nlevels
 
@@ -73,31 +71,31 @@ class AdjointTruncationLayer(nn.Module):
             nsamples = X.size(0)
             nrows = X.size(1)
             ncols = X.size(2)
+            number_of_channels = X.size(3)
             Z = torch.zeros(nsamples,nrows,ncols,nDecs,dtype=X.dtype,device=X.device,requires_grad=X.requires_grad)
-            Z[:,:,:,:self.number_of_channels] = X
-        """
+            Z[:,:,:,:number_of_channels] = X
         else:
-            nsamples = X[0].size(0)
-            nrows_ = X[0].size(1)
-            ncols_ = X[0].size(2)
+            nstages = len(X)
             Z = []
             for istage in range(self.nlevels+1):
-                X_i = X[istage]
-                if istage == 0:
-                    Z.append(torch.zeros(nsamples,nrows_,ncols_,1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad)) 
-                Z.append(torch.zeros(nsamples,nrows_,ncols_,nDecs-1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad))     
-                nrows_ *= self.stride[Direction.VERTICAL]
-                ncols_ *= self.stride[Direction.HORIZONTAL]
-            if self.number_of_channels == 1:
-                Z[0] = X
-            else:
-                target_stage = (self.number_of_channels-1)//(nDecs-1) + 1
-                number_of_channels_at_target_stage = (self.number_of_channels - 1) % (nDecs-1) 
-                for istage in range(target_stage):
-                    Z[istage] = X[istage]
-                Z[target_stage][:,:,:,:number_of_channels_at_target_stage] = X[target_stage].clone()
+                if istage == 0 or istage < nstages-1:
+                    X_i = X[istage]
+                    nsamples = X_i.size(0)
+                    nrows_ = X_i.size(1)
+                    ncols_ = X_i.size(2)
+                    Z.append(X_i) 
+                elif istage == nstages-1:
+                    X_i = X[istage]
+                    nsamples = X_i.size(0)
+                    nrows_ = X_i.size(1)
+                    ncols_ = X_i.size(2)
+                    number_of_channels = X_i.size(3)
+                    Z.append(torch.cat((X_i,torch.zeros(nsamples,nrows_,ncols_,nDecs-1-number_of_channels,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad)),dim=-1))
+                else:
+                    nrows_ *= self.stride[Direction.VERTICAL]
+                    ncols_ *= self.stride[Direction.HORIZONTAL]
+                    Z.append(torch.zeros(nsamples,nrows_,ncols_,nDecs-1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad))                        
             Z = tuple(Z)
-        """
         return Z
 
 class OrthonormalMatrixGenerationSystem:
