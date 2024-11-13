@@ -20,6 +20,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
         Stride
         Mode
         NumberOfBlocks
+        Device
+        DType
     end
     
     properties (Dependent)
@@ -52,6 +54,8 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Mode','Synthesis')
             addParameter(p,'Name','')
             addParameter(p,'NumberOfBlocks',[1 1])
+            addParameter(p,'DType','double')
+            addParameter(p,'Device','cuda')
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
@@ -68,7 +72,9 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
                 + layer.PrivateNumberOfChannels(1) + "," ...
                 + layer.PrivateNumberOfChannels(2) + ")";
             layer.Type = '';
-            
+            layer.Device = p.Results.Device;
+            layer.DType = p.Results.DType;
+
             nChsTotal = sum(layer.PrivateNumberOfChannels);
             nAngles = (nChsTotal-2)*nChsTotal/8;
             if size(layer.PrivateAngles,1)~=nAngles

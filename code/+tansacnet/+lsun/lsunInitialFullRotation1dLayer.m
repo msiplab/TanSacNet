@@ -24,6 +24,8 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
         % (Optional) Layer properties.
         Stride
         NumberOfBlocks
+        Device
+        DType
     end
     
     properties (Dependent)
@@ -62,6 +64,8 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Angles',[])
             %addParameter(p,'NoDcLeakage',false)
             addParameter(p,'NumberOfBlocks',1)
+            addParameter(p,'DType','double')
+            addParameter(p,'Device','cuda')
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
@@ -78,6 +82,8 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
                 + layer.PrivateNumberOfChannels(2) + "), "  ...
                 + "m = " + layer.Stride;
             layer.Type = '';
+            layer.Device = p.Results.Device;
+            layer.DType = p.Results.DType;
 
             nChsTotal = sum(layer.PrivateNumberOfChannels);            
             nAngles = (nChsTotal-1)*nChsTotal/2;

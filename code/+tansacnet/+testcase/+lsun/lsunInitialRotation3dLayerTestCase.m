@@ -71,6 +71,35 @@ classdef lsunInitialRotation3dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
+
+        function testConstructorWithDeviceAndDType(testCase, stride, usegpu, datatype)
+            
+            % Expected values
+            expctdName = 'V0';
+     
+            device_ = ["cpu", "cuda"];
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialRotation3dLayer(...
+                'Stride',stride,...
+                'Name',expctdName,...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            
+            % Actual values
+            actualName = layer.Name;
+            actualDevice = layer.Device;
+            actualDType = layer.DType;
+
+            % Evaluation
+            testCase.verifyEqual(actualName,expctdName);
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            testCase.verifyEqual(actualDType,expctdDType);  
+            
+        end
   
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
@@ -137,6 +166,84 @@ classdef lsunInitialRotation3dLayerTestCase < matlab.unittest.TestCase
                 expctdZ = gather(expctdZ);
             end
             testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
+            
+        end
+
+        function testPredictGrayscaleWithDeviceAndDType(testCase, ...
+                usegpu, stride, nrows, ncols, nlays, datatype)
+
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+            
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+
+            device_ = ["cpu", "cuda"];      
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;      
+            
+            % Parameters
+            nSamples = 8;
+            nDecs = prod(stride);
+            nChsTotal = nDecs;
+            % nDecs x nRows x nCols x nSamples
+            %X = randn(nrows,ncols,nDecs,nSamples,datatype);
+            X = randn(nDecs,nrows,ncols,nlays,nSamples,datatype);
+            if expctdDevice == "cuda"
+                X = gpuArray(X);
+            end
+            
+            % Expected values
+            % nChs x nRows x nCols x nSamples
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            W0 = repmat(eye(ps,datatype),[1 1 nrows*ncols*nlays]);
+            U0 = repmat(eye(pa,datatype),[1 1 nrows*ncols*nlays]);
+            %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
+            expctdZ = zeros(nChsTotal,nrows,ncols,nlays,nSamples,datatype);
+            Y  = zeros(nChsTotal,nrows,ncols,nlays,datatype);
+            for iSample=1:nSamples
+                % Perumation in each block
+                Ai = X(:,:,:,:,iSample); %Ai = permute(X(:,:,:,:,iSample),[4 1 2 3]);
+                Yi = reshape(Ai,nDecs,nrows,ncols,nlays);
+                %
+                Ys = Yi(1:ps,:);
+                Ya = Yi(ps+1:end,:);
+                for iblk = 1:(nrows*ncols*nlays)
+                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
+                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
+                end
+                Y(1:ps,:,:,:) = reshape(Ys,ps,nrows,ncols,nlays);
+                Y(ps+1:ps+pa,:,:,:) = reshape(Ya,pa,nrows,ncols,nlays);                
+                expctdZ(:,:,:,:,iSample) = Y; 
+            end
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialRotation3dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols nlays],...
+                'Name','V0',...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            
+            % Actual values
+            actualZ = layer.predict(X);
+            actualDevice = layer.Device;
+            
+            % Evaluation
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            if actualDevice == "cuda"
+                testCase.verifyClass(actualZ,'gpuArray')
+                actualZ = gather(actualZ);
+                expctdZ = gather(expctdZ);
+            end
+            testCase.verifyInstanceOf(actualZ,expctdDType);
             testCase.verifyThat(actualZ,...
                 IsEqualTo(expctdZ,'Within',tolObj));
             

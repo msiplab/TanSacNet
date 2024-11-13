@@ -69,6 +69,36 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualMode,expctdMode);
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
+
+        function testConstructorWithDeviceAndDType(testCase, stride, usegpu, datatype)
+            
+            % Expected values
+            expctdName = 'Vn~';
+            expctdMode = 'Synthesis';
+     
+            device_ = ["cpu", "cuda"];
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'Name',expctdName,...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            
+            % Actual values
+            actualName = layer.Name;
+            actualDevice = layer.Device;
+            actualDType = layer.DType;
+
+            % Evaluation
+            testCase.verifyEqual(actualName,expctdName);
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            testCase.verifyEqual(actualDType,expctdDType);  
+            
+        end
         
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, mus, datatype)
@@ -125,6 +155,77 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
                 expctdZ = gather(expctdZ);                
             end
             testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
+            
+        end
+
+        function testPredictGrayscaleWithDeviceAndDType(testCase, ...
+                usegpu, stride, nrows, ncols, mus, datatype)
+
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+            
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+
+            device_ = ["cpu", "cuda"];      
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;      
+            
+            % Parameters
+            %nrows_ = 2;
+            %ncols_ = 2;
+            nSamples = 8;
+            nChsTotal = prod(stride);
+            % nDecs x nRows x nCols x nSamples
+            %X = randn(nrows,ncols,nDecs,nSamples,datatype);
+            X = randn(nChsTotal,nrows,ncols,nSamples,datatype);
+            if usegpu
+                X = gpuArray(X);
+            end
+            
+            % Expected values
+            % nChs x nRows x nCols x nSamples
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            UnT = repmat(mus*eye(pa,datatype),[1 1 nrows*ncols]);
+            Y = X; %permute(X,[3 1 2 4]);
+            Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            Za = zeros(size(Ya),'like',Ya);
+            for iSample=1:nSamples
+                for iblk = 1:(nrows*ncols)
+                    Za(:,iblk,iSample) = UnT(:,:,iblk)*Ya(:,iblk,iSample);
+                end
+            end
+            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
+            expctdZ = Y; %ipermute(Y,[3 1 2 4]);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
+                'Name','Vn~',...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            
+            % Actual values
+            layer.Mus = mus;
+            actualZ = layer.predict(X);
+            actualDevice = layer.Device;
+            
+            % Evaluation
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            if actualDevice == "cuda"
+                testCase.verifyClass(actualZ,'gpuArray')
+                actualZ = gather(actualZ);
+                expctdZ = gather(expctdZ);
+            end
+            testCase.verifyInstanceOf(actualZ,expctdDType);
             testCase.verifyThat(actualZ,...
                 IsEqualTo(expctdZ,'Within',tolObj));
             

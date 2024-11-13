@@ -25,6 +25,8 @@ classdef lsunInitialRotation3dLayer < nnet.layer.Layer %#codegen
         % (Optional) Layer properties.
         Stride
         NumberOfBlocks
+        Device
+        DType
     end
     
     properties (Dependent)
@@ -64,6 +66,8 @@ classdef lsunInitialRotation3dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'Angles',[])
             addParameter(p,'NoDcLeakage',false)
             addParameter(p,'NumberOfBlocks',[1 1 1])
+            addParameter(p,'DType','double')
+            addParameter(p,'Device','cuda')
             parse(p,varargin{:})
             
             % Layer constructor function goes here.
@@ -83,7 +87,9 @@ classdef lsunInitialRotation3dLayer < nnet.layer.Layer %#codegen
                 + layer.Stride(2) + "," ...
                 + layer.Stride(3) + ")";
             layer.Type = '';
-
+            layer.Device = p.Results.Device;
+            layer.DType = p.Results.DType;
+            
             nChsTotal = sum(layer.PrivateNumberOfChannels);            
             nAngles = (nChsTotal-2)*nChsTotal/4;
             if size(layer.PrivateAngles,1)~=nAngles
