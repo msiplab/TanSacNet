@@ -9,7 +9,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
     %
     % Requirements: MATLAB R2022a
     %
-    % Copyright (c) 2022, Shogo MURAMATSU
+    % Copyright (c) 2022-2024, Shogo MURAMATSU
     %
     % All rights reserved.
     %

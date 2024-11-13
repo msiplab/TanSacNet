@@ -9,7 +9,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
     %
     % Requirements: MATLAB R2022a
     %
-    % Copyright (c) 2022, Shogo MURAMATSU
+    % Copyright (c) 2022-2024, Shogo MURAMATSU
     %
     % All rights reserved.
     %
@@ -75,7 +75,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             % Expected values
             expctdName = 'V0';
      
-            device_ = ["cuda", "cpu"];
+            device_ = ["cpu", "cuda"];
             expctdDevice = device_(usegpu+1);
             expctdDType = datatype;
             
@@ -181,7 +181,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
 
-            device_ = ["cuda", "cpu"];      
+            device_ = ["cpu", "cuda"];      
             expctdDevice = device_(usegpu+1);
             expctdDType = datatype;      
             
@@ -194,7 +194,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             % nDecs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             X = randn(nDecs,nrows_,ncols_,nSamples,datatype);
-            if expctdDevice == "cuda"
+            if usegpu
                 X = gpuArray(X);
             end
             
