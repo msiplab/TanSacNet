@@ -70,6 +70,35 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualDescription,expctdDescription);
         end
   
+        function testConstructorWithDeviceAndDType(testCase, stride, usegpu, datatype)
+            
+            % Expected values
+            expctdName = 'V0';
+     
+            device_ = ["cuda", "cpu"];
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialRotation2dLayer(...
+                'Stride',stride,...
+                'Name',expctdName,...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            
+            % Actual values
+            actualName = layer.Name;
+            actualDevice = layer.Device;
+            actualDType = layer.DType;
+
+            % Evaluation
+            testCase.verifyEqual(actualName,expctdName);
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            testCase.verifyEqual(actualDType,expctdDType);  
+            
+        end
+
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
 
@@ -140,6 +169,87 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
         
+        function testPredictGrayscaleWithDeviceAndDType(testCase, ...
+                usegpu, stride, datatype)
+
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+            
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+
+            device_ = ["cuda", "cpu"];      
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;      
+            
+            % Parameters
+            nrows_ = 2;
+            ncols_ = 2;
+            nSamples = 8;
+            nDecs = prod(stride);
+            nChsTotal = nDecs;
+            % nDecs x nRows x nCols x nSamples
+            %X = randn(nrows,ncols,nDecs,nSamples,datatype);
+            X = randn(nDecs,nrows_,ncols_,nSamples,datatype);
+            if expctdDevice == "cuda"
+                X = gpuArray(X);
+            end
+            
+            % Expected values
+            % nChs x nRows x nCols x nSamples
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            W0 = repmat(eye(ps,datatype),[1 1 nrows_*ncols_]);
+            U0 = repmat(eye(pa,datatype),[1 1 nrows_*ncols_]);
+            %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
+            expctdZ = zeros(nChsTotal,nrows_,ncols_,nSamples,datatype);
+            Y  = zeros(nChsTotal,nrows_,ncols_,datatype);
+            for iSample=1:nSamples
+                % Perumation in each block
+                Ai = X(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
+                Yi = reshape(Ai,nDecs,nrows_,ncols_);
+                %
+                Ys = Yi(1:ps,:);
+                Ya = Yi(ps+1:end,:);
+                for iblk = 1:(nrows_*ncols_)
+                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
+                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
+                end
+                Y(1:ps,:,:) = reshape(Ys,ps,nrows_,ncols_);
+                Y(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows_,ncols_);                
+                expctdZ(:,:,:,iSample) = Y; %ipermute(Y,[3 1 2]);
+            end
+            
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialRotation2dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows_ ncols_],...
+                'Name','V0',...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            
+            % Actual values
+            actualZ = layer.predict(X);
+            actualDevice = layer.Device;
+            
+            % Evaluation
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            if actualDevice == "cuda"
+                testCase.verifyClass(actualZ,'gpuArray')
+                actualZ = gather(actualZ);
+                expctdZ = gather(expctdZ);
+            end
+            testCase.verifyInstanceOf(actualZ,expctdDType);
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
+            
+        end
+
+
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             
