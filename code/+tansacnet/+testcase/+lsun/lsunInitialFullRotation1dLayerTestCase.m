@@ -464,6 +464,108 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
+        function testBackwardWithDeviceAndDType(testCase, ...
+                usegpu, stride, nblks, datatype)
+            
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+
+
+            device_ = ["cpu", "cuda"];      
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;      
+
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-4,single(1e-4));
+            import tansacnet.utility.*
+            gen = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            
+            % Parameters
+            nSamples = 8;
+            nChsTotal = stride;
+            nAngles = (nChsTotal-1)*nChsTotal/2;
+            angles = zeros(nAngles,nblks);
+            mus_ = 1;
+            
+            % nChsTotal x 1 x nBlks x nSamples
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);                        
+            if usegpu
+                X = gpuArray(X);
+                angles = gpuArray(angles);
+                dLdZ = gpuArray(dLdZ);
+            end                     
+
+            % Expected values
+            % nChsTotal x 1 x nBlks x nSamples
+            % dLdX = dZdX x dLdZ
+            V0T = permute(gen.step(angles,mus_,0),[2 1 3]);
+            Y = dLdZ;
+            for iSample = 1:nSamples
+                for iblk = 1:nblks
+                    Y(:,:,iblk,iSample) = V0T(:,:,iblk)*Y(:,:,iblk,iSample); 
+                end
+            end
+            expctddLdX = Y;
+            
+            % dLdWi = <dLdZ,(dVdWi)X>
+            dldw_ = zeros(nAngles,nblks,1,datatype);
+            dldz_ = dLdZ;
+            % (dVdWi)X
+            c_ = X;
+            for iAngle = 1:nAngles
+                dV0 = gen.step(angles,mus_,iAngle);
+                for iblk = 1:nblks
+                    dldz_iblk = squeeze(dldz_(:,:,iblk,:));
+                    c_iblk = squeeze(c_(:,:,iblk,:));
+                    d_iblk = zeros(size(c_iblk),'like',c_iblk);
+                    for iSample = 1:nSamples
+                        d_iblk(:,iSample) = dV0(:,:,iblk)*c_iblk(:,iSample);
+                    end
+                    dldw_(iAngle,iblk) = sum(dldz_iblk.*d_iblk,'all');
+                end
+            end
+            expctddLdW = dldw_;
+
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialFullRotation1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks,...
+                'Name','V0',...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            layer.Mus = mus_;
+            %expctdZ = layer.predict(X);
+            
+            % Actual values
+            [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
+            actualDevice = layer.Device;
+            
+            % Evaluation
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            if actualDevice == "cuda"
+                testCase.verifyClass(actualdLdX,'gpuArray')
+                actualdLdX = gather(actualdLdX);
+                expctddLdX = gather(expctddLdX);
+                testCase.verifyClass(actualdLdW,'gpuArray')
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);
+            end
+            testCase.verifyInstanceOf(actualdLdX,expctdDType);
+            testCase.verifyInstanceOf(actualdLdW,expctdDType);
+            testCase.verifyThat(actualdLdX,...
+                IsEqualTo(expctddLdX,'Within',tolObj));
+            testCase.verifyThat(actualdLdW,...
+                IsEqualTo(expctddLdW,'Within',tolObj));
+            
+        end
+
         function testBackwardWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, datatype)
 

@@ -512,6 +512,128 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));                        
         end
 
+        function testBackwardWithDeviceAndDType(testCase, ...
+                usegpu, stride, nblks, mus, datatype)
+            
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+
+
+            device_ = ["cpu", "cuda"];      
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;      
+
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-4,single(1e-4));
+            import tansacnet.utility.*
+            genW = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');
+            genU = OrthonormalMatrixGenerationSystem(...
+                'PartialDifference','on');  
+            
+            % Parameters
+            nSamples = 8;
+            nChsTotal = stride;
+            nAngles = (nChsTotal-2)*nChsTotal/4;
+            angles = zeros(nAngles,nblks);
+            
+            % nChsTotal x 1 x nBlks x nSamples         
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
+            if usegpu
+                X = gpuArray(X);
+                dLdZ = gpuArray(dLdZ);
+                angles = gpuArray(angles);
+            end
+
+            % Expected values
+            % nChsTotal x nRows x nCols x nSamples
+            pt = ceil(nChsTotal/2);
+            pb = floor(nChsTotal/2);
+
+            % dLdX = dZdX x dLdZ
+            anglesW = angles(1:nAngles/2,:);
+            anglesU = angles(nAngles/2+1:nAngles,:);
+            if nAngles == 0
+                Wn = mus*ones(1,1,nblks);
+                Un = mus*ones(1,1,nblks);
+            else
+                Wn = genW.step(anglesW,mus,0);
+                Un = genU.step(anglesU,mus,0);
+            end
+            %
+            adLd_ = dLdZ;
+            cdLd_top = reshape(adLd_(1:pt,:,:,:),pt,nblks,nSamples);
+            cdLd_btm = reshape(adLd_(pt+1:pt+pb,:,:,:),pb,nblks,nSamples);
+            for iSample = 1:nSamples
+                for iblk = 1:nblks
+                    cdLd_top(:,iblk,iSample) = Wn(:,:,iblk)*cdLd_top(:,iblk,iSample);
+                    cdLd_btm(:,iblk,iSample) = Un(:,:,iblk)*cdLd_btm(:,iblk,iSample);
+                end
+            end
+            adLd_(1:pt,:,:,:) = reshape(cdLd_top,pt,1,nblks,nSamples);
+            adLd_(pt+1:pt+pb,:,:,:) = reshape(cdLd_btm,pb,1,nblks,nSamples);
+            expctddLdX = adLd_;
+            
+            % dLdWi = <dLdZ,(dVdWi)X>
+            expctddLdW = zeros(nAngles,nblks,datatype);
+            c_top = X(1:pt,:,:,:);
+            c_btm = X(pt+1:pt+pb,:,:,:);
+            dldz_top = dLdZ(1:pt,:,:,:);
+            dldz_btm = dLdZ(pt+1:pt+pb,:,:,:);
+            for iAngle = 1:nAngles/2
+                dWn_T = permute(genW.step(anglesW,mus,iAngle),[2 1 3]);
+                dUn_T = permute(genU.step(anglesU,mus,iAngle),[2 1 3]);                
+                for iblk = 1:nblks
+                    c_top_iblk = squeeze(c_top(:,:,iblk,:));                    
+                    c_btm_iblk = squeeze(c_btm(:,:,iblk,:));
+                    c_top_iblk = dWn_T(:,:,iblk)*c_top_iblk;                    
+                    c_btm_iblk = dUn_T(:,:,iblk)*c_btm_iblk;
+                    dldz_top_iblk = squeeze(dldz_top(:,:,iblk,:));
+                    dldz_btm_iblk = squeeze(dldz_btm(:,:,iblk,:));
+                    expctddLdW(iAngle,iblk) = sum(dldz_top_iblk.*c_top_iblk,'all');
+                    expctddLdW(nAngles/2+iAngle,iblk) = sum(dldz_btm_iblk.*c_btm_iblk,'all');
+                end
+            end
+
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunIntermediateFullRotation1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks,...
+                'Name','Vn~',...
+                'Device',expctdDevice,...
+                'DType',expctdDType);
+            layer.Mus = mus;
+            %expctdZ = layer.predict(X);
+            
+            % Actual values
+            [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
+            actualDevice = layer.Device;
+            
+            % Evaluation
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            if actualDevice == "cuda"
+                testCase.verifyClass(actualdLdX,'gpuArray')
+                actualdLdX = gather(actualdLdX);
+                expctddLdX = gather(expctddLdX);
+                testCase.verifyClass(actualdLdW,'gpuArray')
+                actualdLdW = gather(actualdLdW);
+                expctddLdW = gather(expctddLdW);
+            end
+            testCase.verifyInstanceOf(actualdLdX,expctdDType);
+            testCase.verifyInstanceOf(actualdLdW,expctdDType);
+            testCase.verifyThat(actualdLdX,...
+                IsEqualTo(expctddLdX,'Within',tolObj));
+            testCase.verifyThat(actualdLdW,...
+                IsEqualTo(expctddLdW,'Within',tolObj));
+            
+        end
+
         function testBackwardWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
             if usegpu && gpuDeviceCount == 0
