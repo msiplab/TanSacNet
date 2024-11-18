@@ -3,11 +3,11 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
     %
     % Requirements: MATLAB R2015b
     %
-    % Copyright (c) 2014-2022, Shogo MURAMATSU
+    % Copyright (c) 2014-2024, Shogo MURAMATSU, Yasas GODAGE
     %
     % All rights reserved.
     %
-    % Contact address: Shogo MURAMATSU,
+    % Contact address: Shogo MURAMATSU, Yasas GODAGE
     %                Faculty of Engineering, Niigata University,
     %                8050 2-no-cho Ikarashi, Nishi-ku,
     %                Niigata, 950-2181, JAPAN
@@ -22,10 +22,16 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
     properties (Hidden, Transient)
         PartialDifferenceSet = ...
             matlab.system.StringSet({'on','off','sequential'});
+        DeviceSet = ...
+            matlab.system.StringSet({'cpu','cuda'});
+        DTypeSet = ...
+            matlab.system.StringSet({'single','double'});
     end
     
     properties
         NumberOfDimensions
+        Device = 'cuda'
+        DType = 'double'
     end
     
     properties (Access = private)
@@ -47,6 +53,8 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
             s = saveObjectImpl@matlab.System(obj);
             s.NumberOfDimensions = obj.NumberOfDimensions;
             s.PartialDifference = obj.PartialDifference;
+            s.Device = obj.Device;
+            s.DType = obj.DType;
         end
         
         function loadObjectImpl(obj,s,wasLocked)
@@ -55,6 +63,8 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
             else
                 obj.PartialDifference = 'off';
             end
+            obj.DType = s.DType;
+            obj.Device = s.Device;            
             obj.NumberOfDimensions = s.NumberOfDimensions;
             loadObjectImpl@matlab.System(obj,s,wasLocked);
         end
@@ -69,17 +79,61 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
         end
         
         function resetImpl(obj)
-            obj.nextangle = uint32(0);            
+            obj.nextangle = uint32(0);
         end
-        
-        function validateInputsImpl(~,~,mus,~)
+
+        function validateInputsImpl(obj,angles,mus,~)
+            % Check device of angles
+            if obj.Device == "cuda" && ~isgpuarray(angles)
+                errID = 'LSUN:DeviceMismatch';
+                msg = 'ANGLES should be gpuArray';
+                throw(MException(errID,msg));
+            elseif obj.Device == "cpu" && isgpuarray(angles)
+                errID = 'LSUN:DeviceMismatch';
+                msg = 'ANGLES should be on CPU';
+                throw(MException(errID,msg));
+            end
+
+            % Check device of mus
+            if obj.Device == "cuda" && ~isgpuarray(mus)
+                errID = 'LSUN:DeviceMismatch';
+                msg = 'MUS should be gpuArray';
+                throw(MException(errID,msg));
+            elseif obj.Device == "cpu" && isgpuarray(mus)
+                errID = 'LSUN:DeviceMismatch';
+                msg = 'MUS should be on CPU';
+                throw(MException(errID,msg));
+            end
+
+            % Check dtype of angles
+            if isgpuarray(angles)
+                angles = gather(angles);
+            end
+            if ~strcmp(obj.DType,class(angles))
+                errID = 'LSUN:DTypeMismatch';
+                msg = char("ANGLES should be " + obj.DType);
+                throw(MException(errID,msg));
+            end
+
+            % Check dtype of angles
+            if isgpuarray(mus)
+                mus = gather(mus);
+            end
+            if ~strcmp(obj.DType,class(mus))
+                errID = 'LSUN:DTypeMismatch';
+                msg = char("MUS should be " + obj.DType);
+                throw(MException(errID,msg));
+            end
+
             if ~isempty(mus) && any(abs(mus(:))~=1)
                 error('All entries of mus must be 1 or -1.');
             end
         end
         
         function matrix = stepImpl(obj,angles,mus,pdAng)
-            
+            device_ = obj.Device;
+            dtype_ = obj.DType;
+
             if nargin < 4
                 pdAng = 0;
             end
@@ -88,7 +142,11 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
                 if isvector(mus) % Single case
                     matrix = diag(mus); 
                 else % Multiple case
-                    matrix = zeros(size(mus,1),size(mus,1),size(mus,2));
+                    if device_ == "cuda"
+                        matrix = zeros(size(mus,1),size(mus,1),size(mus,2),dtype_,"gpuArray");
+                    else
+                        matrix = zeros(size(mus,1),size(mus,1),size(mus,2),dtype_);
+                    end
                     for idx = 1:size(mus,2)
                         matrix(:,:,idx) = diag(mus(:,idx));
                     end
@@ -119,9 +177,16 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
     methods (Access = private)
         
         function matrix = stepNormal_(obj,angles,mus,pdAng)
+            device_ = obj.Device;
+            dtype_ = obj.DType;
             nDim_ = obj.NumberOfDimensions;
             nMatrices_ = size(angles,2);
-            matrix = repmat(eye(nDim_),[1 1 nMatrices_]);
+            if device_ == "cuda"
+                eye_ = eye(nDim_,dtype_,"gpuArray");
+            else
+                eye_ = eye(nDim_,dtype_);
+            end
+            matrix = repmat(eye_,[1 1 nMatrices_]); 
             if isrow(mus)
                 mus = mus.';
             end
@@ -137,7 +202,7 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
                         vb = matrix(iBtm,:,iMtx);
                         [vt,vb] = obj.rot_(vt,vb,angle);
                         if iAng == pdAng
-                            matrix(:,:,iMtx) = 0*matrix(:,:,iMtx);
+                            matrix(:,:,iMtx) = cast(0,dtype_)*matrix(:,:,iMtx);
                         end
                         matrix(iBtm,:,iMtx) = vb;
                         %
@@ -154,6 +219,8 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
         end
 
         function matrix = stepSequential_(obj,angles,mus,pdAng)
+            device_ = obj.Device;
+            dtype_ = obj.DType;
             % Check pdAng
             if pdAng ~= obj.nextangle
                 error("Unable to proceed sequential differentiation. Index = %d is expected, but %d was given.", obj.nextangle, pdAng);
@@ -161,13 +228,20 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
             %
             nDim_ = obj.NumberOfDimensions;
             nMatrices_ = size(angles,2);
-            matrix = repmat(eye(nDim_),[1 1 nMatrices_]);
+            if device_ == "cuda"
+                eye_ = eye(nDim_,dtype_,"gpuArray"); 
+                zeros_ = zeros(nDim_,dtype_,"gpuArray"); 
+            else
+                eye_ = eye(nDim_,dtype_); 
+                zeros_ = zeros(nDim_,dtype_); 
+            end
+            matrix = repmat(eye_,[1 1 nMatrices_]);
             if isrow(mus)
                 mus = mus.';
             end
             if pdAng < 1 % Initialization
-                obj.matrixpst = repmat(eye(nDim_),[1 1 nMatrices_]);
-                obj.matrixpre = repmat(eye(nDim_),[1 1 nMatrices_]);
+                obj.matrixpst = repmat(eye_,[1 1 nMatrices_]); 
+                obj.matrixpre = repmat(eye_,[1 1 nMatrices_]); 
                 %
                 for iMtx = 1:nMatrices_
                     iAng = 1;
@@ -190,16 +264,21 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
                 end
                 obj.nextangle = uint32(1);
             else % Sequential differentiation
+                if device_ == "cuda"
+                    zeros_1xD_ = zeros(1,nDim_,dtype_,"gpuArray");
+                else
+                    zeros_1xD_ = zeros(1,nDim_,dtype_);
+                end
                 %
                 %matrix = 1;
                 for iMtx = 1:nMatrices_
-                    matrixrev = eye(nDim_);
-                    matrixdif = zeros(nDim_);
+                    matrixrev = eye_; 
+                    matrixdif = zeros_; 
                     %
                     iAng = 1;
                     for iTop=1:nDim_-1
                         rt = matrixrev(iTop,:);
-                        dt = zeros(1,nDim_);
+                        dt = zeros_1xD_; 
                         dt(iTop) = 1;
                         for iBtm=iTop+1:nDim_
                             if iAng == pdAng
@@ -210,7 +289,7 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
                                 matrixrev(iTop,:) = rt;
                                 matrixrev(iBtm,:) = rb;
                                 %
-                                db = zeros(1,nDim_);
+                                db = zeros_1xD_; 
                                 db(iBtm) = 1;
                                 dangle = angle + pi/2;
                                 [dt,db] = obj.rot_(dt,db,dangle);
