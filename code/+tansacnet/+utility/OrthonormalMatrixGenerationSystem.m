@@ -115,7 +115,7 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
                 throw(MException(errID,msg));
             end
 
-            % Check dtype of angles
+            % Check dtype of mus
             if isgpuarray(mus)
                 mus = gather(mus);
             end
