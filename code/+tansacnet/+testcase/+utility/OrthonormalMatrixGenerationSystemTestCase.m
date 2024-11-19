@@ -170,14 +170,15 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
                 warning('No GPU device was detected.')
                 return;
             end
-            % Expected values
-            coefExpctd = [
-                1 0 ;
-                0 1 ];
-
+            
             device_ = [ "cpu", "cuda" ];
-            expctdDevice = device_(usegpu+1);
+            expctdDevice = convertStringsToChars(device_(usegpu+1));
             expctdDType = datatype;
+          
+            % Expected values
+            coefExpctd = cast([
+                1 0 ;
+                0 1 ],expctdDType);
 
             % Instantiation of target class
             import tansacnet.utility.*
@@ -185,13 +186,17 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
                 'Device', expctdDevice, ...
                 'DType', expctdDType ...
                 );
-
+           
             % Actual values
-            coefActual = step(testCase.omgs,0,1);
+            if usegpu
+                coefActual = step(testCase.omgs,gpuArray(cast(0,expctdDType)),...
+                    gpuArray(cast(1,expctdDType)));
+            else
+                coefActual = step(testCase.omgs,cast(0,expctdDType),...
+                    cast(1,expctdDType));
+            end
             actualDevice = testCase.omgs.Device;
             actualDType = testCase.omgs.DType;
-
-            % Evaluation
             if usegpu
                 testCase.verifyClass(coefActual,'gpuArray')
                 coefActual = gather(coefActual);
@@ -244,10 +249,18 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
                 );
 
             % Actual values
-            coefActual = step(testCase.omgs,pi/4,1);
+            if usegpu
+                coefActual = step(testCase.omgs,gpuArray(cast(pi/4,expctdDType)),...
+                    gpuArray(cast(1,expctdDType)));
+            else
+                coefActual = step(testCase.omgs,cast(pi/4,expctdDType),...
+                    cast(1,expctdDType));
+            end
+            
+            %coefActual = step(testCase.omgs,pi/4,1);
 
             % Evaluation
-            if usegpu
+            if usegpu 
                 testCase.verifyClass(coefActual,'gpuArray');
                 coefActual = gather(coefActual);
             end
@@ -277,6 +290,50 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             % Evaluation
             testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
         end
+        
+        function testConstructorWithAnglesMultipleWithDeviceAndDType(testCase, usegpu, datatype)
+
+            device_ = [ "cpu", "cuda" ];
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;
+
+            % Expected values
+            coefExpctd(:,:,1) = cast([
+                cos(pi/4) -sin(pi/4) ;
+                sin(pi/4)  cos(pi/4) ],expctdDType);
+            coefExpctd(:,:,2) = cast([
+                cos(pi/6) -sin(pi/6) ;
+                sin(pi/6)  cos(pi/6) ],expctdDType);
+
+            % Instantiation of target class
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'Device', expctdDevice, ...
+                'DType', expctdDType ...
+                );
+
+            % Actual values
+            if usegpu
+                angles = gpuArray(cast([pi/4 pi/6],expctdDType));
+                coefActual = step(testCase.omgs,angles,...
+                    gpuArray(cast(1,expctdDType)));
+            else
+                angles = cast([pi/4 pi/6],expctdDType);
+                coefActual = step(testCase.omgs,angles,...
+                    cast(1,expctdDType));
+            end
+
+            %angles = [pi/4 pi/6];
+            %coefActual = step(testCase.omgs,angles,1);
+
+            % Evaluation
+            if usegpu 
+                testCase.verifyClass(coefActual,'gpuArray');
+                coefActual = gather(coefActual);
+            end
+            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
+        end
+
 
         % Test for default construction
         function testConstructorWithAnglesAndMus(testCase)
@@ -294,6 +351,44 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             coefActual = step(testCase.omgs,pi/4,[ 1 -1 ]);
 
             % Evaluation
+            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
+
+        end
+
+        function testConstructorWithAnglesAndMusWithDeviceAndDType(testCase, usegpu, datatype)
+           
+            device_ = [ "cpu", "cuda" ];
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;
+
+            % Expected values
+            coefExpctd = cast([
+                cos(pi/4) -sin(pi/4) ;
+                -sin(pi/4) -cos(pi/4) ],expctdDType);
+
+            % Instantiation of target class
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'Device', expctdDevice, ...
+                'DType', expctdDType ...
+                );
+
+            % Actual values
+             if usegpu
+                coefActual = step(testCase.omgs,gpuArray(cast(pi/4,expctdDType)),...
+                    gpuArray(cast([ 1 -1 ],expctdDType)));
+            else
+                coefActual = step(testCase.omgs,cast(pi/4,expctdDType),...
+                    cast([ 1 -1 ],expctdDType));
+            end
+
+            %coefActual = step(testCase.omgs,pi/4,[ 1 -1 ]);
+
+            % Evaluation
+            if usegpu 
+                testCase.verifyClass(coefActual,'gpuArray');
+                coefActual = gather(coefActual);
+            end
             testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
 
         end
@@ -363,6 +458,57 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             coefActual = step(testCase.omgs,angles,mus);
 
             % Evaluation
+            testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
+
+        end
+
+        function testConstructorWithAnglesAndMusMultipleWithDeviceAndDType(testCase, usegpu, datatype)
+
+            if usegpu && gpuDeviceCount == 0
+                warning('No GPU device was detected.')
+                return;
+            end
+            device_ = [ "cpu", "cuda" ];
+            expctdDevice = device_(usegpu+1);
+            expctdDType = datatype;
+
+            % Expected values
+            coefExpctd(:,:,1) = cast([
+                cos(pi/4) -sin(pi/4) ;
+                -sin(pi/4) -cos(pi/4)],expctdDType);
+            coefExpctd(:,:,2) = cast([
+                -cos(pi/6) sin(pi/6) ;
+                sin(pi/6) cos(pi/6)],expctdDType);
+
+            % Instantiation of target class
+            import tansacnet.utility.*
+            testCase.omgs = OrthonormalMatrixGenerationSystem(...
+                'Device', expctdDevice, ...
+                'DType', expctdDType ...
+                );
+
+            % Actual values
+            if usegpu
+                angles = gpuArray(cast([pi/4 pi/6],expctdDType));
+                mus = gpuArray(cast([  1 -1 ; -1  1],expctdDType));
+            else
+                angles = cast([pi/4 pi/6],expctdDType);
+                mus = cast([  1 -1 ; -1  1],expctdDType);
+            end
+            coefActual = step(testCase.omgs,angles,mus);
+
+            % angles = [pi/4 pi/6];
+            % mus = [  1 -1 ;
+            %     -1  1 ];
+            % coefActual = step(testCase.omgs,angles,mus);
+
+            % Evaluation
+
+             if usegpu 
+                testCase.verifyClass(coefActual,'gpuArray');
+                coefActual = gather(coefActual);
+             end
+           
             testCase.verifyEqual(coefActual,coefExpctd,'RelTol',1e-10);
 
         end
