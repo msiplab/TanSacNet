@@ -30,7 +30,7 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
     
     properties
         NumberOfDimensions
-        Device = 'cuda'
+        Device = 'cpu'
         DType = 'double'
     end
     
@@ -42,6 +42,9 @@ classdef OrthonormalMatrixGenerationSystem < matlab.System %#codegen
     
     methods
         function obj = OrthonormalMatrixGenerationSystem(varargin)
+            if canUseGPU
+                obj.Device = 'cuda';
+            end
             % Support name-value pair arguments
             setProperties(obj,nargin,varargin{:});
         end
