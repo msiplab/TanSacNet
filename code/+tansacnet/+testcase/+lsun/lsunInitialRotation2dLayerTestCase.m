@@ -256,7 +256,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
-            end     
+            end
             if usegpu
                 device_ = "cuda";
             else
@@ -276,10 +276,10 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             % nDecs x nRows x nCols x nSamples
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);                   
+            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
 
             % Expected values
-            % nChs x nRows x nCols x nSamples        
+            % nChs x nRows x nCols x nSamples
             ps = ceil(nChsTotal/2);
             pa = floor(nChsTotal/2);
             W0 = genW.step(angles(1:size(angles,1)/2,:),1);
@@ -308,14 +308,15 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
-                'Name','V0', ...
+                'Name','V0',...
                 'Device',device_);
-            
+
             % Actual values
             if usegpu
                 X = gpuArray(X);
-                angles = gpuArray(angles);                
-            end  
+                angles = gpuArray(angles);
+            end
+
             layer.Angles = angles;
             actualZ = layer.predict(X);
             
@@ -327,7 +328,8 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             end    
             testCase.verifyInstanceOf(actualZ,datatype);
             testCase.verifyThat(actualZ,...
-                IsEqualTo(expctdZ,'Within',tolObj));   
+                IsEqualTo(expctdZ,'Within',tolObj));
+            
         end
        
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
@@ -336,7 +338,8 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
-            end    
+            end
+            
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -351,7 +354,8 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             % nDecs x nRows x nCols x nDecs x nSamples
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);            
+            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
+
 
             % Expected values
             % nChs x nRows x nCols x nSamples
@@ -395,7 +399,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             if usegpu
                 X = gpuArray(X);
                 angles = gpuArray(angles);
-            end   
+            end
             layer.Mus = mus;
             layer.Angles = angles;
             actualZ = layer.predict(X);
@@ -429,12 +433,12 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
             import tansacnet.utility.*
             genW = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             genU = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             
             % Parameters
@@ -451,7 +455,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             %dLdZ = randn(nrows,ncols,sum(stride),nSamples,datatype);            
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
             dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);                        
-            
+
 
             % Expected values
             % nDecs x nRows x nCols x nSamples
@@ -509,9 +513,9 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
-                'Name','V0', ...
+                'Name','V0',...
                 'Device',device_);
-            %layer.Mus = mus_;
+          
             %expctdZ = layer.predict(X);
             
             % Actual values
@@ -561,13 +565,14 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
             import tansacnet.utility.*
             genW = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             genU = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
+            
             nrows_ = 8;
             ncols_ = 8;
 
@@ -584,7 +589,8 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             %dLdZ = randn(nrows,ncols,sum(stride),nSamples,datatype);            
             X = randn(nDecs,nrows_,ncols_,nSamples,datatype);
-            dLdZ = randn(nDecs,nrows_,ncols_,nSamples,datatype); 
+            dLdZ = randn(nDecs,nrows_,ncols_,nSamples,datatype);                        
+
 
             % Expected values
             % nDecs x nRows x nCols x nSamples
@@ -644,15 +650,15 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                 'NumberOfBlocks',[nrows_ ncols_],...
                 'Name','V0',...
                 'Device',expctdDevice,...
-                'DType',expctdDType);            
+                'DType',expctdDType);
             %expctdZ = layer.predict(X);
             
             % Actual values
             if usegpu
                 X = gpuArray(X);
-                mus_ = gpuArray(mus_);
                 %anglesW = gpuArray(anglesW);
                 %anglesU = gpuArray(anglesU);
+                mus_ = gpuArray(mus_);
                 dLdZ = gpuArray(dLdZ);
             end
             layer.Mus = mus_;
@@ -690,12 +696,12 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             tolObj = AbsoluteTolerance(1e-4,single(1e-3));
             import tansacnet.utility.*
             genW = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             genU = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             
             % Parameters
@@ -711,7 +717,7 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             %dLdZ = randn(nrows,ncols,sum(stride),nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);            
+            dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);
 
             % Expected values
             % nDecs x nRows x nCols x nSamples
@@ -769,15 +775,15 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
-                'Name','V0');            
+                'Name','V0');
             %expctdZ = layer.predict(X);
             
             % Actual values
             if usegpu
                 X = gpuArray(X);
+                anglesW = gpuArray(anglesW);
+                anglesU = gpuArray(anglesU);
                 mus_ = gpuArray(mus_);
-                %anglesW = gpuArray(anglesW);
-                %anglesU = gpuArray(anglesU);
                 dLdZ = gpuArray(dLdZ);
             end
             layer.Mus = mus_;
@@ -814,12 +820,12 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             tolObj = AbsoluteTolerance(1e-4,single(1e-3));
             import tansacnet.utility.*
             genW = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             genU = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on', ...
-                'Device','cpu', ...
+                'PartialDifference','on',...
+                'Device','cpu',...
                 'DType',datatype);
             
             % Parameters
@@ -834,7 +840,8 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             %X = randn(nrows,ncols,nDecs,nSamples,datatype);
             %dLdZ = randn(nrows,ncols,sum(stride),nSamples,datatype);
             X = randn(nDecs,nrows,ncols,nSamples,datatype);
-            dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);  
+            dLdZ = randn(nDecs,nrows,ncols,nSamples,datatype);            
+
 
             % Expected values
             % nDecs x nRows x nCols x nSamples
@@ -898,14 +905,15 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
                 'NoDcLeakage',true,...
-                'Name','V0');            
+                'Name','V0');
             %expctdZ = layer.predict(X);
             
             % Actual values
             if usegpu
                 X = gpuArray(X);
-                %anglesW = gpuArray(anglesW);
-                %anglesU = gpuArray(anglesU);
+                anglesW = gpuArray(anglesW);
+                anglesU = gpuArray(anglesU);
+                mus = gpuArray(mus);
                 dLdZ = gpuArray(dLdZ);
             end
             layer.Mus = mus;
