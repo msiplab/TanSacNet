@@ -230,12 +230,17 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
                 return;
-            end            
+            end      
+             if usegpu
+                device_ = "cuda";
+            else
+                device_ = "cpu";
+            end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
             import tansacnet.utility.*
-            gen = OrthonormalMatrixGenerationSystem();
+            gen = OrthonormalMatrixGenerationSystem('Device','cpu');
             
             % Parameters
             nSamples = 8;
@@ -244,11 +249,7 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             %X = randn(nrows,ncols,nChsTotal,nSamples,datatype);
             X = randn(nChsTotal,1,nblks,nSamples,datatype);
             nAngles = (nChsTotal-1)*nChsTotal/2;
-            angles = randn(nAngles,nblks);
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-            end            
+            angles = randn(nAngles,nblks);                 
 
             % Expected values
             % nChs x 1 x nBlks x nSamples
@@ -271,9 +272,14 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             layer = lsunInitialFullRotation1dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',nblks,...
-                'Name','V0');
+                'Name','V0', ...
+                'Device',device_);
             
             % Actual values
+            if usegpu
+                X = gpuArray(X);
+                angles = gpuArray(angles);
+            end       
             layer.Angles = angles;
             actualZ = layer.predict(X);
             
@@ -380,28 +386,30 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 warning('No GPU device was detected.')
                 return;
             end
+             if usegpu
+                device_ = "cuda";
+            else
+                device_ = "cpu";
+            end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
             import tansacnet.utility.*
             gen = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on');
+                'PartialDifference','on',...
+                'Device','cpu',...
+                'DType',datatype);
             
             % Parameters
             nSamples = 8;
             nChsTotal = stride;
             nAngles = (nChsTotal-1)*nChsTotal/2;
-            angles = zeros(nAngles,nblks);
-            mus_ = 1;
+            angles = zeros(nAngles,nblks,datatype);
+            mus_ = cast(1,datatype);
             
             % nChsTotal x 1 x nBlks x nSamples
             X = randn(nChsTotal,1,nblks,nSamples,datatype);
-            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);                        
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-                dLdZ = gpuArray(dLdZ);
-            end
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);    
 
             % Expected values
             % nChsTotal x 1 x nBlks x nSamples
@@ -439,11 +447,17 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             layer = lsunInitialFullRotation1dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',nblks,...
-                'Name','V0');
-            layer.Mus = mus_;
+                'Name','V0', ...
+                'Device',device_);            
             %expctdZ = layer.predict(X);
             
             % Actual values
+            if usegpu
+                X = gpuArray(X);
+                %angles = gpuArray(angles);
+                dLdZ = gpuArray(dLdZ);
+            end
+            layer.Mus = mus_;
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
@@ -472,7 +486,6 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 return;
             end
 
-
             device_ = ["cpu", "cuda"];      
             expctdDevice = device_(usegpu+1);
             expctdDType = datatype;      
@@ -482,23 +495,20 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
             import tansacnet.utility.*
             gen = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on');
+                'PartialDifference','on',...
+                'Device','cpu',...
+                'DType',datatype);
             
             % Parameters
             nSamples = 8;
             nChsTotal = stride;
             nAngles = (nChsTotal-1)*nChsTotal/2;
-            angles = zeros(nAngles,nblks);
-            mus_ = 1;
+            angles = zeros(nAngles,nblks,datatype);
+            mus_ = cast(1,datatype);
             
             % nChsTotal x 1 x nBlks x nSamples
             X = randn(nChsTotal,1,nblks,nSamples,datatype);
-            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);                        
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-                dLdZ = gpuArray(dLdZ);
-            end                     
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);  
 
             % Expected values
             % nChsTotal x 1 x nBlks x nSamples
@@ -539,11 +549,16 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
                 'NumberOfBlocks',nblks,...
                 'Name','V0',...
                 'Device',expctdDevice,...
-                'DType',expctdDType);
-            layer.Mus = mus_;
+                'DType',expctdDType);            
             %expctdZ = layer.predict(X);
             
             % Actual values
+            if usegpu
+                X = gpuArray(X);
+                %angles = gpuArray(angles);
+                dLdZ = gpuArray(dLdZ);
+            end   
+            layer.Mus = mus_;
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             actualDevice = layer.Device;
             
@@ -571,30 +586,32 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
             if usegpu && gpuDeviceCount == 0
                 warning('No GPU device was detected.')
-                return;
+                return;                
+            end
+            if usegpu
+                device_ = "cuda";
+            else
+                device_ = "cpu";
             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-3));
             import tansacnet.utility.*
             gen = OrthonormalMatrixGenerationSystem(...
-                'PartialDifference','on');
+                'PartialDifference','on',...
+                'Device','cpu',...
+                'DType',datatype);
             
             % Parameters
             nSamples = 8;
             nChsTotal = stride;
             nAngles = (nChsTotal-1)*nChsTotal/2;
             angles = randn(nAngles,nblks,datatype);
-            mus_ = 1;
+            mus_ = cast(1,datatype);
             
             % nChsTotal x 1 x nBlks x nSamples
             X = randn(nChsTotal,1,nblks,nSamples,datatype);
-            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);
-            if usegpu
-                X = gpuArray(X);
-                angles = gpuArray(angles);
-                dLdZ = gpuArray(dLdZ);
-            end
+            dLdZ = randn(nChsTotal,1,nblks,nSamples,datatype);            
 
             % Expected values
             % nChsTotal x 1 x nBlks x nSamples
@@ -632,12 +649,18 @@ classdef lsunInitialFullRotation1dLayerTestCase < matlab.unittest.TestCase
             layer = lsunInitialFullRotation1dLayer(...
                 'Stride',stride,...
                 'NumberOfBlocks',nblks,...
-                'Name','V0');
-            layer.Mus = mus_;
-            layer.Angles = angles; 
+                'Name','V0', ...
+                'Device',device_);            
             %expctdZ = layer.predict(X);
             
             % Actual values
+            if usegpu
+                X = gpuArray(X);
+                %angles = gpuArray(angles);
+                dLdZ = gpuArray(dLdZ);
+            end
+            layer.Mus = mus_;
+            layer.Angles = angles; 
             [actualdLdX,actualdLdW] = layer.backward(X,[],dLdZ,[]);
             
             % Evaluation
