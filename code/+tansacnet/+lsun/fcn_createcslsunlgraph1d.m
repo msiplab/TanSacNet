@@ -4,7 +4,7 @@ function lsunLgraph = ...
 %
 % Requirements: MATLAB R2022b
 %
-% Copyright (c) 2023, Shogo MURAMATSU
+% Copyright (c) 2023-2024, Shogo MURAMATSU
 %
 % All rights reserved.
 %
@@ -30,6 +30,14 @@ addParameter(p,'OverlappingFactor',1)
 addParameter(p,'Mode','Whole');
 addParameter(p,'Prefix','');
 addParameter(p,'AppendInOutLayers',true);
+%
+if canUseGPU
+    addParameter(p,'Device','cuda');
+else
+    addParameter(p,'Device','cpu');
+end
+addParameter(p,'DType','single');
+%
 parse(p,varargin{:})
 
 % Layer constructor function goes here.
@@ -38,6 +46,9 @@ inputSize = [1 p.Results.InputSize nComponents];
 stride = p.Results.Stride;
 ovlpFactor = p.Results.OverlappingFactor;
 nLevels = 1; %p.Results.NumberOfLevels;
+%
+device = p.Results.Device;
+dtype = p.Results.DType;    
 %noDcLeakage = p.Results.NumberOfVanishingMoments;
 %{
 if isscalar(noDcLeakage)
@@ -97,7 +108,9 @@ for iLv = 1:nLevels
         strCmp = sprintf('Cmp%0d_',iCmp);
         analysisLayers{iLv,iCmp} = [ analysisLayers{iLv,iCmp}
             lsunInitialFullRotation1dLayer('Name',[prefix strLv strCmp 'V0'],...
-            'NumberOfBlocks',nBlocks,'Stride',stride) %,...
+            'NumberOfBlocks',nBlocks,'Stride',stride,...
+            'Device',device,...
+            'DType',dtype) %,...
             ...'NoDcLeakage',noDcLeakage(1))
             ];
     end
@@ -109,7 +122,9 @@ for iLv = 1:nLevels
         strCmp = sprintf('Cmp%0d_',iCmp);
         synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
             lsunFinalFullRotation1dLayer('Name',[prefix strLv strCmp 'V0~'],...
-            'NumberOfBlocks',nBlocks,'Stride',stride)%,...
+            'NumberOfBlocks',nBlocks,'Stride',stride,...
+                'Device',device,...
+                'DType',dtype)%,...
             ...'NoDcLeakage',noDcLeakage(2))
             ];
     end
@@ -124,21 +139,29 @@ for iLv = 1:nLevels
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV-1) 'rb'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Right','TargetChannels','Bottom','Mode','Analysis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV-1)],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',mus_)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',mus_,...
+                    'Device',device,...
+                    'DType',dtype)
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV) 'lt'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Left','TargetChannels','Top','Mode','Analysis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV)],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',mus_)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',mus_,...
+                    'Device',device,...
+                    'DType',dtype)
                 ];
             synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV-1) 'rb~'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Left','TargetChannels','Bottom','Mode','Synthesis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV-1) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',mus_)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',mus_,...
+                    'Device',device,...
+                    'DType',dtype)
                 lsunCSAtomExtension1dLayer('Name',[prefix strLv strCmp 'Qx' num2str(iOrderV) 'lt~'],...
                 'Stride',stride,'NumberOfBlocks',nBlocks,'Direction','Right','TargetChannels','Top','Mode','Synthesis')
                 lsunIntermediateFullRotation1dLayer('Name',[prefix strLv strCmp 'Vx' num2str(iOrderV) '~'],...
-                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',mus_)
+                'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Synthesis','Mus',mus_,...
+                    'Device',device,...
+                    'DType',dtype)
                 ];
         end
         
