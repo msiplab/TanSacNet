@@ -395,9 +395,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0T.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0T.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                                    for iblk in range(nblks) ]
+        actualdLdW = torch.cat((layer.orthTransW0T.orthonormalTransforms.angles.grad, \
+                                  layer.orthTransU0T.orthonormalTransforms.angles.grad),dim=1)
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -494,9 +493,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0T.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0T.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                                    for iblk in range(nblks) ]
+        actualdLdW = torch.cat((layer.orthTransW0T.orthonormalTransforms.angles.grad, \
+                                  layer.orthTransU0T.orthonormalTransforms.angles.grad),dim=1)
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -598,9 +596,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0T.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0T.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                        for iblk in range(nblks) ]
+        actualdLdW = torch.cat((layer.orthTransW0T.orthonormalTransforms.angles.grad, \
+                                  layer.orthTransU0T.orthonormalTransforms.angles.grad),dim=1)
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)

@@ -3,7 +3,7 @@ import unittest
 from parameterized import parameterized
 import math
 import torch
-from torch_tansacnet.lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from torch_tansacnet.YD_lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 from torch_tansacnet.lsunUtility import Direction, OrthonormalMatrixGenerationSystem
 
 stride = [ [2, 2], [4, 4] ]
@@ -420,7 +420,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         Z = layer(X)
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ layer.orthTransUnx.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -507,7 +507,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ layer.orthTransUnx.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -595,7 +595,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ layer.orthTransUnx.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
