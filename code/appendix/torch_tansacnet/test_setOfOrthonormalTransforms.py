@@ -23,7 +23,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
     
     Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
-    Copyright (c) 2021-2024, Shogo MURAMATSU
+    Copyright (c) 2021-2024, Shogo MURAMATSU, Yasas GODAGE
     
     All rights reserved.
     

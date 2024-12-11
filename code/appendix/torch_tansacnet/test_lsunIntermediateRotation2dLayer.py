@@ -3,7 +3,7 @@ import unittest
 from parameterized import parameterized
 import math
 import torch
-from torch_tansacnet.YD_lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from torch_tansacnet.lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 from torch_tansacnet.lsunUtility import Direction, OrthonormalMatrixGenerationSystem
 
 stride = [ [2, 2], [4, 4] ]
@@ -23,9 +23,9 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         コンポーネント別に出力(nComponents=1のみサポート):
             nSamples x nRows x nCols x nChs
 
-        Requirements: Python 3.10/11.x, PyTorch 2.3.x
+        Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
-        Copyright (c) 2024, Shogo MURAMATSU
+        Copyright (c) 2024, Shogo MURAMATSU, Yasas GODAGE
 
         All rights reserved.
 
