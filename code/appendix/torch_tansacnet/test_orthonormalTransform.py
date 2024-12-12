@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import math
 from random import *
-from torch_tansacnet.orthonormalTransform import OrthonormalTransform, SingleOrthonormalMatrixGenerationSystem
+from torch_tansacnet.orthonormalTransform import OrthonormalTransform, fcn_orthonormalMatrixGeneration
 from torch_tansacnet.lsunLayerExceptions import InvalidMode, InvalidMus
 
 datatype = [ torch.float32, torch.float64 ]
@@ -1405,13 +1405,14 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
         #X = X.to(device)
         dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)   
-        dLdZ = dLdZ.to(device)     
-        omgs = SingleOrthonormalMatrixGenerationSystem(
-                partial_difference=False
+        dLdZ = dLdZ.to(device) 
+        mus = torch.tensor(1)    
+        omgs = fcn_orthonormalMatrixGeneration(
+                partial_difference=False,angles=angs0,mus=mus
             )
-        R = omgs(angles=angs0,mus=1)
-        R = R.to(device)
-        dRdW = ( omgs(angles=angs2,mus=1) - omgs(angles=angs1,mus=1) )/delta
+        #R = omgs(angles=angs0,mus=1)
+        R = omgs.to(device)
+        dRdW = ( fcn_orthonormalMatrixGeneration(angles=angs2,mus=mus) - fcn_orthonormalMatrixGeneration(angles=angs1,mus=mus) )/delta
         dRdW = dRdW.to(device)
         if mode!='Synthesis':
             expctddLdX = R.mT @ dLdZ # = dZdX @ dLdZ
@@ -1457,6 +1458,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         nPoints = 8
         #ncols = 2
         mus = [ 1,1,1,1,-1,-1,-1,-1 ]
+        mus = torch.tensor(mus)
 
         angs0 = 2*math.pi*torch.rand(28,dtype=datatype,device=device)
         angs1 = angs0.clone()
@@ -1471,12 +1473,12 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         #X = X.to(device)
         dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)        
         dLdZ = dLdZ.to(device)
-        omgs = SingleOrthonormalMatrixGenerationSystem(
-                partial_difference=False
+        omgs = fcn_orthonormalMatrixGeneration(
+                partial_difference=False,angles=angs0,mus=mus
             )
-        R = omgs(angles=angs0,mus=mus)
-        R = R.to(device)
-        dRdW = ( omgs(angles=angs2,mus=mus) - omgs(angles=angs1,mus=mus) )/delta
+        #R = omgs(angles=angs0,mus=mus)
+        R = omgs.to(device)
+        dRdW = ( fcn_orthonormalMatrixGeneration(angles=angs2,mus=mus) - fcn_orthonormalMatrixGeneration(angles=angs1,mus=mus) )/delta
         dRdW = dRdW.to(device)
 
         if mode!='Synthesis':

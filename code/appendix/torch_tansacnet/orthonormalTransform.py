@@ -304,7 +304,8 @@ class GivensRotations4Analyzer(autograd.Function):
         #R = omgs(angles,mus) 
         R = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=False)
         ctx.save_for_backward(input,angles,mus,R)
-
+        if input.dim() < 3:
+            input = input.unsqueeze(0)
         return R @ input # TODO: Slice processing as MATLAB's PAGEFUN
     @staticmethod
     def backward(ctx, grad_output):
@@ -356,8 +357,10 @@ class GivensRotations4Synthesizer(autograd.Function):
         #R = omgs(angles,mus)
         R = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=False) 
         ctx.save_for_backward(input,angles,mus,R)
+        if input.dim() < 3:
+            input = input.unsqueeze(0)
 
-        return R.mT @ input # TODO: Slice processing as MATLAB's PAGEFUN
+        return torch.matmul(R.mT, input) # TODO: Slice processing as MATLAB's PAGEFUN
     
     @staticmethod
     def backward(ctx, grad_output):
