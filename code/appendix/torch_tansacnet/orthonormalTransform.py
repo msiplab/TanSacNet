@@ -320,11 +320,15 @@ class GivensRotations4Analyzer(autograd.Function):
             #omgs = SingleOrthonormalMatrixGenerationSystem(partial_difference=True)            
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
             
+            # TODO: Remove iblks
             for iblks in range(grad_angles.size(0)):
+                # TODO: Initialize prematrix and pstmatrix for storing the state of the matrices
                 for iAngle in range(grad_angles.size(1)):
                     #dRi = omgs(angles,mus,index_pd_angle=iAngle) 
+                    # TODO: Modify to use prematrix and pstmatrix
                     dRi = fcn_orthonormalMatrixGeneration(angles[iblks],mus[iblks],partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
                     #print(grad_output * (dRi @ input))
+                    # TODO: Removing iblks can accelerate the computation
                     grad_angles[iblks,iAngle] = torch.sum((grad_output * (dRi @ input))[iblks])  
 
         if ctx.needs_input_grad[2]:
@@ -375,15 +379,20 @@ class GivensRotations4Synthesizer(autograd.Function):
         if ctx.needs_input_grad[1]:
             #omgs = SingleOrthonormalMatrixGenerationSystem(partial_difference=True)
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False) 
+            # TODO: Remove iblks 
             for iblks in range(grad_angles.size(0)):
+                # TODO: Initialize prematrix and pstmatrix for storing the state of the matrices
                 for iAngle in range(grad_angles.size(1)):
                     #dRi = omgs(angles,mus,index_pd_angle=iAngle)
+                    # TODO: Modify to use prematrix and pstmatrix
                     dRi = fcn_orthonormalMatrixGeneration(angles[iblks],mus[iblks],partial_difference=True,index_pd_angle=iAngle) # TODO: #9 Sequential processing
+                    # TODO: Removing iblks can accelerate the computation
                     grad_angles[iblks,iAngle] = torch.sum((grad_output * (dRi.mT @ input))[iblks])
         if ctx.needs_input_grad[2]:
             grad_mus = torch.zeros_like(mus,device=angles.device,requires_grad=False) 
         return grad_input, grad_angles, grad_mus
 
+# TODO: Modify to use prematrix and pstmatrix
 @torch.jit.script
 def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
     """matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device)
@@ -415,6 +424,7 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
     if angles.device.type == "cuda":
         iAng = 0
 
+        # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation  
         for iTop in range(nDims-1):
             vt = matrix[:,iTop,:].unsqueeze(1)
             for iBtm in range(iTop+1,nDims):
@@ -440,6 +450,7 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
 
         #print(f"matrix size: {matrix.size()}")
     else:
+        # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation
         for iMtx in range(nMatrices_):
             iAng = 0
 
@@ -514,6 +525,7 @@ def fcn_orthmtxgen(nDims: int, angles: torch.Tensor):
 
     return matrix
 
+# TODO: Define new function for partial difference w/ prematrix and pstmatrix
 def fcn_orthonormalMatrixGeneration(
     angles: torch.Tensor,
     mus: torch.Tensor,
