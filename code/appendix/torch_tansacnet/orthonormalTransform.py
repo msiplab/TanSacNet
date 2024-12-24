@@ -320,7 +320,7 @@ class GivensRotations4Analyzer(autograd.Function):
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
     
             # TODO: Initialize prematrix and pstmatrix for storing the state of the matrices
-            dRi = torch.zeros_like(grad_output) # TODO: Remove
+            dRi = torch.zeros_like(R) # TODO: Remove
             for iAngle in range(grad_angles.size(1)):
                 # TODO: Modify to use prematrix and pstmatrix
                 #dRi = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
@@ -377,7 +377,7 @@ class GivensRotations4Synthesizer(autograd.Function):
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
     
             # TODO: Initialize prematrix and pstmatrix for storing the state of the matrices
-            dRi = torch.zeros_like(grad_output) # TODO: Remove
+            dRi = torch.zeros_like(R) # TODO: Remove
             for iAngle in range(grad_angles.size(1)):
                 # TODO: Modify to use prematrix and pstmatrix
                 #dRi = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
