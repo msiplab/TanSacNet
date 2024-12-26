@@ -380,9 +380,9 @@ class GivensRotations4Synthesizer(autograd.Function):
             dRi = torch.zeros_like(R) # TODO: Remove
             for iAngle in range(grad_angles.size(1)):
                 # TODO: Modify to use prematrix and pstmatrix
-                #dRi = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
-                for iblks in range(grad_angles.size(0)):
-                    dRi[iblks] = fcn_orthonormalMatrixGeneration(angles[iblks],mus[iblks],partial_difference=True,index_pd_angle=iAngle)
+                dRi = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
+                # for iblks in range(grad_angles.size(0)):
+                #     dRi[iblks] = fcn_orthonormalMatrixGeneration(angles[iblks],mus[iblks],partial_difference=True,index_pd_angle=iAngle)
                 grad_angles[:,iAngle] = torch.sum((grad_output * (dRi.mT @ input)),dim=(1,2)) # TODO: #9 Sequential processing
 
         if ctx.needs_input_grad[2]:
@@ -453,14 +453,14 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
             iAng = 0
 
             for iTop in range(nDims-1):
-                vt = matrix[iMtx,iTop,:].clone()
+                vt = matrix[iMtx,iTop,:]
                 for iBtm in range(iTop+1,nDims):
-                    angle = angles[iMtx,iAng].clone()
+                    angle = angles[iMtx,iAng]
                     if iAng == index_pd_angle:
                         angle = angle + torch.pi/2. #math.pi/2.
                     c = torch.cos(angle)
                     s = torch.sin(angle)
-                    vb = matrix[iMtx,iBtm,:].clone()
+                    vb = matrix[iMtx,iBtm,:]
                     #
                     u = s*(vt + vb)
                     vt = (c + s)*vt
