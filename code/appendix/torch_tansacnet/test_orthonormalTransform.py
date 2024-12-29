@@ -1408,7 +1408,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         dLdZ = dLdZ.to(device) 
         mus = torch.tensor(1)    
         omgs = fcn_orthonormalMatrixGeneration(
-                partial_difference=False,angles=angs0,mus=mus
+               angles=angs0,mus=mus
             )
         #R = omgs(angles=angs0,mus=1)
         R = omgs.to(device)
@@ -1474,7 +1474,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)        
         dLdZ = dLdZ.to(device)
         omgs = fcn_orthonormalMatrixGeneration(
-                partial_difference=False,angles=angs0,mus=mus
+                angles=angs0,mus=mus
             )
         #R = omgs(angles=angs0,mus=mus)
         R = omgs.to(device)
