@@ -322,7 +322,12 @@ class GivensRotations4Analyzer(autograd.Function):
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
             #
             dRpre = torch.eye(R.size(1),dtype=angles.dtype,device=angles.device).unsqueeze(0).repeat(R.size(0),1,1) 
-            dRpst = fcn_orthonormalMatrixGeneration(angles,torch.ones_like(mus))
+            #dRpst = fcn_orthonormalMatrixGeneration(angles,torch.ones_like(mus))
+            if mus.dim() == 1:
+                mus = mus.unsqueeze(0)
+            mus = mus.to(device=angles.device,dtype=angles.dtype) 
+            dRpst = mus.unsqueeze(-1) * R
+            #
             for iAngle in range(grad_angles.size(1)):
                 [dRi,dRpst,dRpre] = fcn_orthonormalMatrixGeneration_diff(angles,mus,index_pd_angle=iAngle,matrixpst=dRpst,matrixpre=dRpre) 
                 grad_angles[:,iAngle] = torch.sum((grad_output * (dRi @ input)),dim=(1,2)) 
@@ -376,7 +381,12 @@ class GivensRotations4Synthesizer(autograd.Function):
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
             #
             dRpre = torch.eye(R.size(1),dtype=angles.dtype,device=angles.device).unsqueeze(0).repeat(R.size(0),1,1)
-            dRpst = fcn_orthonormalMatrixGeneration(angles,torch.ones_like(mus))
+            #dRpst = fcn_orthonormalMatrixGeneration(angles,torch.ones_like(mus))
+            if mus.dim() == 1:
+                mus = mus.unsqueeze(0)
+            mus = mus.to(device=angles.device,dtype=angles.dtype) 
+            dRpst = mus.unsqueeze(-1) * R
+            #
             for iAngle in range(grad_angles.size(1)):
                 [dRi,dRpst,dRpre] = fcn_orthonormalMatrixGeneration_diff(angles,mus,index_pd_angle=iAngle,matrixpst=dRpst,matrixpre=dRpre)
                 grad_angles[:,iAngle] = torch.sum((grad_output * (dRi.mT @ input)),dim=(1,2)) 
@@ -393,8 +403,7 @@ def fcn_orthmtxgen_diff_seq(nDims: int, angles: torch.Tensor, index_pd_angle: in
     """
         
     nMatrices_ = angles.size(0)
-    matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
-    #
+    matrix = torch.empty(nMatrices_,nDims,nDims,dtype=angles.dtype,device=angles.device)
     matrixrev = torch.eye(nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
     matrixdif = torch.zeros(nDims,nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
 
@@ -406,14 +415,14 @@ def fcn_orthmtxgen_diff_seq(nDims: int, angles: torch.Tensor, index_pd_angle: in
         for iBtm in range(iTop+1,nDims):
             if iAng == index_pd_angle:
                 angle = angles[:,iAng].squeeze()
-                #
+                # matrixrev
                 rb = matrixrev[:,iBtm,:].view(nMatrices_,-1)
                 c = torch.cos(-angle).view(nMatrices_,-1)
                 s = torch.sin(-angle).view(nMatrices_,-1)
                 rt, rb = c*rt - s*rb, s*rt + c*rb
                 matrixrev[:,iTop,:] = rt.view(nMatrices_,-1)
                 matrixrev[:,iBtm,:] = rb.view(nMatrices_,-1)               
-                #
+                # matrixdif
                 db = torch.zeros(nMatrices_,nDims,dtype=angles.dtype,device=angles.device)
                 db[:,iBtm] = 1.
                 dangle = angle + torch.pi/2. 
@@ -422,7 +431,7 @@ def fcn_orthmtxgen_diff_seq(nDims: int, angles: torch.Tensor, index_pd_angle: in
                 dt, db = c*dt - s*db, s*dt + c*db
                 matrixdif[:,iTop,:] = dt.view(nMatrices_,-1)
                 matrixdif[:,iBtm,:] = db.view(nMatrices_,-1)
-                #
+                # matrixpst, matrix, matrixpre
                 matrixpst = matrixpst @ matrixrev
                 matrix = matrixpst @ matrixdif @ matrixpre
                 matrixpre = matrixrev.mT @ matrixpre
@@ -443,13 +452,12 @@ def fcn_orthmtxgen(nDims: int, angles: torch.Tensor):
             c = torch.cos(angle).view(nMatrices_,-1)
             s = torch.sin(angle).view(nMatrices_,-1)
             vb = matrix[:,iBtm,:].view(nMatrices_,-1)
-            #
-            u = s * (vt + vb)
-            vt = (c + s) * vt
-            vb = (c - s) * vb
-            vt = vt - u
-
-            matrix[:,iBtm,:] = (vb + u).view(nMatrices_,-1)
+            vt, vb = c*vt - s*vb, s*vt + c*vb
+            #u = s * (vt + vb)
+            #vt, vb = (c + s) * vt, (c - s) * vb
+            #vt = vt - u
+            #vb = vb + u
+            matrix[:,iBtm,:] = vb.view(nMatrices_,-1)
             iAng = iAng + 1
         matrix[:,iTop,:] = vt.view(nMatrices_,-1)
 
@@ -458,8 +466,6 @@ def fcn_orthmtxgen(nDims: int, angles: torch.Tensor):
 def fcn_orthonormalMatrixGeneration(
     angles: torch.Tensor,
     mus: torch.Tensor):
-    #partial_difference=False,
-    #index_pd_angle=None):
     """
     The output is set on the same device with the angles
     """
