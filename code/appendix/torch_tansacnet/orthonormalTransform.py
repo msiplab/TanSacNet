@@ -395,103 +395,43 @@ def fcn_orthmtxgen_diff_seq(nDims: int, angles: torch.Tensor, index_pd_angle: in
         
     nMatrices_ = angles.size(0)
     matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
-    #    
-    if angles.device.type == "cuda":
-        iAng = 0
+    #
+    matrixrev = torch.eye(nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
+    matrixdif = torch.zeros(nDims,nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
 
-        # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation  
-        # TODO: Slice processing as MATLAB's PAGEFUN
-        for iTop in range(nDims-1):
-            vt = matrix[:,iTop,:].unsqueeze(1)
-            for iBtm in range(iTop+1,nDims):
-                angle = angles[:,iAng].unsqueeze(1).unsqueeze(2)
-                if iAng == index_pd_angle:
-                    angle = angle + torch.pi/2. #math.pi/2.
-                c = torch.cos(angle)
-                s = torch.sin(angle)
-                vb = matrix[:,iBtm,:].unsqueeze(1)
+    iAng = 0
+    for iTop in range(nDims-1):
+        rt = matrixrev[:,iTop,:].view(nMatrices_,-1)
+        dt = torch.zeros(nMatrices_,nDims,dtype=angles.dtype,device=angles.device)
+        dt[:,iTop] = 1.
+        for iBtm in range(iTop+1,nDims):
+            if iAng == index_pd_angle:
+                angle = angles[:,iAng].squeeze()
                 #
-                u = s * (vt + vb)
-                vt = (c + s) * vt
-                vb = (c - s) * vb
-                vt = vt - u
-                if iAng == index_pd_angle:
-                    matrix = torch.zeros_like(matrix,dtype=angles.dtype,device=angles.device)
+                rb = matrixrev[:,iBtm,:].view(nMatrices_,-1)
+                c = torch.cos(-angle).view(nMatrices_,-1)
+                s = torch.sin(-angle).view(nMatrices_,-1)
+                rt, rb = c*rt - s*rb, s*rt + c*rb
+                matrixrev[:,iTop,:] = rt.view(nMatrices_,-1)
+                matrixrev[:,iBtm,:] = rb.view(nMatrices_,-1)               
+                #
+                db = torch.zeros(nMatrices_,nDims,dtype=angles.dtype,device=angles.device)
+                db[:,iBtm] = 1.
+                dangle = angle + torch.pi/2. 
+                c = torch.cos(dangle).view(nMatrices_,-1)
+                s = torch.sin(dangle).view(nMatrices_,-1)
+                dt, db = c*dt - s*db, s*dt + c*db
+                matrixdif[:,iTop,:] = dt.view(nMatrices_,-1)
+                matrixdif[:,iBtm,:] = db.view(nMatrices_,-1)
+                #
+                matrixpst = matrixpst @ matrixrev
+                matrix = matrixpst @ matrixdif @ matrixpre
+                matrixpre = matrixrev.mT @ matrixpre
+            iAng = iAng + 1
 
-                matrix[:,iBtm,:] = (vb + u).squeeze()
-                iAng = iAng + 1
-            matrix[:,iTop,:] = vt.squeeze()
-    
-    else: 
-        matrixrev = torch.eye(nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
-        matrixdif = torch.zeros(nDims,nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
-
-        iAng = 0
-        for iTop in range(nDims-1):
-            rt = matrixrev[:,iTop,:].view(nMatrices_,-1)
-            dt = torch.zeros(nMatrices_,nDims,dtype=angles.dtype,device=angles.device)
-            dt[:,iTop] = 1.
-            for iBtm in range(iTop+1,nDims):
-                if iAng == index_pd_angle:
-                    angle = angles[:,iAng].squeeze()
-                    #
-                    rb = matrixrev[:,iBtm,:].view(nMatrices_,-1)
-                    c = torch.cos(-angle).view(nMatrices_,-1)
-                    s = torch.sin(-angle).view(nMatrices_,-1)
-                    rt, rb = c*rt - s*rb, s*rt + c*rb
-                    matrixrev[:,iTop,:] = rt.view(nMatrices_,-1)
-                    matrixrev[:,iBtm,:] = rb.view(nMatrices_,-1)               
-                    #
-                    db = torch.zeros(nMatrices_,nDims,dtype=angles.dtype,device=angles.device)
-                    db[:,iBtm] = 1.
-                    dangle = angle + torch.pi/2. 
-                    c = torch.cos(dangle).view(nMatrices_,-1)
-                    s = torch.sin(dangle).view(nMatrices_,-1)
-                    dt, db = c*dt - s*db, s*dt + c*db
-                    matrixdif[:,iTop,:] = dt.view(nMatrices_,-1)
-                    matrixdif[:,iBtm,:] = db.view(nMatrices_,-1)
-                    #
-                    matrixpst = matrixpst @ matrixrev
-                    matrix = matrixpst @ matrixdif @ matrixpre
-                    matrixpre = matrixrev.mT @ matrixpre
-                iAng = iAng + 1
-
-        """
-        for iMtx in range(nMatrices_): 
-            #
-            iAng = 0
-            for iTop in range(nDims-1):
-                rt = matrixrev[iMtx,iTop,:].reshape(1,nDims)
-                dt = torch.zeros(1,nDims,dtype=angles.dtype,device=angles.device)
-                dt[0,iTop] = 1.
-                for iBtm in range(iTop+1,nDims):
-                    if iAng == index_pd_angle:
-                        angle = angles[iMtx,iAng]
-                        #
-                        rb = matrixrev[iMtx,iBtm,:].reshape(1,nDims)
-                        c = torch.cos(-angle)
-                        s = torch.sin(-angle)
-                        rt, rb = c*rt - s*rb, s*rt + c*rb
-                        matrixrev[iMtx,iTop,:] = rt.squeeze()
-                        matrixrev[iMtx,iBtm,:] = rb.squeeze()
-                        #
-                        db = torch.zeros(1,nDims,dtype=angles.dtype,device=angles.device)
-                        db[0,iBtm] = 1.
-                        dangle = angle + torch.pi/2. 
-                        c = torch.cos(dangle)
-                        s = torch.sin(dangle)
-                        dt, db = c*dt - s*db, s*dt + c*db
-                        matrixdif[iMtx,iTop,:] = dt.squeeze()
-                        matrixdif[iMtx,iBtm,:] = db.squeeze()
-                        #
-                        matrixpst[iMtx] = matrixpst[iMtx] @ matrixrev[iMtx]
-                        matrix[iMtx] = matrixpst[iMtx] @ matrixdif[iMtx] @ matrixpre[iMtx]
-                        matrixpre[iMtx] = matrixrev.mT[iMtx] @ matrixpre[iMtx]
-                    iAng = iAng + 1
-        """
     return matrix, matrixpst, matrixpre
 
-# FIXME: For multiple block case (nMatrices_ >1)
+# DEPRECATED
 @torch.jit.script
 def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
     
@@ -622,7 +562,7 @@ def fcn_orthonormalMatrixGeneration(
     mus = mus.to(device=angles.device,dtype=angles.dtype) 
 
     if partial_difference:
-        matrix = fcn_orthmtxgen_diff(nDims, angles, index_pd_angle)            
+        matrix = fcn_orthmtxgen_diff(nDims, angles, index_pd_angle) # DEPRECATED           
     else:
         matrix = fcn_orthmtxgen(nDims, angles)            
 
