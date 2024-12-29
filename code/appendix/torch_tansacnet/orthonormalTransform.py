@@ -321,11 +321,11 @@ class GivensRotations4Analyzer(autograd.Function):
         if ctx.needs_input_grad[1]:
             grad_angles = torch.zeros_like(angles,device=angles.device,requires_grad=False)
             #
-            dRpre = torch.zeros_like(R) 
-            dRpst = torch.eye(R.size(1),dtype=angles.dtype,device=angles.device,requires_grad=False).repeat(angles.size(0), 1, 1)
+            dRpre = torch.eye(R.size(1),dtype=angles.dtype,device=angles.device).unsqueeze(0).repeat(R.size(0),1,1) 
+            dRpst = fcn_orthonormalMatrixGeneration(angles,torch.ones_like(mus),partial_difference=False)
             for iAngle in range(grad_angles.size(1)):
                 [dRi,dRpst,dRpre] = fcn_orthonormalMatrixGeneration_diff(angles,mus,index_pd_angle=iAngle,matrixpst=dRpst,matrixpre=dRpre) 
-                grad_angles[:,iAngle] = torch.sum((grad_output * (dRi @ input)),dim=(1,2)) # TODO: #9 Sequential processing
+                grad_angles[:,iAngle] = torch.sum((grad_output * (dRi @ input)),dim=(1,2)) 
 
         if ctx.needs_input_grad[2]:
             grad_mus = torch.zeros_like(mus,device=angles.device,requires_grad=False)      
@@ -380,8 +380,6 @@ class GivensRotations4Synthesizer(autograd.Function):
             for iAngle in range(grad_angles.size(1)):
                 # TODO: Modify to use prematrix and pstmatrix
                 dRi = fcn_orthonormalMatrixGeneration(angles,mus,partial_difference=True,index_pd_angle=iAngle) # TODO: #8 Sequential processing
-                # for iblks in range(grad_angles.size(0)):
-                #     dRi[iblks] = fcn_orthonormalMatrixGeneration(angles[iblks],mus[iblks],partial_difference=True,index_pd_angle=iAngle)
                 grad_angles[:,iAngle] = torch.sum((grad_output * (dRi.mT @ input)),dim=(1,2)) # TODO: #9 Sequential processing
 
         if ctx.needs_input_grad[2]:
@@ -391,46 +389,49 @@ class GivensRotations4Synthesizer(autograd.Function):
 
 @torch.jit.script
 def fcn_orthmtxgen_diff_seq(nDims: int, angles: torch.Tensor, index_pd_angle: int, matrixpst: torch.Tensor, matrixpre: torch.Tensor):
+    """
+    Sequential processing for the difference of the orthonormal matrix
+    """
         
     nMatrices_ = angles.size(0)
     matrix = torch.eye(nDims,dtype=angles.dtype,device=angles.device).repeat(nMatrices_, 1, 1)
     #    
-    #if angles.device.type == "cuda":
-    iAng = 0
+    if angles.device.type == "cuda":
+        iAng = 0
 
-    # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation  
-    for iTop in range(nDims-1):
-        vt = matrix[:,iTop,:].unsqueeze(1)
-        for iBtm in range(iTop+1,nDims):
-            angle = angles[:,iAng].unsqueeze(1).unsqueeze(2)
-            if iAng == index_pd_angle:
-                angle = angle + torch.pi/2. #math.pi/2.
-            c = torch.cos(angle)
-            s = torch.sin(angle)
-            vb = matrix[:,iBtm,:].unsqueeze(1)
-            #
-            u = s * (vt + vb)
-            vt = (c + s) * vt
-            vb = (c - s) * vb
-            vt = vt - u
-            if iAng == index_pd_angle:
-                matrix = torch.zeros_like(matrix,dtype=angles.dtype,device=angles.device)
+        # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation  
+        # TODO: Slice processing as MATLAB's PAGEFUN
+        for iTop in range(nDims-1):
+            vt = matrix[:,iTop,:].unsqueeze(1)
+            for iBtm in range(iTop+1,nDims):
+                angle = angles[:,iAng].unsqueeze(1).unsqueeze(2)
+                if iAng == index_pd_angle:
+                    angle = angle + torch.pi/2. #math.pi/2.
+                c = torch.cos(angle)
+                s = torch.sin(angle)
+                vb = matrix[:,iBtm,:].unsqueeze(1)
+                #
+                u = s * (vt + vb)
+                vt = (c + s) * vt
+                vb = (c - s) * vb
+                vt = vt - u
+                if iAng == index_pd_angle:
+                    matrix = torch.zeros_like(matrix,dtype=angles.dtype,device=angles.device)
 
-            matrix[:,iBtm,:] = (vb + u).squeeze()
-            iAng = iAng + 1
-        matrix[:,iTop,:] = vt.squeeze()
-
-    """
-    else:
-        for iMtx in range(nMatrices_):
+                matrix[:,iBtm,:] = (vb + u).squeeze()
+                iAng = iAng + 1
+            matrix[:,iTop,:] = vt.squeeze()
+    
+    else: 
+        for iMtx in range(nMatrices_): # TODO: Slice processing as MATLAB's PAGEFUN
             matrixrev = torch.eye(nDims,dtype=angles.dtype,device=angles.device)   
             matrixdif = torch.zeros(nDims,nDims,dtype=angles.dtype,device=angles.device)
             #
             iAng = 0
             for iTop in range(nDims-1):
                 rt = matrixrev[iTop,:]
-                dt = matrixdif[iTop,:]
-                dt[iTop] = 1.
+                dt = torch.zeros(1,nDims,dtype=angles.dtype,device=angles.device)
+                dt[0,iTop] = 1.
                 for iBtm in range(iTop+1,nDims):
                     if iAng == index_pd_angle:
                         angle = angles[iMtx,iAng]
@@ -438,25 +439,25 @@ def fcn_orthmtxgen_diff_seq(nDims: int, angles: torch.Tensor, index_pd_angle: in
                         rb = matrixrev[iBtm,:]
                         c = torch.cos(-angle)
                         s = torch.sin(-angle)
-                        rt, rb = c*rt + s*rb, s*rt - c*rb
+                        rt, rb = c*rt - s*rb, s*rt + c*rb
                         matrixrev[iTop,:] = rt
                         matrixrev[iBtm,:] = rb
                         #
-                        db = matrixdif[iBtm,:]
-                        db[iBtm] = 1.
+                        db = torch.zeros(1,nDims,dtype=angles.dtype,device=angles.device)
+                        db[0,iBtm] = 1.
                         dangle = angle + torch.pi/2. 
                         c = torch.cos(dangle)
                         s = torch.sin(dangle)
-                        dt, db = c*dt + s*db, s*dt - c*db
-                        matrixdif[iTop,:] = dt
-                        matrixdif[iBtm,:] = db
+                        dt, db = c*dt - s*db, s*dt + c*db
+                        matrixdif[iTop,:] = dt.squeeze()
+                        matrixdif[iBtm,:] = db.squeeze()
                         #
-                        matrixpst[iMtx,:,:] = matrixpst[iMtx,:,:] @ matrixrev
-                        matrix[iMtx,:,:] = matrixpst[iMtx,:,:] @ matrixdif @ matrixpre[iMtx,:,:]
-                        matrixpre[iMtx,:,:] = matrixrev.mT @ matrixpre[iMtx,:,:]
+                        matrixpst[iMtx] = matrixpst[iMtx] @ matrixrev
+                        matrix[iMtx] = matrixpst[iMtx] @ matrixdif @ matrixpre[iMtx]
+                        matrixpre[iMtx] = matrixrev.mT @ matrixpre[iMtx]
 
                     iAng = iAng + 1
-        """           
+                  
     return matrix, matrixpst, matrixpre
 
 # FIXME: For multiple block case (nMatrices_ >1)
@@ -468,8 +469,6 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
     
     if angles.device.type == "cuda":
         iAng = 0
-
-        # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation  
         for iTop in range(nDims-1):
             vt = matrix[:,iTop,:].unsqueeze(1)
             for iBtm in range(iTop+1,nDims):
@@ -495,7 +494,6 @@ def fcn_orthmtxgen_diff(nDims: int, angles: torch.Tensor, index_pd_angle: int):
 
         #print(f"matrix size: {matrix.size()}")
     else:
-        # TODO: Modify to utilize prematrix and pstmatrix to reduce the computation
         for iMtx in range(nMatrices_):
             iAng = 0
 
@@ -607,7 +605,7 @@ def fcn_orthonormalMatrixGeneration_diff(
     matrixpre: torch.Tensor,
     index_pd_angle=None):
     """
-    The output is set on the same device with the angles
+    Sequential processing for the difference of the orthonormal matrix
     """
 
     # Number of angles
@@ -623,8 +621,7 @@ def fcn_orthonormalMatrixGeneration_diff(
     # Setup of mus, which is send to the same device with angles
     mus = mus.to(device=angles.device,dtype=angles.dtype) 
 
-    [matrix,matrixpst,matrixpre] = fcn_orthmtxgen_diff_seq(nDims, angles, index_pd_angle, matrixpst, matrixpre)            
+    [matrix,matrixpst,matrixpre] = fcn_orthmtxgen_diff_seq(nDims=nDims, angles=angles, index_pd_angle=index_pd_angle, matrixpst=matrixpst, matrixpre=matrixpre)
      
     matrix = mus.unsqueeze(-1) * matrix
-
     return matrix, matrixpst, matrixpre 
