@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import math
 from random import *
-from torch_tansacnet.orthonormalTransform import OrthonormalTransform, SingleOrthonormalMatrixGenerationSystem
+from torch_tansacnet.orthonormalTransform import OrthonormalTransform, fcn_orthonormalMatrixGeneration
 from torch_tansacnet.lsunLayerExceptions import InvalidMode, InvalidMus
 
 datatype = [ torch.float32, torch.float64 ]
@@ -19,9 +19,9 @@ class OrthonormalTransformTestCase(unittest.TestCase):
     """
     ORTHONORMALTRANSFORMTESTCASE
     
-    Requirements: Python 3.10/11.x, PyTorch 2.3.x
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
-    Copyright (c) 2021-2024, Shogo MURAMATSU
+    Copyright (c) 2021-2024, Shogo MURAMATSU, Yasas GODAGE
     
     All rights reserved.
     
@@ -107,10 +107,11 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
         self.assertEqual(actualNParams,expctdNParams)
         self.assertEqual(actualMode,expctdMode)
-   
+    
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
+    
     def testCallWithAngles(self,datatype,ncols,mode,usegpu):
         if usegpu:
             if torch.cuda.is_available():
@@ -146,7 +147,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))        
-    
+
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -266,6 +267,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Evaluation
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))
     
+
     @parameterized.expand(
         list(itertools.product(datatype,ncols,mode,usegpu))
     )
@@ -402,7 +404,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = OrthonormalTransform(n=8,mode=mode)
-        target.angles.data = torch.randn(28,dtype=datatype)
+        target.angles.data = torch.randn(1, 28,dtype=datatype)
 
         # Actual values
         unitvec = torch.randn(8,ncols,dtype=datatype)
@@ -457,13 +459,13 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         target = OrthonormalTransform(n=nPoints,mode=mode,dtype=datatype)
         #target.angles.data = 2*math.pi*torch.rand(nAngles,dtype=datatype)
         target.angles = nn.init.uniform_(target.angles,a=0.0,b=2*math.pi)
-        target.angles.data[:nPoints-1] = torch.zeros(nPoints-1)
+        target.angles.data[0, :nPoints-1] = torch.zeros(nPoints-1)
 
         # Actual values
         with torch.no_grad():       
             matrix = target.forward(torch.eye(nPoints,dtype=datatype))
-        actualLeftTop = matrix[0,0] #.numpy()
-        
+        actualLeftTop = matrix[0,0,0] #.numpy()
+
         # Evaluation
         message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
         #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
@@ -486,12 +488,12 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         target = OrthonormalTransform(n=nPoints,mode=mode,dtype=datatype)
         #target.angles.data = 2*math.pi*torch.rand(nAngles,dtype=datatype)
         target.angles = nn.init.uniform_(target.angles,a=0.0,b=2*math.pi)
-        target.angles.data[:nPoints-1] = torch.zeros(nPoints-1)
+        target.angles.data[0, :nPoints-1] = torch.zeros(nPoints-1)
 
         # Actual values
         with torch.no_grad():       
             matrix = target.forward(torch.eye(nPoints,dtype=datatype))
-        actualLeftTop = matrix[0,0] #.numpy()
+        actualLeftTop = matrix[0,0,0] #.numpy()
         
         # Evaluation
         message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
@@ -513,13 +515,13 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Instantiation of target class
         target = OrthonormalTransform(n=npoints,mode=mode,dtype=datatype)
         target.angles = nn.init.uniform_(target.angles,a=0.0,b=2*math.pi)
-        target.angles.data[:npoints-1] = torch.zeros(npoints-1)
+        target.angles.data[0,:npoints-1] = torch.zeros(npoints-1)
 
         # Actual values
         with torch.no_grad():       
             matrix = target.forward(torch.eye(npoints,dtype=datatype))
-        actualLeftTop = matrix[0,0] #.numpy()
-        
+        actualLeftTop = matrix[0,0,0] #.numpy()
+
         # Evaluation
         message = "actualLeftTop=%s differs from %s" % ( str(actualLeftTop), str(expctdLeftTop) )        
         #self.assertTrue(np.isclose(actualLeftTop,expctdLeftTop,rtol=rtol,atol=atol),message)        
@@ -546,7 +548,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expected values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)     
         #X = X.to(device)   
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)
         dLdZ = dLdZ.to(device)
         R = torch.eye(nPoints,dtype=datatype)
         R = R.to(device)
@@ -557,10 +559,10 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         dRdW = dRdW.to(device)
         if mode!='Synthesis':
             expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = dLdZ.T @ dRdW @ X 
+            expctddLdW = dLdZ.mT @ dRdW @ X 
         else:
             expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = dLdZ.T @ dRdW.T @ X             
+            expctddLdW = dLdZ.mT @ dRdW.T @ X             
 
         # Instantiation of target class
         target = OrthonormalTransform(n=nPoints,dtype=datatype,device=device,mode=mode)
@@ -597,7 +599,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expected values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)     
         #X = X.to(device)   
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)
         dLdZ = dLdZ.to(device)
         R = torch.eye(nPoints,dtype=datatype)
         R = R.to(device)
@@ -611,7 +613,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
             expctddLdW = torch.sum(dLdZ * (dRdW @ X))
         else:
             expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))
+            expctddLdW = torch.sum(dLdZ * (dRdW.mT @ X))
 
         # Instantiation of target class
         target = OrthonormalTransform(n=nPoints,dtype=datatype,device=device,mode=mode)
@@ -648,7 +650,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expected values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)    
         #X = X.to(device)    
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)
         dLdZ = dLdZ.to(device)
         #angle = 2.*math.pi*randn(1)
         angle = 2.*math.pi*gauss(mu=0.,sigma=1.) #randn(1)
@@ -707,7 +709,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expected values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)   
         #X = X.to(device)     
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)
         dLdZ = dLdZ.to(device)
         # angle = 2.*math.pi*randn(1)
         angle = 2.*math.pi*gauss(mu=0.,sigma=1.) #randn(1)        
@@ -789,7 +791,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expected values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)  
         #X = X.to(device) 
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)     
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)    
         dLdZ = dLdZ.to(device)   
         R = torch.eye(nPoints,dtype=datatype)
         R = R.to(device)
@@ -1031,7 +1033,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expcted values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
         #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)    
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)    
         dLdZ = dLdZ.to(device)    
         R = torch.as_tensor(
             torch.tensor(mus).view(-1,1) * \
@@ -1150,7 +1152,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expcted values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
         #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype) 
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype) 
         dLdZ = dLdZ.to(device)       
         R = torch.as_tensor(
             torch.tensor(mus).view(-1,1) * \
@@ -1269,9 +1271,9 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         delta = 1e-4
 
         # Expcted values
-        X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
+        X = torch.randn(1,nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
         #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)        
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)        
         dLdZ = dLdZ.to(device)
         R = torch.as_tensor(
             torch.tensor(mus).view(-1,1) * \
@@ -1362,11 +1364,12 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
         Z = target.forward(X)
+
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
         actualdLdW = target.angles.grad[pdAng]
-        
+
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
@@ -1374,7 +1377,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
     @parameterized.expand(
         list(itertools.product(mode,ncols,usegpu))
     )
-    def testBackward8x8RandAngPdAng4(self,mode,ncols,usergpu):
+    def testBackward8x8RandAngPdAng4(self,mode,ncols,usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
@@ -1401,21 +1404,22 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expcted values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
         #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)   
-        dLdZ = dLdZ.to(device)     
-        omgs = SingleOrthonormalMatrixGenerationSystem(
-                partial_difference=False
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)   
+        dLdZ = dLdZ.to(device) 
+        mus = torch.tensor(1)    
+        omgs = fcn_orthonormalMatrixGeneration(
+               angles=angs0,mus=mus
             )
-        R = omgs(angles=angs0,mus=1)
-        R = R.to(device)
-        dRdW = ( omgs(angles=angs2,mus=1) - omgs(angles=angs1,mus=1) )/delta
+        #R = omgs(angles=angs0,mus=1)
+        R = omgs.to(device)
+        dRdW = ( fcn_orthonormalMatrixGeneration(angles=angs2,mus=mus) - fcn_orthonormalMatrixGeneration(angles=angs1,mus=mus) )/delta
         dRdW = dRdW.to(device)
         if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
+            expctddLdX = R.mT @ dLdZ # = dZdX @ dLdZ
             expctddLdW = torch.sum(dLdZ * (dRdW @ X)) 
         else:
             expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))    
+            expctddLdW = torch.sum(dLdZ * (dRdW.mT @ X))    
 
         # Instantiation of target class
         target = OrthonormalTransform(n=nPoints,dtype=datatype,device=device,mode=mode)
@@ -1424,6 +1428,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Actual values
         torch.autograd.set_detect_anomaly(True)        
         Z = target.forward(X)
+
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
@@ -1453,6 +1458,8 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         nPoints = 8
         #ncols = 2
         mus = [ 1,1,1,1,-1,-1,-1,-1 ]
+        mus = torch.tensor(mus)
+
         angs0 = 2*math.pi*torch.rand(28,dtype=datatype,device=device)
         angs1 = angs0.clone()
         angs2 = angs0.clone()
@@ -1464,21 +1471,22 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expcted values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=True)
         #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)        
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)        
         dLdZ = dLdZ.to(device)
-        omgs = SingleOrthonormalMatrixGenerationSystem(
-                partial_difference=False
+        omgs = fcn_orthonormalMatrixGeneration(
+                angles=angs0,mus=mus
             )
-        R = omgs(angles=angs0,mus=mus)
-        R = R.to(device)
-        dRdW = ( omgs(angles=angs2,mus=mus) - omgs(angles=angs1,mus=mus) )/delta
+        #R = omgs(angles=angs0,mus=mus)
+        R = omgs.to(device)
+        dRdW = ( fcn_orthonormalMatrixGeneration(angles=angs2,mus=mus) - fcn_orthonormalMatrixGeneration(angles=angs1,mus=mus) )/delta
         dRdW = dRdW.to(device)
+
         if mode!='Synthesis':
-            expctddLdX = R.T @ dLdZ # = dZdX @ dLdZ
+            expctddLdX = R.mT @ dLdZ # = dZdX @ dLdZ
             expctddLdW = torch.sum(dLdZ * (dRdW @ X)) 
         else:
             expctddLdX = R @ dLdZ # = dZdX @ dLdZ
-            expctddLdW = torch.sum(dLdZ * (dRdW.T @ X))    
+            expctddLdW = torch.sum(dLdZ * (dRdW.mT @ X))    
 
         # Instantiation of target class
         target = OrthonormalTransform(n=nPoints,dtype=datatype,device=device,mode=mode)
@@ -1492,7 +1500,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         Z.backward(dLdZ)
         actualdLdX = X.grad
         actualdLdW = target.angles.grad[pdAng]
-        
+
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
         self.assertTrue(torch.allclose(actualdLdW,expctddLdW,rtol=rtol,atol=atol))
@@ -1528,7 +1536,7 @@ class OrthonormalTransformTestCase(unittest.TestCase):
         # Expcted values
         X = torch.randn(nPoints,ncols,dtype=datatype,device=device,requires_grad=False)
         #X = X.to(device)
-        dLdZ = torch.randn(nPoints,ncols,dtype=datatype)  
+        dLdZ = torch.randn(1,nPoints,ncols,dtype=datatype)  
         dLdZ = dLdZ.to(device) 
 
         # Instantiation of target class
@@ -1640,6 +1648,6 @@ class OrthonormalTransformTestCase(unittest.TestCase):
 
         # Evaluation        
         self.assertTrue(torch.autograd.gradcheck(target,(X,)))
-
+ 
 if __name__ == '__main__':
     unittest.main()

@@ -27,17 +27,31 @@ class ForwardTruncationLayer(nn.Module):
     def __init__(self,
                  number_of_channels=1,
                  stride=[2,2],
-                 nlevels=0):
+                 nlevels=0,
+                 mode='normal'):
         super(ForwardTruncationLayer, self).__init__()
 
         self.number_of_channels = number_of_channels
         self.stride = stride
         self.nlevels = nlevels
+        self.mode = mode
+
+        if self.mode not in ['normal', 'interleave']:
+            raise ValueError("mode must be either 'normal' or 'interleave'")
+
+        if self.mode == 'interleave' and self.nlevels != 0:
+            raise ValueError("mode = 'interleave' is only supported when self.nlevels = 0")
 
     def forward(self, X):
+
         if self.nlevels == 0:
+            if self.mode == 'interleave':
+                nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
+                indices = torch.arange(nDecs).view(2,nDecs//2).T.flatten()
+                X = X[:,:,:,indices]
             Z = X[:,:,:,:self.number_of_channels]
-        else:
+
+        else: # TODO: INTERLEAVE mode
             nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
             if self.number_of_channels == 1:
                 Z = X
@@ -51,6 +65,15 @@ class ForwardTruncationLayer(nn.Module):
             Z = tuple(Z)
         return Z
 
+    @property
+    def T(self): # TODO: Unit test
+        from . import AdjointTruncationLayer
+        return AdjointTruncationLayer(
+            stride=self.stride,
+            nlevels=self.nlevels,
+            mode=self.mode
+        )
+
 class AdjointTruncationLayer(nn.Module):
     """
     ADJOINTTRUNCATIONLAYER Adjoint truncation layer
@@ -59,11 +82,19 @@ class AdjointTruncationLayer(nn.Module):
     """
     def __init__(self,
                  stride=[2,2],
-                 nlevels=0):
+                 nlevels=0,
+                 mode='normal'):
         super(AdjointTruncationLayer, self).__init__()
 
         self.stride = stride
         self.nlevels = nlevels
+        self.mode = mode
+
+        if self.mode not in ['normal', 'interleave']:
+            raise ValueError("mode must be either 'normal' or 'interleave'")
+
+        if self.mode == 'interleave' and self.nlevels != 0:
+            raise ValueError("mode = 'interleave' is only supported when self.nlevels = 0")
 
     def forward(self, X):
         nDecs = self.stride[Direction.VERTICAL]*self.stride[Direction.HORIZONTAL]
@@ -74,7 +105,11 @@ class AdjointTruncationLayer(nn.Module):
             number_of_channels = X.size(3)
             Z = torch.zeros(nsamples,nrows,ncols,nDecs,dtype=X.dtype,device=X.device,requires_grad=X.requires_grad)
             Z[:,:,:,:number_of_channels] = X
-        else:
+            if self.mode == 'interleave':
+                indices = torch.arange(nDecs).view(-1,2).T.flatten()
+                Z = Z[:,:,:,indices]
+
+        else: # TODO: INTERLEAVE mode
             nstages = len(X)
             Z = []
             for istage in range(self.nlevels+1):
@@ -101,6 +136,7 @@ class AdjointTruncationLayer(nn.Module):
                     Z.append(torch.zeros(nsamples,nrows_,ncols_,nDecs-1,dtype=X_i.dtype,device=X_i.device,requires_grad=X_i.requires_grad))                        
             Z = tuple(Z)
         return Z
+    
 
 class OrthonormalMatrixGenerationSystem:
     """

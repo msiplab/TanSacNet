@@ -114,6 +114,7 @@ This work was supported by JSPS KAKENHI Grant Number JP22H00512.
 ### Developpers
 * Yasas GODAGE,  2022-
 * Eisuke KOBAYASHI, 2022-2023
+* Takuma KUWABARA, 2024-
  
 ### Test contributers
 * Motoyasu SUZUKI, 2024-

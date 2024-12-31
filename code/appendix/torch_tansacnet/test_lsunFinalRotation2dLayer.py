@@ -24,9 +24,9 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         コンポーネント別に出力(nComponents=1のみサポート):
             nSamples x nRows x nCols x nChs
 
-        Requirements: Python 3.10/11.x, PyTorch 2.3.x
+        Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
-        Copyright (c) 2024, Shogo MURAMATSU
+        Copyright (c) 2024, Shogo MURAMATSU, Yasas GODAGE
 
         All rights reserved.
 
@@ -395,9 +395,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0T.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0T.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                                    for iblk in range(nblks) ]
+        actualdLdW = torch.cat((layer.orthTransW0T.orthonormalTransforms.angles.grad, \
+                                  layer.orthTransU0T.orthonormalTransforms.angles.grad),dim=1)
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -494,9 +493,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0T.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0T.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                                    for iblk in range(nblks) ]
+        actualdLdW = torch.cat((layer.orthTransW0T.orthonormalTransforms.angles.grad, \
+                                  layer.orthTransU0T.orthonormalTransforms.angles.grad),dim=1)
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -598,9 +596,8 @@ class LsunFinalRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ torch.cat((layer.orthTransW0T.orthonormalTransforms[iblk].angles.grad, \
-                                  layer.orthTransU0T.orthonormalTransforms[iblk].angles.grad),dim=0) \
-                        for iblk in range(nblks) ]
+        actualdLdW = torch.cat((layer.orthTransW0T.orthonormalTransforms.angles.grad, \
+                                  layer.orthTransU0T.orthonormalTransforms.angles.grad),dim=1)
         
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)

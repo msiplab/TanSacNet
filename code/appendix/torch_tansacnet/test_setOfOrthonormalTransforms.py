@@ -23,7 +23,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
     
     Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
     
-    Copyright (c) 2021-2024, Shogo MURAMATSU
+    Copyright (c) 2021-2024, Shogo MURAMATSU, Yasas GODAGE
     
     All rights reserved.
     
@@ -63,13 +63,13 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Actual values
         with torch.no_grad():
             actualZ = target(X)
-        actualNTrxs = len(target.orthonormalTransforms)
+        #actualNTrxs = len(target.orthonormalTransforms)
         actualMode = target.mode
         
         # Evaluation
         self.assertTrue(isinstance(target,nn.Module))        
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
-        self.assertEqual(actualNTrxs,expctdNTrxs)
+        #self.assertEqual(actualNTrxs,expctdNTrxs)
         self.assertEqual(actualMode,expctdMode)
 
     @parameterized.expand(
@@ -101,13 +101,13 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Actual values
         with torch.no_grad():
             actualZ = target(X)
-        actualNTrxs = len(target.orthonormalTransforms)
+        #actualNTrxs = len(target.orthonormalTransforms)
         actualMode = target.mode
         
         # Evaluation
         self.assertTrue(isinstance(target,nn.Module))        
         self.assertTrue(torch.allclose(actualZ,expctdZ,rtol=rtol,atol=atol))    
-        self.assertEqual(actualNTrxs,expctdNTrxs)
+        #self.assertEqual(actualNTrxs,expctdNTrxs)
         self.assertEqual(actualMode,expctdMode)
 
     @parameterized.expand(
@@ -143,8 +143,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
+        target.orthonormalTransforms.angles = nn.init.constant_(target.orthonormalTransforms.angles,val=math.pi/4)
 
         # Actual values
         with torch.no_grad():
@@ -183,8 +182,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode,dtype=datatype)
         target = target.to(device)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
+        target.orthonormalTransforms.angles = nn.init.constant_(target.orthonormalTransforms.angles,val=math.pi/4)
 
         # Actual values
         with torch.no_grad():
@@ -226,9 +224,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
-            target.orthonormalTransforms[iblk].mus = torch.tensor([1, -1])
+        target.orthonormalTransforms.angles = nn.init.constant_(target.orthonormalTransforms.angles,val=math.pi/4)
+        target.orthonormalTransforms.mus = torch.tensor([1, -1])
 
         # Actual values
         with torch.no_grad():
@@ -272,9 +269,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=2,nblks=nblks,mode=mode,dtype=datatype)
         target = target.to(device)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.constant_(target.orthonormalTransforms[iblk].angles,val=math.pi/4)
-            target.orthonormalTransforms[iblk].mus = torch.tensor([1, -1])
+        target.orthonormalTransforms.angles = nn.init.constant_(target.orthonormalTransforms.angles,val=math.pi/4)
+        target.orthonormalTransforms.mus = torch.tensor([1, -1])
 
         # Actual values
         with torch.no_grad():
@@ -337,8 +333,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Actual values
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles.data = torch.tensor([math.pi/4],dtype=datatype).to(device)
+        target.orthonormalTransforms.angles.data = torch.tensor([math.pi/4],dtype=datatype).to(device)
         with torch.no_grad():
             actualZ = target(X)
 
@@ -400,8 +395,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             expctdZ[iblk,:,:] = Z_iblk.view(2,nsamples)
 
         # Actual values
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles.data = torch.tensor([math.pi/4],dtype=datatype).to(device)
+        target.orthonormalTransforms.angles.data = torch.tensor([math.pi/4],dtype=datatype).to(device)
         with torch.no_grad():
             actualZ = target(X)
 
@@ -427,8 +421,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=4,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
+        target.orthonormalTransforms.angles = nn.init.normal_(target.orthonormalTransforms.angles)
 
         # Actual values
         unitvec = torch.randn(nblks,4,nsamples,dtype=datatype,device=device)
@@ -458,8 +451,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=8,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
+        target.orthonormalTransforms.angles = nn.init.normal_(target.orthonormalTransforms.angles)
 
         # Actual values
         unitvec = torch.randn(nblks,8,nsamples,dtype=datatype,device=device)
@@ -491,8 +483,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         # Instantiation of target class
         #nAngles = int(npoints*(npoints-1)/2)
         target = SetOfOrthonormalTransforms(n=npoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.normal_(target.orthonormalTransforms[iblk].angles)
+        target.orthonormalTransforms.angles = nn.init.normal_(target.orthonormalTransforms.angles)
 
         # Actual values
         unitvec = torch.randn(nblks,npoints,nsamples,dtype=datatype,device=device)
@@ -527,9 +518,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.uniform_(target.orthonormalTransforms[iblk].angles,a=0.0,b=2*math.pi)
-            target.orthonormalTransforms[iblk].angles.data[:nPoints-1] = torch.zeros(nPoints-1)
+        target.orthonormalTransforms.angles = nn.init.uniform_(target.orthonormalTransforms.angles,a=0.0,b=2*math.pi)
+        target.orthonormalTransforms.angles.data[:,:nPoints-1] = torch.zeros(nPoints-1)
 
         # Actual values
         X = torch.eye(nPoints,dtype=datatype,device=device).repeat(nblks,1,1)
@@ -564,9 +554,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=nPoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.uniform_(target.orthonormalTransforms[iblk].angles,a=0.0,b=2*math.pi)
-            target.orthonormalTransforms[iblk].angles.data[:nPoints-1] = torch.zeros(nPoints-1)
+        target.orthonormalTransforms.angles = nn.init.uniform_(target.orthonormalTransforms.angles,a=0.0,b=2*math.pi)
+        target.orthonormalTransforms.angles.data[:,:nPoints-1] = torch.zeros(nPoints-1)
 
         # Actual values
         X = torch.eye(nPoints,dtype=datatype,device=device).repeat(nblks,1,1)
@@ -600,9 +589,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
 
         # Instantiation of target class
         target = SetOfOrthonormalTransforms(n=npoints,nblks=nblks,mode=mode,device=device,dtype=datatype)
-        for iblk in range(nblks):
-            target.orthonormalTransforms[iblk].angles = nn.init.uniform_(target.orthonormalTransforms[iblk].angles,a=0.0,b=2*math.pi)
-            target.orthonormalTransforms[iblk].angles.data[:npoints-1] = torch.zeros(npoints-1)
+        target.orthonormalTransforms.angles = nn.init.uniform_(target.orthonormalTransforms.angles,a=0.0,b=2*math.pi)
+        target.orthonormalTransforms.angles.data[:,:npoints-1] = torch.zeros(npoints-1)
 
         # Actual values
         X = torch.eye(npoints,dtype=datatype,device=device).repeat(nblks,1,1)
@@ -648,11 +636,11 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             dLdZ_iblk = dLdZ[iblk,:,:]
             X_iblk = X[iblk,:,:]
             if mode!='Synthesis':
-                dLdX_iblk = R.T @ dLdZ_iblk
-                dLdW_iblk = dLdZ_iblk.T @ dRdW @ X_iblk
+                dLdX_iblk = R.mT @ dLdZ_iblk
+                dLdW_iblk = dLdZ_iblk.mT @ dRdW @ X_iblk
             else:
                 dLdX_iblk = R @ dLdZ_iblk
-                dLdW_iblk = dLdZ_iblk.T @ dRdW.T @ X_iblk
+                dLdW_iblk = dLdZ_iblk.mT @ dRdW.mT @ X_iblk
             expctddLdX[iblk,:,:] = dLdX_iblk
             expctddLdW[iblk,:] = dLdW_iblk.view(-1)
 
@@ -665,7 +653,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        #actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad 
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -722,7 +711,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad 
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -781,7 +770,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad 
         actualAngles = target.angles
 
         # Evaluation
@@ -841,7 +830,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -901,7 +890,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad 
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -926,7 +915,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         list(itertools.product(nblks))
     )
     def testSetInvalidMus(self,nblks):        
-        mus = [ 2 for _ in range(nblks) ]        
+        mus = [ [2] for _ in range(nblks) ]      
         with self.assertRaises(InvalidMus):
             target = SetOfOrthonormalTransforms(nblks=nblks)
             target.mus = mus
@@ -982,7 +971,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1020,7 +1009,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad 
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1170,7 +1159,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad[:,pdAng]
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1231,7 +1220,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad[:,pdAng]
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1292,7 +1281,8 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad[:,pdAng]
+        
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1353,7 +1343,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad[:,pdAng] 
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1414,7 +1404,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad[:,pdAng]
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1476,7 +1466,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
         target.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ target.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+        actualdLdW = target.orthonormalTransforms.angles.grad[:,pdAng]
 
         # Evaluation
         self.assertTrue(torch.allclose(actualdLdX,expctddLdX,rtol=rtol,atol=atol))
@@ -1550,7 +1540,7 @@ class SetOfOrthonormalTransformsTestCase(unittest.TestCase):
             Z = target0(X)
             target0.zero_grad()
             Z.backward(dLdZ)
-            actualdLdW = [ target0.orthonormalTransforms[iblk].angles.grad[pdAng] for iblk in range(nblks) ]
+            actualdLdW = target0.orthonormalTransforms.angles.grad[:,pdAng]
 
             # Evaluation
             for iblk in range(nblks):

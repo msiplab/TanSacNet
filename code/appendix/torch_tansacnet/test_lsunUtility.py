@@ -103,6 +103,7 @@ class LsunUtilityTestCase(unittest.TestCase):
         self.assertEqual(actualZ.shape,expctdZ.shape)
         self.assertTrue(torch.allclose(actualZ,expctdZ))
 
+
     @parameterized.expand(
         list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
     )
@@ -659,6 +660,113 @@ class LsunUtilityTestCase(unittest.TestCase):
             self.assertEqual(actualZ[istage].dtype,datatype)                
             self.assertEqual(actualZ[istage].shape,expctdZ[istage].shape,istage) 
             self.assertTrue(torch.allclose(actualZ[istage],expctdZ[istage]),istage) 
+
+
+    @parameterized.expand(
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
+    )
+    def testForwardTruncationLayerWithInterleave(self,stride,datatype,nsamples,number_of_channels,usegpu): 
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device('cuda')
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device('cpu')
+        
+        # Parameters       
+        stride_ = stride
+        datatype_ = datatype
+        height_ = 4
+        width_ = 4
+        nlevels_ = 0
+        nsamples_ = nsamples
+        number_of_channels_ = number_of_channels
+        mode = 'interleave'
+
+        # nSamples x nRows x nCols x nDecs
+        nrows = height_//stride_[Direction.VERTICAL]
+        ncols = width_//stride_[Direction.HORIZONTAL]
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        X = torch.randn(nsamples_,nrows,ncols,nDecs,dtype=datatype_,device=device,requires_grad=True)
+
+        # Expected values
+        indices = torch.arange(nDecs).view(2,nDecs//2).T.flatten()
+        expctdZ = X[:,:,:,indices[:number_of_channels_]]
+
+        # Instantiation of target class
+        layer = ForwardTruncationLayer(
+            number_of_channels = number_of_channels_,
+            stride = stride_,
+            nlevels = nlevels_,
+            mode = mode
+        )
+        layer = layer.to(device)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer(X)
+
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype_)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ))
+    
+    @parameterized.expand(
+        list(itertools.product(stride,datatype,nsamples,number_of_channels,usegpu))
+    )
+    def testAdjointTruncationLayerWithInterleave(self,
+                                   stride,datatype,nsamples,number_of_channels,usegpu): 
+        if usegpu:
+            if torch.cuda.is_available():
+                device = torch.device('cuda')
+            else:
+                print('No GPU device was detected.')
+                return 
+        else:
+            device = torch.device('cpu')
+        
+        # Parameters       
+        stride_ = stride
+        datatype_ = datatype
+        height_ = 4
+        width_ = 4
+        nlevels_ = 0
+        nsamples_ = nsamples
+        number_of_channels_ = number_of_channels
+        mode = 'interleave'
+    
+        # nSamples x nRows x nCols x nDecs
+        nrows = height_//stride_[Direction.VERTICAL]
+        ncols = width_//stride_[Direction.HORIZONTAL]
+        nDecs = stride_[Direction.VERTICAL]*stride_[Direction.HORIZONTAL]
+        X = torch.randn(nsamples_,nrows,ncols,number_of_channels_,dtype=datatype_,device=device,requires_grad=True)
+
+        # Expected values
+        if number_of_channels_ == nDecs:
+            expctdZ = X
+        else:
+            expctdZ = torch.cat((X,torch.zeros(nsamples_,nrows,ncols,nDecs-number_of_channels_,dtype=datatype_,device=device)),dim=3)
+        indices = torch.arange(nDecs).view(-1,2).T.flatten()
+        expctdZ = expctdZ[:,:,:,indices]
+
+        # Instantiation of target class
+        layer = AdjointTruncationLayer(
+            stride = stride_,
+            nlevels = nlevels_,
+            mode = mode
+        )
+        layer = layer.to(device)
+
+        # Actual values
+        with torch.no_grad():
+            actualZ = layer(X)
+
+        # Evaluation
+        self.assertEqual(actualZ.dtype,datatype_)
+        self.assertEqual(actualZ.shape,expctdZ.shape)
+        self.assertTrue(torch.allclose(actualZ,expctdZ))
 
 if __name__ == '__main__':
     unittest.main()

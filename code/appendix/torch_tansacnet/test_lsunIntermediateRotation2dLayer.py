@@ -23,9 +23,9 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         コンポーネント別に出力(nComponents=1のみサポート):
             nSamples x nRows x nCols x nChs
 
-        Requirements: Python 3.10/11.x, PyTorch 2.3.x
+        Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
-        Copyright (c) 2024, Shogo MURAMATSU
+        Copyright (c) 2024, Shogo MURAMATSU, Yasas GODAGE
 
         All rights reserved.
 
@@ -420,7 +420,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         Z = layer(X)
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ layer.orthTransUnx.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -507,7 +507,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ layer.orthTransUnx.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
@@ -595,7 +595,7 @@ class LsunIntermediateRotation2dLayerTestCase(unittest.TestCase):
         layer.zero_grad()
         Z.backward(dLdZ)
         actualdLdX = X.grad
-        actualdLdW = [ layer.orthTransUnx.orthonormalTransforms[iblk].angles.grad for iblk in range(nblks) ]
+        actualdLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
 
         # Evaluation
         self.assertIsInstance(actualdLdX,torch.Tensor)
