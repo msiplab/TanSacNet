@@ -20,24 +20,41 @@ It is easy to incorporate them into flexible configurations and
 parts of your network.
 
 ## Package structure
-               
-           tansacnet -+- results
-                      |
-                      +- data
-                      |
-                      +- code -+- examples -+- ...
-                               |
-                               +- tansacnet -+- testcase -+- lsun
-                                             |            |
-                                             |            +- utility 
-                                             |
-                                             +- lsun
-                                             |
-                                             +- utility       
+
+        tansacnet
+        ├── code
+        │   ├── appendix
+        │   │   ├── setup.py
+        │   │   └── torch_tansacnet
+        │   │       ├── mytest.py 
+        │   │       ...
+        │   ├── examples
+        │   │   ├── lsun
+        │   │   │   ├── main_lsun.mlx
+        │   │   │   ├── main_lsun.ipynb
+        │   │   │   ...        
+        │   │   ...
+        │   └── +tansacnet
+        │       ├── +testcase
+        │       │   ├── +lsun
+        │       │   │   ├── lsunBlockDct2dLayerTestCase.m
+        │       │   │   ...
+        │       │   └── +utility
+        │       │       ├── OrthonormalMatrixGenerationSystemTestCase.m
+        │       │       ...
+        │       ├── +lsun
+        │       │   ├── +mexxrcs     
+        │       │   ├── lsunBlockDct2dLayer.m
+        │       │   ...
+        │       └── +utility
+        │           ├── OrthonormalMatrixGenerationSystem.m
+        │           ...
+        ├── data
+        └── results
 
 ## Requirements
  
- * MATLAB R2022b/R2023b is recommended.
+ * MATLAB R2024b is recommended.
  * Signal Processing Toolbox
  * Image Processing Toolbox
  * Optimization Toolbox
@@ -97,6 +114,7 @@ This work was supported by JSPS KAKENHI Grant Number JP22H00512.
 ### Developpers
 * Yasas GODAGE,  2022-
 * Eisuke KOBAYASHI, 2022-2023
+* Takuma KUWABARA, 2024-
  
 ### Test contributers
 * Motoyasu SUZUKI, 2024-

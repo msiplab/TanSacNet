@@ -6,3 +6,4 @@
 !/data/.datafolder
 /results/
 !/results/.resultsfolder
+**/__pycache__/
