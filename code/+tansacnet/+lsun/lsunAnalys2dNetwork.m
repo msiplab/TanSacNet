@@ -14,12 +14,12 @@ classdef lsunAnalys2dNetwork < dlnetwork
             % fcn_createlsunlgraph2d のプロパティ設定を参照
         end
 
-        function analyzerFactory = getAnalyzerFactory(net)
-            % ???
+        function analyzerFactory = getAnalyzerFactory(obj)
+            % ???      
             analyzerFactory = [];
         end
 
-        function adjnet = transpose(obj)
+        function adj = transpose(obj)
             %METHOD1 このメソッドの概要をここに記述
             %   詳細説明をここに記述
             
@@ -28,7 +28,7 @@ classdef lsunAnalys2dNetwork < dlnetwork
     end
 
     methods (Hidden=false)
-        function dlnet = dlnetwork(net)
+        function dlnet = dlnetwork(obj)
            % ???
             dlnet = [];
         end
