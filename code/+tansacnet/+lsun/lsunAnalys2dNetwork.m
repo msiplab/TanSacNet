@@ -1,4 +1,4 @@
-classdef LsunAnalys2dNetwork < dlnetwork
+classdef lsunAnalys2dNetwork < dlnetwork
     %UNTITLED このクラスの概要をここに記述
     %   詳細説明をここに記述
 
@@ -7,7 +7,7 @@ classdef LsunAnalys2dNetwork < dlnetwork
     end
 
     methods
-        function obj = LsunAnalysis2dNetwork(varargin)
+        function obj = lsunAnalysis2dNetwork(varargin)
             %UNTITLED このクラスのインスタンスを作成
             %   詳細説明をここに記述
             
