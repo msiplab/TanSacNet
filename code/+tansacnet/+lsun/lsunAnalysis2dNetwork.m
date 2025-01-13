@@ -1,6 +1,18 @@
-classdef lsunAnalys2dNetwork < dlnetwork
-    %UNTITLED このクラスの概要をここに記述
-    %   詳細説明をここに記述
+classdef lsunAnalysis2dNetwork < dlnetwork
+    %LSUNANALYSIS2dNETWORK
+    %
+    % Requirements: MATLAB R2024a
+    %
+    % Copyright (c) 2025, Shogo MURAMATSU, Yasas GODAGE
+    %
+    % All rights reserved.
+    %
+    % Contact address: Shogo MURAMATSU
+    %                Faculty of Engineering, Niigata University,
+    %                8050 2-no-cho Ikarashi, Nishi-ku,
+    %                Niigata, 950-2181, JAPAN
+    %
+
 
     properties
         % fcn_createlsunlgraph2d 参照
@@ -21,7 +33,7 @@ classdef lsunAnalys2dNetwork < dlnetwork
     end
 
     methods
-        function obj = lsunAnalys2dNetwork(varargin)
+        function obj = lsunAnalysis2dNetwork(varargin)
             %UNTITLED このクラスのインスタンスを作成
             %   詳細説明をここに記述
             

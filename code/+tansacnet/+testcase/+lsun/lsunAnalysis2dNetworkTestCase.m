@@ -3,11 +3,11 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
     %
     % Requirements: MATLAB R2024a
     %
-    % Copyright (c) 2025, Shogo MURAMATSU
+    % Copyright (c) 2025, Shogo MURAMATSU, Yasas GODAGE
     %
     % All rights reserved.
     %
-    % Contact address: Shogo MURAMATSU,
+    % Contact address: Shogo MURAMATSU
     %                Faculty of Engineering, Niigata University,
     %                8050 2-no-cho Ikarashi, Nishi-ku,
     %                Niigata, 950-2181, JAPAN
@@ -46,7 +46,7 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
 
             % Instantiation of target class
             import tansacnet.lsun.*
-            net = lsunAnalys2dNetwork();
+            net = lsunAnalysis2dNetwork();
 
             % Verify that net is a subclass of dlnetwork
             testCase.verifyTrue(isa(net, 'dlnetwork'));
