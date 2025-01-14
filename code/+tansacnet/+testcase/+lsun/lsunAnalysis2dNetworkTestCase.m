@@ -16,6 +16,14 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
     
     properties (TestParameter)
         
+        inputSize = {[8 8], [16 8], [8 32], [16 32], [16 16], [32 32]}
+        Stride = {[2 1], [1 2], [2 2], [2 4], [4 1], [4 4]};
+        OverlappingFactor = {[1 1], [3 3], [5 5], [1 3], [3 1]};
+        nodcleakage = struct( 'true', true, 'false', false);
+        datatype = { 'single', 'double' };
+        device = {'cpu', 'cuda'};
+
+        
     end
 
     methods (TestClassSetup)
@@ -29,24 +37,29 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
     methods (Test)
         % テスト メソッド
 
-        function testDefaultConstructor(testCase)
-             % Configuration
-            inputSize = [32 32];
+        function testDefaultConstructor(testCase, Stride, OverlappingFactor, ...
+                inputSize, nodcleakage, datatype, device)
+            % Configuration
             numberOfComponents = 1;
+            
 
             % Expcted values
             expctdTensorSize = [inputSize numberOfComponents];
-            expctdStride = [2 2];
-            expctdOverlappingFactor = [1 1];
+            expctdStride = Stride;
+            expctdOverlappingFactor = OverlappingFactor;
             expctdNumberOfLevels = 1;
-            expcedNoDcLeakage = false;
+            expcedNoDcLeakage = nodcleakage;
             expctdPrefix = '';
-            expctdDevice = 'cuda';
-            expctdDType = 'double';
+            expctdDevice = device;
+            expctdDType = datatype;
 
             % Instantiation of target class
             import tansacnet.lsun.*
-            net = lsunAnalysis2dNetwork();
+            net = lsunAnalysis2dNetwork('InputSize',inputSize, ...
+                'Stride',Stride, ...
+                'OverlappingFactor',OverlappingFactor, ...
+                'DType',datatype,'NoDcLeakage',nodcleakage, ...
+                'Device',device);
 
             % Verify that net is a subclass of dlnetwork
             testCase.verifyTrue(isa(net, 'dlnetwork'));
