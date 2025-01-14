@@ -37,7 +37,50 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
     methods (Test)
         % テスト メソッド
 
-        function testDefaultConstructor(testCase, Stride, OverlappingFactor, ...
+        function testDefaultConstructor(testCase)
+            % Configuration
+            inputSize = [32 32];
+            numberOfComponents = 1;
+
+            % Expcted values
+            expctdTensorSize = [inputSize numberOfComponents];
+            expctdStride = [2 2];
+            expctdOverlappingFactor = [1 1];
+            expctdNumberOfLevels = 1;
+            expcedNoDcLeakage = false;
+            expctdPrefix = '';
+            expctdDevice = 'cuda';
+            expctdDType = 'double';
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            net = lsunAnalysis2dNetwork();
+
+            % Verify that net is a subclass of dlnetwork
+            testCase.verifyTrue(isa(net, 'dlnetwork'));
+
+            % Actual values
+            actualTensorSize = net.TensorSize;
+            actualStride = net.Stride;
+            actualOverlappingFactor = net.OverlappingFactor;
+            actualNumberOfLevels = net.NumberOfLevels;
+            actualNoDcLeakage = net.NoDcLeakage;
+            actualPrefix = net.Prefix;
+            actualDevice = net.Device;
+            actualDType = net.DType;
+
+            % Evaluation
+            testCase.verifyEqual(actualTensorSize,expctdTensorSize);
+            testCase.verifyEqual(actualStride,expctdStride);
+            testCase.verifyEqual(actualOverlappingFactor,expctdOverlappingFactor);
+            testCase.verifyEqual(actualNumberOfLevels,expctdNumberOfLevels);
+            testCase.verifyEqual(actualNoDcLeakage,expcedNoDcLeakage);
+            testCase.verifyEqual(actualPrefix,expctdPrefix);
+            testCase.verifyEqual(actualDevice,expctdDevice);
+            testCase.verifyEqual(actualDType,expctdDType);
+        end
+
+        function testConstructorWithProperties(testCase, Stride, OverlappingFactor, ...
                 inputSize, nodcleakage, datatype, device)
             % Configuration
             numberOfComponents = 1;
