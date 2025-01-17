@@ -127,6 +127,116 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(actualDevice,expctdDevice);
             testCase.verifyEqual(actualDType,expctdDType);
         end
+
+        function testNetwork(testCase, datatype, device)
+
+            stride = [2 2];
+            height = 16;
+            width = 16;
+            %nSamples = 8;
+            %nComponents = 1;
+            import tansacnet.lsun.*
+            net = lsunAnalysis2dNetwork('InputSize',[height width], ...
+                'Stride',stride, ...
+                'DType',datatype, ...
+                'Device',device);
+            dlnet = net.dlnetwork();
+            %analyzeNetwork(dlnet)
+            dlnet_ = initialize(dlnet);
+            
+            X = rand([height, width], datatype);
+            %X = rand([nSamples, nComponents, height, width], datatype);
+            X = dlarray(X, 'SSCB');
+            
+            actualZ = forward(dlnet_, X);
+            testCase.verifyInstanceOf(extractdata(actualZ),datatype);
+     
+        end
+
+
+
+
+
+        % function testForward(testCase, datatype, device)
+        %     import tansacnet.utility.Direction
+        %     import matlab.unittest.constraints.IsEqualTo
+        %     import matlab.unittest.constraints.AbsoluteTolerance
+        %     tolObj = AbsoluteTolerance(1e-5,single(1e-5));
+        % 
+        %     Stride = [2 2];
+        %     nSamples = 8;
+        %     %nComponents = 1;
+        %     height = 64;
+        %     width = 32;
+        %     nDecs = Stride(Direction.VERTICAL) * Stride(Direction.HORIZONTAL);
+        % 
+        %     X = rand([height, width, nSamples], datatype);
+        %     X = dlarray(X, 'SSBC');
+        %     %X = rand([nSamples, nComponents, height, width], datatype);
+        %     nrows = ceil(height / Stride(Direction.VERTICAL));
+        %     ncols = ceil(width / Stride(Direction.HORIZONTAL));
+        % 
+        %     arrayshape = numel(X)/prod(Stride);
+        %     X_reshaped =  reshape(X, [arrayshape, Stride]);
+        % 
+        %     Y = zeros(size(X_reshaped));
+        %     for i = 1:size(X_reshaped, 1)
+        %         Y(i, :, :) = blockproc(squeeze(extractdata(X_reshaped(i, :, :))), Stride, @(x) dct2(x.data));
+        %     end
+        % 
+        %     A = testCase.permuteDctCoefs_(Y); 
+        %     disp(size(A))
+        %     disp([nSamples, nrows, ncols, nDecs])
+        %     V = reshape(A, [nSamples, nrows, ncols, nDecs]); 
+        % 
+        %     ps = ceil(nDecs / 2);
+        %     pa = floor(nDecs / 2);
+        % 
+        %     W0 = eye(ps, datatype);
+        %     U0 = eye(pa, datatype);
+        % 
+        %     Zsa = zeros(nDecs, nrows * ncols * nSamples, datatype);
+        %     Ys = permute(V(:, :, :, 1:ps), [4, 1, 2, 3]);
+        %     Ys = reshape(Ys, ps, []);
+        %     Zsa(1:ps, :) = W0 * Ys;
+        % 
+        %     if pa > 0
+        %         Ya = permute(V(:, :, :, ps+1:end), [4, 1, 2, 3]);
+        %         Ya = reshape(Ya, pa, []);
+        %         Zsa(ps+1:end, :) = U0 * Ya;
+        %     end
+        % 
+        %     expctdZ = permute(reshape(Zsa', [nrows, ncols, nSamples, nDecs]), ...
+        %         [3, 1, 2, 4]);
+        % 
+        %     import tansacnet.lsun.*
+        %     net = lsunAnalysis2dNetwork('InputSize',[height width], ...
+        %         'Stride',Stride, ...
+        %         'DType',datatype, ...
+        %         'Device',device);
+        %     dlnet = net.dlnetwork();
+        %     dlnet_ = initialize(dlnet);
+        %     analyzeNetwork(dlnet)
+        % 
+        %     actualZ = forward(dlnet_, X);
+        %     disp(class(extractdata(actualZ)))
+        %     disp(datatype)
+        % 
+        %     testCase.verifyInstanceOf((extractdata(actualZ)),datatype);
+        %     testCase.verifyThat(permute(extractdata(actualZ),[4, 1, 2, 3]),...
+        %         IsEqualTo(expctdZ(:,:,:,[1,2,4]),'Within',tolObj));
+        % 
+        % end
     end
+
+    % methods (Static, Access = private)
+    %     function value = permuteDctCoefs_(coefs)
+    %         cee = coefs(:,1:2:end,1:2:end);
+    %         coo = coefs(:,2:2:end,2:2:end);
+    %         coe = coefs(:,2:2:end,1:2:end);
+    %         ceo = coefs(:,1:2:end,2:2:end);
+    %         value = cat(2, cee(:) , coo(:) , coe(:) , ceo(:) );
+    %     end
+    % end
 
 end
