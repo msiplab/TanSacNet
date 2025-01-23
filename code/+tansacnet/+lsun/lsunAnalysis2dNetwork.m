@@ -148,6 +148,8 @@ classdef lsunAnalysis2dNetwork < dlnetwork
                             'DType',dtype)
                         ];
                 end
+
+                
                 % Final blocks
                 % blockIdctLayers{iLv} = lsunBlockIdct2dLayer('Name',[prefix strLv 'E0~'],...
                 %     'Stride',stride,...
@@ -241,8 +243,10 @@ classdef lsunAnalysis2dNetwork < dlnetwork
                     
                     % Channel separation and concatenation
                     analysisLayers{iLv,iCmp} = [ analysisLayers{iLv,iCmp}
-                        lsunChannelSeparation2dLayer('Name',[prefix strLv strCmp 'Sp'])
+                      lsunChannelSeparation2dLayer('Name',[prefix strLv strCmp 'Sp'])
                         ];
+
+
                     % synthesisLayers{iLv,iCmp} = [ synthesisLayers{iLv,iCmp}
                     %     lsunChannelConcatenation2dLayer('Name',[prefix strLv strCmp 'Cn'])
                     %     ];               
