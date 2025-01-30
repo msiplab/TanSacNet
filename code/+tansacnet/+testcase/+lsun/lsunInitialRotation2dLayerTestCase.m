@@ -99,6 +99,43 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
 
+        function testinitialize(testCase,stride,nrows,ncols)
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            datatype = 'double';
+
+            nblks_ = [8 8];
+            nChsTotal = sum([ceil(prod(stride)/2) floor(prod(stride)/2)]);
+            nAngles = (nChsTotal-2)*nChsTotal/4;
+            
+            nDecs = prod(stride);
+            nSamples = 8;
+            X = randn(nDecs,nrows,ncols,nSamples,datatype);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialRotation2dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_);
+           
+            % Expected values
+            inputsize = [nAngles prod(nblks_)];
+            layout = networkDataLayout(inputsize,'SS'); %layout - Angles.Size
+            expctdangles = zeros(inputsize,datatype);
+
+            layer_ = initialize(layer,layout);
+            
+            % Actual values
+            actualZ = layer_.predict(X);
+            actualangles = layer_.Angles;
+            
+            % Evaluation
+            testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualangles,...
+                IsEqualTo(expctdangles,'Within',tolObj));
+        end
+
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
 

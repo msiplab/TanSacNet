@@ -96,6 +96,34 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             
             layer = layer.updateParameters();
         end
+
+        function layer = initialize(layer,layout)
+            % (Optional) Initialize layer learnable and state parameters.
+            %
+            % Inputs:
+            %         layer  - Layer to initialize
+            %         layout - Data layout, specified as a networkDataLayout
+            %                  object
+            %
+            % Outputs:
+            %         layer - Initialized layer
+            %
+            %  - For layers with multiple inputs, replace layout with 
+            %    layout1,...,layoutN, where N is the number of inputs.
+
+            % Define layer initialization function here.
+            
+            % LAYOUT
+            nChsTotal = sum(layer.PrivateNumberOfChannels);            
+            nAngles = (nChsTotal-2)*nChsTotal/4;
+            nblks = layer.NumberOfBlocks;
+            inputsize = [nAngles prod(nblks)];
+            layout = networkDataLayout(inputsize,'SS');
+         
+            %angles = zeros(layout.Size,datatype);
+            angles = zeros(layout.Size,layer.DType);
+            layer.Angles = angles;
+        end
         
         function Z = predict(layer, X)
             % Forward input data through the layer at prediction time and
