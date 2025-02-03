@@ -105,9 +105,10 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
             datatype = 'double';
 
-            nblks_ = [8 8];
+            inputSize = [32 32 1];
             nChsTotal = sum([ceil(prod(stride)/2) floor(prod(stride)/2)]);
             nAngles = (nChsTotal-2)*nChsTotal/4;
+            nblks_ = inputSize(1:2)./stride;
             
             nDecs = prod(stride);
             nSamples = 8;
@@ -117,12 +118,13 @@ classdef lsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             import tansacnet.lsun.*
             layer = lsunInitialRotation2dLayer(...
                 'Stride',stride,...
-                'NumberOfBlocks',nblks_);
+                'InputSize',inputSize);
            
             % Expected values
-            inputsize = [nAngles prod(nblks_)];
-            layout = networkDataLayout(inputsize,'SS'); %layout - Angles.Size
-            expctdangles = zeros(inputsize,datatype);
+            layoutsize = [nAngles prod(nblks_)];
+            %inputsize = [size(X)];
+            layout = networkDataLayout(layoutsize,'SS'); %layout - Angles.Size
+            expctdangles = zeros(layoutsize,datatype);
 
             layer_ = initialize(layer,layout);
             

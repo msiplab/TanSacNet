@@ -140,7 +140,7 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
-            analyzeNetwork(dlnet)
+            %analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
             
             X = rand([height, width, nComponents, nSamples], datatype);

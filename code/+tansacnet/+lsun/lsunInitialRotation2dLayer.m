@@ -26,6 +26,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
         NumberOfBlocks
         Device
         DType
+        InputSize
     end
     
     properties (Dependent)
@@ -60,6 +61,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             % This function must have the same name as the class.
             p = inputParser;
             addParameter(p,'Stride',[])
+            addParameter(p,'InputSize',[])
             addParameter(p,'Name','')
             addParameter(p,'Mus',[])
             addParameter(p,'Angles',[])
@@ -71,6 +73,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
+            layer.InputSize = p.Results.InputSize;
             layer.NumberOfBlocks = p.Results.NumberOfBlocks;
             layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Name = p.Results.Name;
@@ -114,15 +117,15 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             % Define layer initialization function here.
             
             % LAYOUT
-            nChsTotal = sum(layer.PrivateNumberOfChannels);            
-            nAngles = (nChsTotal-2)*nChsTotal/4;
-            nblks = layer.NumberOfBlocks;
-            inputsize = [nAngles prod(nblks)];
-            layout = networkDataLayout(inputsize,'SS');
-         
-            %angles = zeros(layout.Size,datatype);
+            %if isempty(layout)
+            layer.NumberOfBlocks = layer.InputSize(1:2)./layer.Stride;
+            layoutsize = [size(layer.PrivateAngles,1) prod(layer.NumberOfBlocks)];
+            layout = networkDataLayout(layoutsize,'SS');
+            %end
+           
             angles = zeros(layout.Size,layer.DType);
             layer.Angles = angles;
+
         end
         
         function Z = predict(layer, X)
