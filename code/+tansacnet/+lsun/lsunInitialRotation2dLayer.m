@@ -26,7 +26,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
         NumberOfBlocks
         Device
         DType
-        InputSize
+        %InputSize
     end
     
     properties (Dependent)
@@ -61,7 +61,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             % This function must have the same name as the class.
             p = inputParser;
             addParameter(p,'Stride',[])
-            addParameter(p,'InputSize',[])
+            %addParameter(p,'InputSize',[])
             addParameter(p,'Name','')
             addParameter(p,'Mus',[])
             addParameter(p,'Angles',[])
@@ -73,7 +73,7 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
-            layer.InputSize = p.Results.InputSize;
+            %layer.InputSize = p.Results.InputSize;
             layer.NumberOfBlocks = p.Results.NumberOfBlocks;
             layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Name = p.Results.Name;
@@ -115,15 +115,18 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             %    layout1,...,layoutN, where N is the number of inputs.
 
             % Define layer initialization function here.
+            %disp(layout)
+            %fprintf('Layout size: [%s]\n', sprintf('%d ', layout.Size));
             
             % LAYOUT
-            %if isempty(layout)
-            layer.NumberOfBlocks = layer.InputSize(1:2)./layer.Stride;
+            Direction = tansacnet.utility.Direction;
+                            % layout - [prod(Stride) inputSize(1)/Stride(Dir.VERTICLE) inputSize(2)/Stride(Dir.HORIZONTAL)]
+            inputSize = [layout.Size(2)*layer.Stride(Direction.VERTICAL) layout.Size(3)*layer.Stride(Direction.HORIZONTAL)];
+            layer.NumberOfBlocks = inputSize./layer.Stride;
             layoutsize = [size(layer.PrivateAngles,1) prod(layer.NumberOfBlocks)];
-            layout = networkDataLayout(layoutsize,'SS');
-            %end
+            %layout = networkDataLayout(layoutsize,'SS');
            
-            angles = zeros(layout.Size,layer.DType);
+            angles = zeros(layoutsize,layer.DType);
             layer.Angles = angles;
 
         end
