@@ -99,6 +99,45 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             
         end
 
+        function testinitialize(testCase,stride,nrows,ncols)
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            datatype = 'double';
+
+            inputSize = [32 32 1];
+            nChsTotal = sum([ceil(prod(stride)/2) floor(prod(stride)/2)]);
+            nAngles = (nChsTotal-2)*nChsTotal/4;
+            nblks_ = inputSize(1:2)./stride;
+            
+            nDecs = prod(stride);
+            nSamples = 8;
+            X = randn(nDecs,nrows,ncols,nSamples,datatype);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunFinalRotation2dLayer(...
+                'Stride',stride);
+           
+            % Expected values
+            anglesize = [nAngles prod(nblks_)];
+            layoutsize = [prod(stride) inputSize(1)/stride(1) inputSize(2)/stride(2)];
+            %inputsize = [size(X)];
+            layout = networkDataLayout(layoutsize,'SSC'); %layout - Angles.Size
+            expctdangles = zeros(anglesize,datatype);
+
+            layer_ = initialize(layer,layout);
+            
+            % Actual values
+            actualZ = layer_.predict(X);
+            actualangles = layer_.Angles;
+            
+            % Evaluation
+            testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualangles,...
+                IsEqualTo(expctdangles,'Within',tolObj));
+        end
+
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, datatype)
             

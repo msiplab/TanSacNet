@@ -115,13 +115,14 @@ classdef lsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             %    layout1,...,layoutN, where N is the number of inputs.
 
             % Define layer initialization function here.
-            %disp(layout)
             %fprintf('Layout size: [%s]\n', sprintf('%d ', layout.Size));
             
             % LAYOUT
-            Direction = tansacnet.utility.Direction;
-                            % layout - [prod(Stride) inputSize(1)/Stride(Dir.VERTICLE) inputSize(2)/Stride(Dir.HORIZONTAL)]
-            inputSize = [layout.Size(2)*layer.Stride(Direction.VERTICAL) layout.Size(3)*layer.Stride(Direction.HORIZONTAL)];
+            Direction = tansacnet.utility.Direction;               
+            nRows = layout.Size(2);
+            nCols = layout.Size(3);
+            % layout - [prod(Stride) nRows/Stride(Dir.VERTICLE) nCols/Stride(Dir.HORIZONTAL)]
+            inputSize = [nRows*layer.Stride(Direction.VERTICAL) nCols*layer.Stride(Direction.HORIZONTAL)];
             layer.NumberOfBlocks = inputSize./layer.Stride;
             layoutsize = [size(layer.PrivateAngles,1) prod(layer.NumberOfBlocks)];
             %layout = networkDataLayout(layoutsize,'SS');

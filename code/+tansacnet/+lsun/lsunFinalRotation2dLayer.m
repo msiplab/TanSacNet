@@ -96,8 +96,43 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             
             layer = layer.updateParameters();
         end
-        
+
+        function layer = initialize(layer,layout)
+            % (Optional) Initialize layer learnable and state parameters.
+            %
+            % Inputs:
+            %         layer  - Layer to initialize
+            %         layout - Data layout, specified as a networkDataLayout
+            %                  object
+            %
+            % Outputs:
+            %         layer - Initialized layer
+            %
+            %  - For layers with multiple inputs, replace layout with
+            %    layout1,...,layoutN, where N is the number of inputs.
+
+            % Define layer initialization function here.
+            %fprintf('Layout size: [%s]\n', sprintf('%d ', layout.Size));
+
+            % LAYOUT
+            Direction = tansacnet.utility.Direction;
+            nRows = layout.Size(2);
+            nCols = layout.Size(3);
+            % layout - [prod(Stride) nRows/Stride(Dir.VERTICLE) nCols/Stride(Dir.HORIZONTAL)]
+            inputSize = [nRows*layer.Stride(Direction.VERTICAL) nCols*layer.Stride(Direction.HORIZONTAL)];
+            layer.NumberOfBlocks = inputSize./layer.Stride;
+            layoutsize = [size(layer.PrivateAngles,1) prod(layer.NumberOfBlocks)];
+            %layout = networkDataLayout(layoutsize,'SS');
+
+            angles = zeros(layoutsize,layer.DType);
+            layer.Angles = angles;
+
+        end
+
         function Z = predict(layer, X)
+            
+            %X = dlarray(rand([2 16 16 1]),'SSCB');
+
             % Forward input data through the layer at prediction time and
             % output the result.
             %
