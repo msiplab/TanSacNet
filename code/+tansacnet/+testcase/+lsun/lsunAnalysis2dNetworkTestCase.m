@@ -199,7 +199,7 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
             ncols = ceil(width/Stride(Direction.HORIZONTAL));
             ndecs = prod(Stride);
             %expctdZ = zeros(nrows,ncols,ndecs,nSamples,datatype);
-            expctdZ = zeros(ndecs,nrows,ncols,nSamples,datatype);
+            expctdZ_ = zeros(ndecs,nrows,ncols,nSamples,datatype);
             for iSample = 1:nSamples
                 % Block DCT
                 Y = blockproc(X(:,:,nComponents,iSample),...
@@ -207,11 +207,11 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 % Rearrange the DCT Coefs.
                 A = blockproc(Y,...
                     Stride,@testCase.permuteDctCoefs_);
-                expctdZ(:,:,:,iSample) = ...
+                expctdZ_(:,:,:,iSample) = ...
                     ...permute(reshape(A,ndecs,nrows,ncols),[2 3 1]);
                     reshape(A,ndecs,nrows,ncols);
             end
-            X_ = expctdZ;
+            X_ = expctdZ_;
             %expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
 
@@ -236,6 +236,7 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 Y_(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);                
                 expctdZ(:,:,:,iSample) = Y_; %ipermute(Y,[3 1 2]);
             end
+            
             % Channel separation
             expctdZac = permute(expctdZ(2:end,:,:,:),[2 3 1 4]);
             expctdZdc = permute(expctdZ(1,:,:,:),[2 3 1 4]);
@@ -261,14 +262,12 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctdZac,'Within',tolObj));
         end
 
-        function testForward_with_Overlap(testCase, datatype, device)
+        function testForward_with_Overlap(testCase,Stride,OverlappingFactor,datatype,device)
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-5,single(1e-5));
 
-            Stride = [2 2];
-            OverlappingFactor_ = [5 5];
             nSamples = 8;
             nComponents = 1;
             height = 32;
@@ -278,13 +277,13 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
             nChsTotal = nDecs;
 
             X = rand([height, width, nComponents, nSamples], datatype);
-          
+            angles = [];
             % Expected values
             nrows = ceil(height/Stride(Direction.VERTICAL));
             ncols = ceil(width/Stride(Direction.HORIZONTAL));
             ndecs = prod(Stride);
             %expctdZ = zeros(nrows,ncols,ndecs,nSamples,datatype);
-            expctdZ = zeros(ndecs,nrows,ncols,nSamples,datatype);
+            expctdZ_ = zeros(ndecs,nrows,ncols,nSamples,datatype);
             for iSample = 1:nSamples
                 % Block DCT
                 Y = blockproc(X(:,:,nComponents,iSample),...
@@ -292,11 +291,11 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 % Rearrange the DCT Coefs.
                 A = blockproc(Y,...
                     Stride,@testCase.permuteDctCoefs_);
-                expctdZ(:,:,:,iSample) = ...
+                expctdZ_(:,:,:,iSample) = ...
                     ...permute(reshape(A,ndecs,nrows,ncols),[2 3 1]);
                     reshape(A,ndecs,nrows,ncols);
             end
-            X_ = expctdZ;
+            X_ = expctdZ_;
             %expctdZ = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
             %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
 
@@ -318,50 +317,50 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                     Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
                 end
                 Y_(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
-                Y_(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);                
-                Yn(:,:,:,iSample) = Y_; %ipermute(Y,[3 1 2]);
+                Y_(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);    
+                eY(:,:,:,iSample) = Y_; %ipermute(Y,[3 1 2]);
             end
-            
+
             for iCmp = 1:nComponents
-                for iOrderH = 2:2:OverlappingFactor_(2)-1
+                for iOrderH = 2:2:OverlappingFactor(2)-1
                     % Atom extension (Right shift)
-                    eY = testCase.AtomExt('Right',Yn,pa,ps);
-
+                    eY = testCase.AtomExt('Right',eY,pa,ps);
+                   
                     % Intermediate rotation
-                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,datatype);
-
+                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,nChsTotal,angles,datatype,device);
+                    
                     % Atom extension (Left shift)
                     eY = testCase.AtomExt('Left',eY,pa,ps);
-
+                    
                     % Intermediate rotation
-                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,datatype);
+                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,nChsTotal,angles,datatype,device);
                 end
-
-                for iOrderV = 2:2:OverlappingFactor_(1)-1
+                
+                for iOrderV = 2:2:OverlappingFactor(1)-1
                     % Atom extension (Down shift)
                     eY = testCase.AtomExt('Down',eY,pa,ps);
-
+               
                     % Intermediate rotation
-                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,datatype);
-
+                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,nChsTotal,angles,datatype,device);
+                    
                     % Atom extension (Up shift)
                     eY = testCase.AtomExt('Up',eY,pa,ps);
-
+                  
                     % Intermediate rotation
-                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,datatype);
+                    eY = testCase.intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,nChsTotal,angles,datatype,device);
                 end
             
             % Channel separation
-            expctdZac = permute(expctdZ(2:end,:,:,:),[2 3 1 4]);
-            expctdZdc = permute(expctdZ(1,:,:,:),[2 3 1 4]);
+            expctdZac = permute(eY(2:end,:,:,:),[2 3 1 4]);
+            expctdZdc = permute(eY(1,:,:,:),[2 3 1 4]);
             end
-
-            %disp(size(expctdZac))
+            
+            %disp(expctdZdc)
 
             import tansacnet.lsun.*
             net = lsunAnalysis2dNetwork('InputSize',[height width], ...
                 'Stride',Stride, ...
-                'OverlappingFactor', OverlappingFactor_, ...
+                'OverlappingFactor', OverlappingFactor, ...
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
@@ -412,16 +411,36 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
             eY =  [ eYs+eYa ; eYs-eYa ]/sqrt(2);
         end
 
-        function Y = intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,datatype)
-            UnT = repmat(mus*eye(pa,datatype),[1 1 nrows*ncols]);
-            iYa = reshape(eY(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+        function irY = intRotation(eY,mus,pa,ps,nrows,ncols,nSamples,nChsTotal,angles,datatype,device)
+            import tansacnet.utility.*
+            genU = OrthonormalMatrixGenerationSystem('DType',datatype,'Device',device);
+            %angles = zeros((nChsTotal-2)*nChsTotal/8,nrows*ncols,datatype);
+            if isempty(angles)
+                angles = zeros((nChsTotal-2)*nChsTotal/8,nrows*ncols,datatype);
+            elseif isscalar(angles)
+                angles = angles*ones((nChsTotal-2)*nChsTotal/8,nrows*ncols,'like',angles); 
+            end
+            if isempty(mus)
+                mus = ones(pa,nrows*ncols,datatype);   
+            elseif isscalar(mus)
+                mus = mus*ones(pa,nrows*ncols,datatype);  
+            end
+            if device == "cuda"
+                angles = gpuArray(angles);
+                mus = gpuArray(mus);
+            end
+            Un = genU.step(angles,mus);
+            irY = eY;
+
+            %UnT = repmat(mus*eye(pa,datatype),[1 1 nrows*ncols]);
+            iYa = reshape(irY(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             Za = zeros(size(iYa),'like',iYa);
             for iSample=1:nSamples
                 for iblk = 1:(nrows*ncols)
-                    Za(:,iblk,iSample) = UnT(:,:,iblk)*iYa(:,iblk,iSample);
+                    Za(:,iblk,iSample) = Un(:,:,iblk)*iYa(:,iblk,iSample);
                 end
             end
-            Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
+            irY(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
         end
     end
 
