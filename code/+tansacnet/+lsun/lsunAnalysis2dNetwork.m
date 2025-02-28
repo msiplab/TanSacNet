@@ -74,8 +74,27 @@ classdef lsunAnalysis2dNetwork < dlnetwork
         function adj = transpose(obj)
             %METHOD1 このメソッドの概要をここに記述
             %   詳細説明をここに記述
-            
+
             % fcn_cpparamsana2syn を参照
+
+            % import tansacnet.lsun.*
+            % %
+            % expanalyzer = '^Lv\d+_Cmp\d+_V(\w\d|0)+$';
+            % nLayers = height(analysisdlnet.Layers);
+            % for iLayer = 1:nLayers
+            %     alayer = analysisdlnet.Layers(iLayer);
+            %     alayerName = alayer.Name;
+            %     if ~isempty(regexp(alayerName,expanalyzer,'once'))
+            %         slayer = synthesislgraph.Layers({synthesislgraph.Layers.Name} == alayerName + "~");
+            %         alayer.Angles = slayer.Angles;
+            %         alayer.Mus = slayer.Mus;
+            %         if isa(alayer,'tansacnet.lsun.lsunInitialRotation2dLayer')
+            %             alayer.NoDcLeakage = slayer.NoDcLeakage;
+            %         end
+            %         analysisdlnet = analysisdlnet.replaceLayer(alayerName,alayer);
+            %         disp("Copy angles from " + slayer.Name + " to " + alayerName)
+            %     end
+            % end
         end
     end
 

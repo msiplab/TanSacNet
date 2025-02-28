@@ -123,9 +123,11 @@ classdef lsunFinalRotation2dLayer < nnet.layer.Layer %#codegen
             layer.NumberOfBlocks = inputSize./layer.Stride;
             layoutsize = [size(layer.PrivateAngles,1) prod(layer.NumberOfBlocks)];
             %layout = networkDataLayout(layoutsize,'SS');
-
-            angles = zeros(layoutsize,layer.DType);
-            layer.Angles = angles;
+            
+            if isempty(layer.Angles)
+                angles = zeros(layoutsize,layer.DType);
+                layer.Angles = angles;
+            end
 
         end
 

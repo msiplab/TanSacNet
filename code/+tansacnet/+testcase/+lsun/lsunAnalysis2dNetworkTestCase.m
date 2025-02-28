@@ -250,7 +250,7 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 'Device',device);
             dlnet = net.dlnetwork();
             dlnet_ = initialize(dlnet);
-            %analyzeNetwork(dlnet)
+            analyzeNetwork(dlnet)
             
             X = dlarray(X, 'SSCB');
             [Zac,Zdc] = forward(dlnet_, X);
@@ -376,6 +376,161 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
             testCase.verifyThat(extractdata(Zac),...
                 IsEqualTo(expctdZac,'Within',tolObj));
         end
+
+        function testBackword(testCase, Stride, datatype, device)
+            import tansacnet.utility.Direction
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
+            import tansacnet.utility.*
+            genW = OrthonormalMatrixGenerationSystem('Device','cpu');
+            genU = OrthonormalMatrixGenerationSystem('Device','cpu');
+
+            % Parameters
+            nSamples = 8;
+            height = 32;
+            width = 32;
+            nrows = height/Stride(Direction.VERTICAL);
+            ncols = width/Stride(Direction.HORIZONTAL);
+            nDecs = prod(Stride);
+            nComponents = 1;
+            nChsTotal = nDecs;
+            
+            dLdZac = randn(nrows,ncols,nChsTotal-1,nSamples,datatype);
+            % 1 x nRows x nCols x nSamples
+            dLdZdc = randn(nrows,ncols,1,nSamples,datatype);
+            
+            % Expected values
+            % nChsTotal x nRows x nCols x nSamples
+            %expctddLdX = cat(3,dLdZ1,dLdZ2);
+            dLdX_ = ipermute(cat(3,dLdZdc,dLdZac),[2 3 1 4]);
+            
+            
+            angles = randn((nChsTotal-2)*nChsTotal/4,nrows*ncols);
+
+            % Expected values
+            % nChs x nRows x nCols x nSamples
+            ps = ceil(nChsTotal/2);
+            pa = floor(nChsTotal/2);
+            W0 = genW.step(angles(1:size(angles,1)/2,:),1);
+            U0 = genU.step(angles(size(angles,1)/2+1:end,:),1);
+            %expctdZ = zeros(nrows,ncols,nChsTotal,nSamples,datatype);
+            Z = zeros(nChsTotal,nrows,ncols,nSamples,datatype);
+            Y_  = zeros(nChsTotal,nrows,ncols,datatype);
+            for iSample=1:nSamples
+                % Perumation in each block
+                Ai = dLdX_(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
+                Yi = reshape(Ai,nDecs,nrows,ncols);
+                %
+                Ys = Yi(1:ps,:);
+                Ya = Yi(ps+1:end,:);
+                for iblk = 1:(nrows*ncols)
+                    Ys(:,iblk) = W0(:,1:ps,iblk)*Ys(:,iblk);
+                    Ya(:,iblk) = U0(:,1:pa,iblk)*Ya(:,iblk);
+                end
+                Y_(1:ps,:,:) = reshape(Ys,ps,nrows,ncols);
+                Y_(ps+1:ps+pa,:,:) = reshape(Ya,pa,nrows,ncols);
+                Z(:,:,:,iSample) = Y_; %ipermute(Y,[3 1 2]);
+            end
+
+            %dLdZ = rand(nrows,ncols,nDecs,nSamples,datatype);
+            dLdZ = Z;
+            
+            % Expected values
+            %dLdX_ = zeros(height,width,datatype);
+            for iSample = 1:nSamples
+                %A = reshape(permute(dLdZ(:,:,:,iSample),[3 1 2]),...
+                %    nDecs*nrows,ncols);
+                A = reshape(dLdZ(:,:,:,iSample),nDecs*nrows,ncols);                
+                Y = blockproc(A,[nDecs 1],...
+                    @(x) testCase.permuteIdctCoefs_(x.data,Stride));
+                expctddLdX(:,:,nComponents,iSample) = ...
+                    blockproc(Y,...
+                    Stride,...
+                    @(x) idct2(x.data));
+            end
+            velocity = [];
+            momentum = 0.9;
+            decay = 0.01;
+            initialLearnRate = 1e-1;
+
+            import tansacnet.lsun.*
+            net = lsunAnalysis2dNetwork('InputSize',[height width], ...
+                'Stride',Stride, ...
+                'DType',datatype, ...
+                'Device',device);
+            dlnet = net.dlnetwork();
+            dlnet_ = initialize(dlnet);
+            %analyzeNetwork(dlnet)
+            
+            %dlX = dlarray(gpuArray(cat(3, dLdZac, dLdZdc)),"SSCB");
+            dlX = dlarray(gpuArray(randn(32,32)),'SSCB');
+            disp(size(dlX));
+            %dLdZac = dlarray(dLdZac, 'SSCB');
+            %dLdZdc = dlarray(dLdZdc, 'SSCB');
+            [gradients,loss] = dlfeval(@testCase.modelGradients,dlnet_,dlX);
+            
+            learnRate = initialLearnRate/(1 + decay);
+            [dlnet_,velocity] = sgdmupdate(dlnet_,gradients,velocity,learnRate,momentum);
+            %actualdLdX = backward(dlnet_, dLdZac,dLdZdc);
+            [Zac,Zdc] = forward(dlnet_, dlX);
+
+            testCase.verifyInstanceOf(classUnderlying(extractdata(Zac)),datatype);
+            % testCase.verifyThat(actualdLdX,...
+            %     IsEqualTo(expctddLdX,'Within',tolObj));     
+
+
+        end
+
+        function testBackword_st(testCase, Stride, datatype, device)
+            import tansacnet.utility.Direction
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
+            import tansacnet.utility.*
+
+            nSamples = 8;
+            height = 32;
+            width = 32;
+            nrows = height/Stride(Direction.VERTICAL);
+            ncols = width/Stride(Direction.HORIZONTAL);
+            nDecs = prod(Stride);
+            numSteps = 5;
+            prevLoss = inf;
+            isLossDecreasing = false;
+            vel=[];
+
+            import tansacnet.lsun.*
+            net = lsunAnalysis2dNetwork('InputSize',[height width], ...
+                'Stride',Stride, ...
+                'DType',datatype, ...
+                'Device',device);
+            dlnet = net.dlnetwork();
+            dlnet_ = initialize(dlnet);
+
+            dlX = dlarray(gpuArray(randn(32,32)),'SSCB');
+            % 
+             for step = 1:numSteps
+                
+                [gradients,loss] = dlfeval(@testCase.modelGradients,dlnet_,dlX);
+                [dlnet_,vel] = sgdmupdate(dlnet_,gradients,vel);
+                if loss < prevLoss
+                    isLossDecreasing = true;
+                end
+                prevLoss = loss;
+                isNonZero = false;
+                for i = 1:size(gradients,1)
+                    gradData = extractdata(gradients.Value{i});
+                    if any(gradData(:) ~= 0)
+                        isNonZero = true;
+                        break;
+                    end
+                end
+                testCase.verifyTrue(isNonZero, 'Gradient contains only zeros!');
+             end
+            testCase.verifyTrue(isLossDecreasing, 'Loss did not decrease over steps!');
+
+        end
     end
 
     methods (Static, Access = private)
@@ -441,6 +596,37 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 end
             end
             irY(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
+        end
+        
+        function value = permuteIdctCoefs_(x,blockSize)
+            import tansacnet.utility.Direction
+            coefs = x;
+            decY_ = blockSize(Direction.VERTICAL);
+            decX_ = blockSize(Direction.HORIZONTAL);
+            nQDecsee = ceil(decY_/2)*ceil(decX_/2);
+            nQDecsoo = floor(decY_/2)*floor(decX_/2);
+            nQDecsoe = floor(decY_/2)*ceil(decX_/2);
+            cee = coefs(         1:  nQDecsee);
+            coo = coefs(nQDecsee+1:nQDecsee+nQDecsoo);
+            coe = coefs(nQDecsee+nQDecsoo+1:nQDecsee+nQDecsoo+nQDecsoe);
+            ceo = coefs(nQDecsee+nQDecsoo+nQDecsoe+1:end);
+            value = zeros(decY_,decX_,'like',x);
+            value(1:2:decY_,1:2:decX_) = reshape(cee,ceil(decY_/2),ceil(decX_/2));
+            value(2:2:decY_,2:2:decX_) = reshape(coo,floor(decY_/2),floor(decX_/2));
+            value(2:2:decY_,1:2:decX_) = reshape(coe,floor(decY_/2),ceil(decX_/2));
+            value(1:2:decY_,2:2:decX_) = reshape(ceo,ceil(decY_/2),floor(decX_/2));
+        end
+
+        function [gradients, loss] = modelGradients(dlnet, dlX)
+            % Forward data through the dlnetwork object.
+            dlY = forward(dlnet,dlX); % F(x)
+            % Compute loss.
+            Nx = size(dlX,4);
+            Ny = size(dlY,4);
+            loss = sum(dlX.^2,"all")/Nx-sum(dlY.^2,"all")/Ny;
+            % Compute gradients.
+            gradients = dlgradient(loss,dlnet.Learnables);
+            loss = double(gather(extractdata(loss)));
         end
     end
 
