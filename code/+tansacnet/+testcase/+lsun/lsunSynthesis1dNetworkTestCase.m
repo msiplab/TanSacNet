@@ -16,8 +16,8 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
     
     properties (TestParameter)
         
-        inputSize = {32}
-        Stride = {4}; % [1 2] 
+        inputSize = {32,64}
+        Stride = {2,4}; % [1 2] 
         OverlappingFactor = {1, 3, 5};
         %nodcleakage = struct( 'true', true, 'false', false);
         datatype = { 'single' };
@@ -149,7 +149,7 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
 
             testCase.verifyInstanceOf(extractdata(Z),datatype);  
         end
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
         function testForward(testCase, Stride, datatype, device)
             import tansacnet.utility.Direction
             import matlab.unittest.constraints.IsEqualTo
@@ -162,50 +162,43 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
             seqlen = 100;
             nDecs = prod(stride);
             nChsTotal = nDecs;
+            nblks = ceil(seqlen/stride);
             
      % Expected Values
-            X = rand(1, seqlen, 1, nSamples, datatype);
+            Xac = randn(nChsTotal-1,1,nblks,nSamples,datatype);
+            % 1 x 1 x nBlks x nSamples
+            Xdc = randn(1,1,nblks,nSamples,datatype);
 
-            %
-            nblks = ceil(seqlen/stride);
-            DCT_Z = zeros(stride,1,nblks,nSamples,datatype);
-            for iSample = 1:nSamples
-            % Block DCT
-                U = reshape(X(:,:,:,iSample),stride,[]);
-                if stride > 1
-                    Y = dct(U);
-                    % Rearrange the DCT Coefs.
-                    A = testCase.permuteDctCoefs_(Y);
-                    DCT_Z(:,:,:,iSample) = ...
-                        reshape(A,stride,1,nblks,1);
-                else
-                    DCT_Z(:,:,:,iSample) = ...
-                        reshape(U,stride,1,nblks,1);
+            % Channel Concatanation
+            Z_CC = cat(1,Xdc,Xac);
+
+            % Final Rotation
+            V0T = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
+            Y_ = Z_CC;
+            for iSample=1:nSamples
+                for iblk = 1:nblks
+                    Y_(:,:,iblk,iSample) = V0T(:,:,iblk)*Y_(:,:,iblk,iSample); 
                 end
             end
+            Z_FR = Y_;
 
-            %Initial Rotation
-            V0 = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
-            INIT_Z = zeros(nChsTotal,1,nblks,nSamples,datatype);
-
-            for iSample=1:nSamples
-                % Perumation in each block
-                Ai = DCT_Z(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nChsTotal,nblks);
-                %       
-                for iblk = 1:nblks
-                    Yi(:,iblk) = V0(:,:,iblk)*Yi(:,iblk);
-                end               
-                INIT_Z(:,:,:,iSample) = reshape(Yi,nChsTotal,1,nblks);
+            % Block IDCT
+            Z_IDCT = zeros(1,seqlen,1,nSamples,datatype);
+            for iSample = 1:nSamples
+                A = reshape(Z_FR(:,:,:,iSample),stride,[]);
+                if stride > 1
+                    Yi = testCase.permuteIdctCoefs_(A,stride);
+                    Z_IDCT(:,:,:,iSample) = ...
+                        reshape(idct(Yi),1,seqlen,1);
+                else
+                    Z_IDCT(:,:,:,iSample) = ...
+                        reshape(A,1,seqlen,1);                    
+                end
             end
-            % Channel Separation
-            % (nChsTotal-1) x 1 x nBlks x nSamples 
-            expctdZac = INIT_Z(2:end,:,:,:);
-            % 1 x 1 x nBlks x nSamples
-            expctdZdc = INIT_Z(1,:,:,:);
+            expctdZ = Z_IDCT;
 
             import tansacnet.lsun.*
-            net = lsunAnalysis1dNetwork('InputSize',seqlen, ...
+            net = lsunSynthesis1dNetwork('InputSize',seqlen, ...
                 'Stride',Stride, ...
                 'DType',datatype, ...
                 'Device',device);
@@ -213,15 +206,14 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
             analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
 
-            X = dlarray(X, 'SSCB');
+            Xac = dlarray(Xac,'SSCB');
+            Xdc = dlarray(Xdc,'SSCB');
 
-            [Zac,Zdc] = forward(dlnet_, X);
+            actualZ = forward(dlnet_, Xac,Xdc);
 
-            testCase.verifyInstanceOf((extractdata(Zac)),datatype);
-            testCase.verifyThat(extractdata(Zdc),...
-                IsEqualTo(expctdZdc,'Within',tolObj));
-            testCase.verifyThat(extractdata(Zac),...
-                IsEqualTo(expctdZac,'Within',tolObj));
+            testCase.verifyInstanceOf((extractdata(actualZ)),datatype);
+            testCase.verifyThat(extractdata(actualZ),...
+                IsEqualTo(expctdZ,'Within',tolObj));
         end
 
         function testForward_With_intermediateROT(testCase, Stride, OverlappingFactor, datatype, device)
@@ -229,72 +221,83 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-5,single(1e-5));
-            
+
             % Parameters
             stride = Stride;
             nSamples = 8;
             seqlen = 100;
             nComponents = 1;
+            mus = 1;
             nDecs = prod(stride);
             nChsTotal = nDecs;
+            nblks = ceil(seqlen/stride);
             ovlpFactor = OverlappingFactor;
-            mus = 1;
             
      % Expected Values
-            X = rand(1, seqlen, 1, nSamples, datatype);
-            X_ = gpuArray(X);
+            Xac = randn(nChsTotal-1,1,nblks,nSamples,datatype);
+            % 1 x 1 x nBlks x nSamples
+            Xdc = randn(1,1,nblks,nSamples,datatype);
+
             
-            nblks = ceil(seqlen/stride);
-            DCT_Z = zeros(stride,1,nblks,nSamples,datatype);
-            for iSample = 1:nSamples
-            % Block DCT
-                U = reshape(X_(:,:,:,iSample),stride,[]);
-                if stride > 1
-                    Y = dct(U);
-                    % Rearrange the DCT Coefs.
-                    A = testCase.permuteDctCoefs_(Y);
-                    DCT_Z(:,:,:,iSample) = ...
-                        reshape(A,stride,1,nblks,1);
-                else
-                    DCT_Z(:,:,:,iSample) = ...
-                        reshape(U,stride,1,nblks,1);
+            if nComponents > 1
+                numOutputs = nComponents;
+                nChsPerCmp = size(Xac,1)/numOutputs;
+                Xac_ = cell(numOutputs,1);
+                for idx = 1:numOutputs
+                    Xac_{idx} = ...
+                        Xac((idx-1)*nChsPerCmp+1:idx*nChsPerCmp,:,:,:);
+                end
+                nChsPerCmp = size(Xdc,1)/numOutputs;
+                Xdc_ = cell(numOutputs,1);
+                for idx = 1:numOutputs
+                    Xdc_{idx} = ...
+                        Xdc((idx-1)*nChsPerCmp+1:idx*nChsPerCmp,:,:,:);
                 end
             end
 
-            %Initial Rotation
-            V0 = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
-            INIT_Z = zeros(nChsTotal,1,nblks,nSamples,datatype);
-
-            for iSample=1:nSamples
-                % Perumation in each block
-                Ai = DCT_Z(:,:,:,iSample); %permute(X(:,:,:,iSample),[3 1 2]);
-                Yi = reshape(Ai,nChsTotal,nblks);
-                %       
-                for iblk = 1:nblks
-                    Yi(:,iblk) = V0(:,:,iblk)*Yi(:,iblk);
-                end               
-                INIT_Z(:,:,:,iSample) = reshape(Yi,nChsTotal,1,nblks);
-            end
-            Zi = INIT_Z;
             for iCmp = 1:nComponents
+                % Channel Concatanation
+                Z_CC = cat(1,Xdc,Xac);
+                Zi = Z_CC;
                 for iOrderV = 2:2:ovlpFactor-1
+                    % Intermediate rotation
+                    Zi = testCase.IntermediatROT_(Zi,nChsTotal,nblks,nSamples,mus,datatype);
                     % Right Shift
-                    Zi = testCase.AtomEXT_(Zi,'Right','Bottom',nChsTotal);
+                    Zi = testCase.AtomEXT_(Zi,'Right','Top',nChsTotal);
                     % Intermediate rotation
                     Zi = testCase.IntermediatROT_(Zi,nChsTotal,nblks,nSamples,mus,datatype);
-                    % Left shift
-                    Zi = testCase.AtomEXT_(Zi,'Left','Top',nChsTotal);
-                    % Intermediate rotation
-                    Zi = testCase.IntermediatROT_(Zi,nChsTotal,nblks,nSamples,mus,datatype);
-                end
-                % Channel Separation
-                % (nChsTotal-1) x 1 x nBlks x nSamples
-                expctdZac = Zi(2:end,:,:,:);
-                % 1 x 1 x nBlks x nSamples
-                expctdZdc = Zi(1,:,:,:);
+                     % Left shift
+                    Zi = testCase.AtomEXT_(Zi,'Left','Bottom',nChsTotal);
+                end 
             end
+
+            % Final Rotation
+            V0T = repmat(eye(nChsTotal,datatype),[1 1 nblks]);
+            Y_ = Zi;
+            for iSample=1:nSamples
+                for iblk = 1:nblks
+                    Y_(:,:,iblk,iSample) = V0T(:,:,iblk)*Y_(:,:,iblk,iSample); 
+                end
+            end
+            Z_FR = Y_;
+
+            % Block IDCT
+            Z_IDCT = zeros(1,seqlen,1,nSamples,datatype);
+            for iSample = 1:nSamples
+                A = reshape(Z_FR(:,:,:,iSample),stride,[]);
+                if stride > 1
+                    Yi = testCase.permuteIdctCoefs_(A,stride);
+                    Z_IDCT(:,:,:,iSample) = ...
+                        reshape(idct(Yi),1,seqlen,1);
+                else
+                    Z_IDCT(:,:,:,iSample) = ...
+                        reshape(A,1,seqlen,1);                    
+                end
+            end
+            expctdZ = Z_IDCT;
+
             import tansacnet.lsun.*
-            net = lsunAnalysis1dNetwork('InputSize',seqlen, ...
+            net = lsunSynthesis1dNetwork('InputSize',seqlen, ...
                 'Stride',Stride, ...
                 'OverlappingFactor',OverlappingFactor,...
                 'DType',datatype, ...
@@ -303,15 +306,14 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
             analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
 
-            X = dlarray(X, 'SSCB');
+            Xac = dlarray(Xac,'SSCB');
+            Xdc = dlarray(Xdc,'SSCB');
 
-            [Zac,Zdc] = forward(dlnet_, X);
+            actualZ = forward(dlnet_, Xac,Xdc);
 
-            testCase.verifyInstanceOf((extractdata(Zac)),datatype);
-            testCase.verifyThat(extractdata(Zdc),...
-                IsEqualTo(expctdZdc,'Within',tolObj));
-            testCase.verifyThat(extractdata(Zac),...
-                IsEqualTo(expctdZac,'Within',tolObj));
+            testCase.verifyInstanceOf((extractdata(actualZ)),datatype);
+            testCase.verifyThat(extractdata(actualZ),...
+                IsEqualTo(expctdZ,'Within',tolObj));
 
         end
 
@@ -323,6 +325,17 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
             ce = coefs(1:2:end,:);
             co = coefs(2:2:end,:);
             value = [ ce ; co ];
+        end
+
+        function value = permuteIdctCoefs_(x,stride)
+            coefs = x;
+            nHDecse = ceil(stride/2);
+            nHDecso = floor(stride/2);
+            ce = coefs(         1:  nHDecse,:);
+            co = coefs(nHDecse+1:nHDecse+nHDecso,:);
+            value = zeros(stride,numel(coefs)/stride,'like',x);
+            value(1:2:stride,:) = ce;
+            value(2:2:stride,:) = co;
         end
 
         function Z = AtomEXT_(X,dir,target,nChsTotal)
