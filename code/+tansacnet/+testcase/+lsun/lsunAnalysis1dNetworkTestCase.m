@@ -127,8 +127,8 @@ classdef lsunAnalysis1dNetworkTestCase < matlab.unittest.TestCase
         function testNetwork(testCase, Stride, OverlappingFactor, datatype, device)
             % TODO : Double precision fix
             seqlen = 100;
-            nSamples = 8;
-            nComponents = 1;
+            %nSamples = 8;
+            %nComponents = 1;
             import tansacnet.lsun.*
             net = lsunAnalysis1dNetwork('InputSize',seqlen, ...
                 'Stride',Stride, ...

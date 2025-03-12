@@ -90,6 +90,37 @@ classdef lsunIntermediateFullRotation1dLayer < nnet.layer.Layer %#codegen
             layer = layer.updateParameters();
             
         end
+
+        function layer = initialize(layer,layout)
+            % (Optional) Initialize layer learnable and state parameters.
+            %
+            % Inputs:
+            %         layer  - Layer to initialize
+            %         layout - Data layout, specified as a networkDataLayout
+            %                  object
+            %
+            % Outputs:
+            %         layer - Initialized layer
+            %
+            %  - For layers with multiple inputs, replace layout with
+            %    layout1,...,layoutN, where N is the number of inputs.
+
+            % Define layer initialization function here.
+            %fprintf('Layout size: [%s]\n', sprintf('%d ', layout.Size));
+
+            % LAYOUT
+            nCols = layout.Size(3);
+            %disp(size(layer.PrivateAngles,1))
+            % layout - [prod(Stride) nRows/Stride(Dir.VERTICLE) nCols/Stride(Dir.HORIZONTAL)]
+            inputSize =  nCols*layer.Stride;
+            layer.NumberOfBlocks = inputSize./layer.Stride;
+            layoutsize = [size(layer.PrivateAngles,1) prod(layer.NumberOfBlocks)];
+            %layout = networkDataLayout(layoutsize,'SS');
+            if isempty(layer.Angles)
+                angles = zeros(layoutsize,layer.DType);
+                layer.Angles = angles;
+            end
+        end
         
         function Z = predict(layer, X)
             % Forward input data through the layer at prediction time and
