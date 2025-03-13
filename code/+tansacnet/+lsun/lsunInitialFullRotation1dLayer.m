@@ -110,10 +110,9 @@ classdef lsunInitialFullRotation1dLayer < nnet.layer.Layer %#codegen
 
             % Define layer initialization function here.
             %fprintf('Layout size: [%s]\n', sprintf('%d ', layout.Size));
-
+            %disp(layout.Size(4))
             % LAYOUT
             nCols = layout.Size(3);
-            %disp(size(layer.PrivateAngles,1))
             % layout - [prod(Stride) nRows/Stride(Dir.VERTICLE) nCols/Stride(Dir.HORIZONTAL)]
             inputSize =  nCols*layer.Stride;
             layer.NumberOfBlocks = inputSize./layer.Stride;

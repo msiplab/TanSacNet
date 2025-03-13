@@ -117,7 +117,8 @@ classdef lsunFinalRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunFinalRotation2dLayer(...
-                'Stride',stride);
+                'Stride',stride, ...
+                'NumberOfBlocks',nblks_);
            
             % Expected values
             anglesize = [nAngles prod(nblks_)];

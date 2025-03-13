@@ -118,7 +118,8 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             % Instantiation of target class
             import tansacnet.lsun.*
             layer = lsunIntermediateRotation2dLayer(...
-                'Stride',stride);
+                'Stride',stride, ...
+                'NumberOfBlocks',nblks_);
            
             % Expected values
             anglesize = [nAngles prod(nblks_)];

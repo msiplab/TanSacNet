@@ -101,6 +101,43 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
             
         end
 
+        function testinitialize(testCase,nblks,stride)
+
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+
+            seqlen = 32;
+            datatype = 'double';
+            nChsTotal = stride;
+            nSamples = 8;
+            nAngles = (nChsTotal-1)*nChsTotal/2;
+            
+            X = randn(nChsTotal,1,nblks,nSamples,datatype);
+            layoutsize = [prod(stride) 1 seqlen./stride];
+            anglesize = [nAngles prod(nblks)];
+            expctdangles = zeros(anglesize,datatype);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunInitialFullRotation1dLayer(...
+                'Stride',stride, ...
+                'NumberOfBlocks',nblks);
+                
+
+            layout = networkDataLayout(layoutsize,'SSC');
+            layer_ = initialize(layer,layout);
+
+            % Actual values
+            actualZ = layer_.predict(X);
+            actualangles = layer_.Angles;
+
+            % Evaluation
+            testCase.verifyInstanceOf(actualZ,datatype);
+            testCase.verifyThat(actualangles,...
+                IsEqualTo(expctdangles,'Within',tolObj));
+        end
+
         function testPredict(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
 
