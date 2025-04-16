@@ -250,7 +250,7 @@ classdef lsunAnalysis2dNetworkTestCase < matlab.unittest.TestCase
                 'Device',device);
             dlnet = net.dlnetwork();
             dlnet_ = initialize(dlnet);
-            analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             
             X = dlarray(X, 'SSCB');
             [Zac,Zdc] = forward(dlnet_, X);

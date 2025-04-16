@@ -143,7 +143,7 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             SYNdlnet = SYNnet.dlnetwork();
-            analyzeNetwork(SYNdlnet)
+            % analyzeNetwork(SYNdlnet)
             SYNdlnet_ = initialize(SYNdlnet);
             Z = forward(SYNdlnet_, Xac, Xdc);
 
@@ -203,7 +203,7 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
-            analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
 
             Xac = dlarray(Xac,'SSCB');
@@ -303,7 +303,7 @@ classdef lsunSynthesis1dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
-            analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
 
             Xac = dlarray(Xac,'SSCB');

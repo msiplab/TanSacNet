@@ -136,7 +136,7 @@ classdef lsunAnalysis1dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
-            analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
             
             X = rand([1, 100, 1, 1], datatype);
@@ -209,7 +209,7 @@ classdef lsunAnalysis1dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
-            analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
 
             X = dlarray(X, 'SSCB');
@@ -299,7 +299,7 @@ classdef lsunAnalysis1dNetworkTestCase < matlab.unittest.TestCase
                 'DType',datatype, ...
                 'Device',device);
             dlnet = net.dlnetwork();
-            analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             dlnet_ = initialize(dlnet);
 
             X = dlarray(X, 'SSCB');
