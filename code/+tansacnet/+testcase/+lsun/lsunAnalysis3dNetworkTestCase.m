@@ -203,16 +203,18 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
             ndecs = prod(Stride);
             %expctdZ = zeros(nrows,ncols,nlays,ndecs,nSamples,datatype);
             expctdZ_ = zeros(ndecs,nrows,ncols,nlays,nSamples,datatype);
+            E0 = testCase.getMatrixE0_(Stride);
             for iSample = 1:nSamples
-                % Block DCT
-                Y = blockproc(X(:,:,:,nComponents,iSample),...
-                    Stride,@(x) dct2(x.data));
+                for i = size(X,3)
+                    % Block DCT
+                    Y = testCase.vol2col_(X(:,:,:,1,iSample),Stride,...
+                    [nrows,ncols,nlays]);
                 % Rearrange the DCT Coefs.
-                A = blockproc(Y,...
-                    Stride,@testCase.permuteDctCoefs_);
+                A = E0*Y;
                 expctdZ_(:,:,:,:,iSample) = ...
                     ...permute(reshape(A,ndecs,nrows,ncols,nlays),[2 3 4 1]);
                     reshape(A,ndecs,nrows,ncols,nlays);
+                end
             end
             X_ = expctdZ_;
             %expctdZ = zeros(nChsTotal,nrows,ncols,nlays,nSamples,datatype);
@@ -243,8 +245,6 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
             % Channel separation
             expctdZac = permute(expctdZ(2:end,:,:,:,:),[2 3 4 1 5]);
             expctdZdc = permute(expctdZ(1,:,:,:,:),[2 3 4 1 5]);
-            
-            %disp(size(expctdZac))
 
             import tansacnet.lsun.*
             net = lsunAnalysis3dNetwork('InputSize',[height width depth], ...
@@ -253,7 +253,7 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
                 'Device',device);
             dlnet = net.dlnetwork();
             dlnet_ = initialize(dlnet);
-            %analyzeNetwork(dlnet)
+            % analyzeNetwork(dlnet)
             
             X = dlarray(X, 'SSSCB');
             [Zac,Zdc] = forward(dlnet_, X);
@@ -288,21 +288,19 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
             nlays = ceil(depth/Stride(Direction.DEPTH));
             ndecs = prod(Stride);
             %expctdZ = zeros(nrows,ncols,nlays,ndecs,nSamples,datatype);
-            Y = zeros(nrows,ncols,nlays,nComponents,nSamples);
-            A = zeros(nrows,ncols,nlays,nComponents,nSamples);
             expctdZ_ = zeros(ndecs,nrows,ncols,nlays,nSamples,datatype);
+            E0 = testCase.getMatrixE0_(Stride);
             for iSample = 1:nSamples
                 for i = size(X,3)
                     % Block DCT
-                    Y(:,:,i,:,:) = blockproc(X(:,:,i,nComponents,iSample),...
-                        Stride,@(x) dct2(x.data));
-                    % Rearrange the DCT Coefs.
-                    A(:,:,i,:,:) = blockproc(Y(:,:,i,:,:),...
-                        Stride,@testCase.permuteDctCoefs_);
-                end
+                    Y = testCase.vol2col_(X(:,:,:,1,iSample),Stride,...
+                    [nrows,ncols,nlays]);
+                % Rearrange the DCT Coefs.
+                A = E0*Y;
                 expctdZ_(:,:,:,:,iSample) = ...
                     ...permute(reshape(A,ndecs,nrows,ncols,nlays),[2 3 4 1]);
                     reshape(A,ndecs,nrows,ncols,nlays);
+                end
             end
             X_ = expctdZ_;
             %expctdZ = zeros(nChsTotal,nrows,ncols,nlays,nSamples,datatype);
@@ -313,7 +311,7 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
             pa = floor(nChsTotal/2);
             W0 = repmat(eye(ps,datatype),[1 1 nrows*ncols*nlays]);
             U0 = repmat(eye(pa,datatype),[1 1 nrows*ncols*nlays]);
-            Y_  = zeros(nChsTotal,nrows,ncols,nlays,datatype);
+            Y_ = zeros(nChsTotal,nrows,ncols,nlays,datatype);
             for iSample=1:nSamples
                 % Perumation in each block
                 Ai = X_(:,:,:,:,iSample); %permute(X(:,:,:,:,iSample),[4 1 2 3]);
@@ -399,21 +397,60 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
             testCase.verifyThat(extractdata(Zac),...
                 IsEqualTo(expctdZac,'Within',tolObj));
         end
+
+        function testBackword_st(testCase, Stride, datatype, device)
+            import tansacnet.utility.Direction
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-5,single(1e-5));
+            import tansacnet.utility.*
+
+            nSamples = 8;
+            height = 32;
+            width = 32;
+            depth = 32;
+            nrows = height/Stride(Direction.VERTICAL);
+            ncols = width/Stride(Direction.HORIZONTAL);
+            nDecs = prod(Stride);
+            numSteps = 5;
+            prevLoss = inf;
+            isLossDecreasing = false;
+            vel=[];
+
+            import tansacnet.lsun.*
+            net = lsunAnalysis3dNetwork('InputSize',[height width depth], ...
+                'Stride',Stride, ...
+                'DType',datatype, ...
+                'Device',device);
+            dlnet = net.dlnetwork();
+            dlnet_ = initialize(dlnet);
+
+            dlX = dlarray(gpuArray(randn(32,32,32)),'SSCB');
+            % 
+             for step = 1:numSteps
+                
+                [gradients,loss] = dlfeval(@testCase.modelGradients,dlnet_,dlX);
+                [dlnet_,vel] = sgdmupdate(dlnet_,gradients,vel);
+                if loss < prevLoss
+                    isLossDecreasing = true;
+                end
+                prevLoss = loss;
+                isNonZero = false;
+                for igrad = 1:size(gradients,1)
+                    gradData = extractdata(gradients.Value{igrad});
+                    if any(gradData(:) ~= 0)
+                        isNonZero = true;
+                        break;
+                    end
+                end
+                testCase.verifyTrue(isNonZero, 'Gradient contains only zeros!');
+             end
+            testCase.verifyTrue(isLossDecreasing, 'Loss did not decrease over steps!');
+
+        end
     end
 
     methods (Static, Access = private)
-        function value = permuteDctCoefs_(x)
-            coefs = x.data;
-            ceee = coefs(1:2:end,1:2:end,1:2:end);
-            ceoo = coefs(1:2:end,2:2:end,2:2:end);
-            cooe = coefs(2:2:end,2:2:end,1:2:end);
-            coeo = coefs(2:2:end,1:2:end,2:2:end);
-            ceeo = coefs(1:2:end,1:2:end,2:2:end);
-            ceoe = coefs(1:2:end,2:2:end,1:2:end);
-            cooo = coefs(2:2:end,2:2:end,2:2:end);
-            coee = coefs(2:2:end,1:2:end,1:2:end);
-            value = [ ceee(:) ; ceoo(:) ; cooe(:) ; coeo(:) ceeo(:) ; ceoe(:) ; cooo(:) ; coee(:) ];
-        end
 
         function eY = AtomExt(dir,Yn,pa,ps)
             if strcmp(dir,'Right')
@@ -472,6 +509,102 @@ classdef lsunAnalysis3dNetworkTestCase < matlab.unittest.TestCase
                 end
             end
             irY(ps+1:ps+pa,:,:,:,:) = reshape(Za,pa,nrows,ncols,nlays,nSamples);
+        end
+
+        function x = col2vol_(y,decFactor,nBlocks)
+            import tansacnet.utility.Direction
+            decY = decFactor(Direction.VERTICAL);
+            decX = decFactor(Direction.HORIZONTAL);
+            decZ = decFactor(Direction.DEPTH);
+            nRows_ = nBlocks(Direction.VERTICAL);
+            nCols_ = nBlocks(Direction.HORIZONTAL);
+            nLays_ = nBlocks(Direction.DEPTH);
+            
+            idx = 0;
+            x = zeros(decY*nRows_,decX*nCols_,decZ*nLays_);
+            for iLay = 1:nLays_
+                idxZ = iLay*decZ;
+                for iCol = 1:nCols_
+                    idxX = iCol*decX;
+                    for iRow = 1:nRows_
+                        idxY = iRow*decY;
+                        idx = idx + 1;
+                        blockData = y(:,idx);
+                        x(idxY-decY+1:idxY,...
+                            idxX-decX+1:idxX,...
+                            idxZ-decZ+1:idxZ) = ...
+                            reshape(blockData,decY,decX,decZ);
+                    end
+                end
+            end
+            
+        end
+            
+        function y = vol2col_(x,decFactor,nBlocks)
+            import tansacnet.utility.Direction
+            decY = decFactor(Direction.VERTICAL);
+            decX = decFactor(Direction.HORIZONTAL);
+            decZ = decFactor(Direction.DEPTH);
+            nRows_ = nBlocks(Direction.VERTICAL);
+            nCols_ = nBlocks(Direction.HORIZONTAL);
+            nLays_ = nBlocks(Direction.DEPTH);
+            
+            idx = 0;
+            y = zeros(decY*decX*decZ,nRows_*nCols_*nLays_);
+            for iLay = 1:nLays_
+                idxZ = iLay*decZ;
+                for iCol = 1:nCols_
+                    idxX = iCol*decX;
+                    for iRow = 1:nRows_
+                        idxY = iRow*decY;
+                        idx = idx + 1;
+                        blockData = x(...
+                            idxY-decY+1:idxY,...
+                            idxX-decX+1:idxX,...
+                            idxZ-decZ+1:idxZ);
+                        y(:,idx) = blockData(:);
+                    end
+                end
+            end
+            
+        end
+        
+
+        function value = getMatrixE0_(decFactor)
+            import tansacnet.utility.Direction
+            decY = decFactor(Direction.VERTICAL);
+            decX = decFactor(Direction.HORIZONTAL);
+            decZ = decFactor(Direction.DEPTH);
+
+            % Generate DCT matrices
+            Cv_ = dctmtx(decY);
+            Ch_ = dctmtx(decX);
+            Cd_ = dctmtx(decZ);
+
+            % Reorder rows using a single matrix operation
+            reorder = @(C) C([1:2:end, 2:2:end], :);
+            Cv_ = reorder(Cv_);
+            Ch_ = reorder(Ch_);
+            Cd_ = reorder(Cd_);
+
+            % Split matrices into even and odd parts
+            split = @(C, n) deal(C(1:ceil(n/2), :), C(ceil(n/2)+1:end, :));
+            [Cve, Cvo] = split(Cv_, decY);
+            [Che, Cho] = split(Ch_, decX);
+            [Cde, Cdo] = split(Cd_, decZ);
+
+            % Compute Kronecker products
+            kron3 = @(A, B, C) kron(kron(A, B), C);
+            value = [
+                kron3(Cde, Che, Cve);
+                kron3(Cdo, Cho, Cve);
+                kron3(Cde, Cho, Cvo);
+                kron3(Cdo, Che, Cvo);
+                kron3(Cdo, Che, Cve);
+                kron3(Cde, Cho, Cve);
+                kron3(Cdo, Cho, Cvo);
+                kron3(Cde, Che, Cvo)
+            ];
         end
     end
 

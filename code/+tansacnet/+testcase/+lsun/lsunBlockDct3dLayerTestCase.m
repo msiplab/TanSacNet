@@ -22,7 +22,7 @@ classdef lsunBlockDct3dLayerTestCase < matlab.unittest.TestCase
     % http://msiplab.eng.niigata-u.ac.jp/
     %
     properties (TestParameter)
-        stride = { [1 1 1], [2 2 2], [1 2 4] };
+        stride = { [1 1 1], [2 2 2], [1 2 4], [4 4 4] };
         datatype = { 'single', 'double' };
         height = struct('small', 8,'medium', 16, 'large', 32);
         width = struct('small', 8,'medium', 16, 'large', 32);
@@ -223,143 +223,39 @@ classdef lsunBlockDct3dLayerTestCase < matlab.unittest.TestCase
 
         function value = getMatrixE0_(decFactor)
             import tansacnet.utility.Direction
-            decY_ = decFactor(Direction.VERTICAL);
-            decX_ = decFactor(Direction.HORIZONTAL);
-            decZ_ = decFactor(Direction.DEPTH);
-            nElmBi = decY_*decX_*decZ_;
-            coefs = zeros(nElmBi);
-            iElm = 1;
-            % E0.'= [ Beee Beoo Booe Boeo Beeo Beoe Booo Boee ] % Byxz
-            % Beee
-            for iRow = 1:2:decY_ % y-e
-                for iCol = 1:2:decX_ % x-e
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 1:2:decZ_ % z-e
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            % Beoo
-            for iRow = 1:2:decY_ % y-e
-                for iCol = 2:2:decX_ % x-o
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 2:2:decZ_ % z-o
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %Booe
-            for iRow = 2:2:decY_ % y-o
-                for iCol = 2:2:decX_ % x-o
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 1:2:decZ_ % z-e
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %Boeo
-            for iRow = 2:2:decY_ % y-o
-                for iCol = 1:2:decX_ % x-e
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 2:2:decZ_ % z-o
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %Beeo
-            for iRow = 1:2:decY_ % y-e
-                for iCol = 1:2:decX_ % x-e
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 2:2:decZ_ % z-o
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %Beoe
-            for iRow = 1:2:decY_ % y-e
-                for iCol = 2:2:decX_ % x-o
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 1:2:decZ_ % z-e
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %Booo
-            for iRow = 2:2:decY_ % y-o
-                for iCol = 2:2:decX_ % x-o
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 2:2:decZ_ % z-o
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %Boee
-            for iRow = 2:2:decY_ % y-o
-                for iCol = 1:2:decX_ % x-e
-                    dctCoefYX = zeros(decY_,decX_);
-                    dctCoefYX(iRow,iCol) = 1;
-                    basisYX = idct2(dctCoefYX);
-                    for iDep = 1:2:decZ_ % z-e
-                        dctCoefZ = zeros(decZ_,1);
-                        dctCoefZ(iDep) = 1;
-                        basisZ  = permute(idct(dctCoefZ),[2 3 1]);
-                        basisVd = convn(basisZ,basisYX);
-                        coefs(iElm,:) = basisVd(:).';
-                        iElm = iElm + 1;
-                    end
-                end
-            end
-            %
-            value = coefs;
+            decY = decFactor(Direction.VERTICAL);
+            decX = decFactor(Direction.HORIZONTAL);
+            decZ = decFactor(Direction.DEPTH);
+
+            % Generate DCT matrices
+            Cv_ = dctmtx(decY);
+            Ch_ = dctmtx(decX);
+            Cd_ = dctmtx(decZ);
+
+            % Reorder rows using a single matrix operation
+            reorder = @(C) C([1:2:end, 2:2:end], :);
+            Cv_ = reorder(Cv_);
+            Ch_ = reorder(Ch_);
+            Cd_ = reorder(Cd_);
+
+            % Split matrices into even and odd parts
+            split = @(C, n) deal(C(1:ceil(n/2), :), C(ceil(n/2)+1:end, :));
+            [Cve, Cvo] = split(Cv_, decY);
+            [Che, Cho] = split(Ch_, decX);
+            [Cde, Cdo] = split(Cd_, decZ);
+
+            % Compute Kronecker products
+            kron3 = @(A, B, C) kron(kron(A, B), C);
+            value = [
+                kron3(Cde, Che, Cve);
+                kron3(Cdo, Cho, Cve);
+                kron3(Cde, Cho, Cvo);
+                kron3(Cdo, Che, Cvo);
+                kron3(Cdo, Che, Cve);
+                kron3(Cde, Cho, Cve);
+                kron3(Cdo, Cho, Cvo);
+                kron3(Cde, Che, Cvo)
+            ];
         end
         
     end
