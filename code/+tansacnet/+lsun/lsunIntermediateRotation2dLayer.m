@@ -1,4 +1,4 @@
-classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
+classdef lsunIntermediateRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %#codegen
     %LSUNINTERMEDIATEROTATION2DLAYER
     %
     %
@@ -120,18 +120,7 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
                     layer.Mode))
             end
 
-            Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
-            for iSample = 1:nSamples
-                if isgpuarray(X)
-                    Ya_iSample = permute(Ya(:,:,iSample),[1 4 2 3]);
-                    Za_iSample = pagefun(@mtimes,A_,Ya_iSample);
-                    Za(:,:,iSample) = ipermute(Za_iSample,[1 4 2 3]);
-                else
-                    for iblk = 1:(nrows*ncols)
-                        Za(:,iblk,iSample) = A_(:,:,iblk)*Ya(:,iblk,iSample);
-                    end
-                end
-            end
+            Za = layer.applyBlockwiseMatrix(A_, Ya);
             Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
             Z = Y; %ipermute(Y,[3 1 2 4]);
         end
@@ -169,67 +158,22 @@ classdef lsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             %Un = fcn_orthmtxgen(anglesU,musU,0);
             %[Un_,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,0,[],[]);
             Un_ = layer.Un;
-            %dUnPst = zeros(size(Un_),'like',Un_);
-            dUnPst = bsxfun(@times,permute(musU,[1 3 2]),Un_);
-            %for iblk = 1:(nrows*ncols)
-            %    dUnPst(:,:,iblk) = bsxfun(@times,musU(:,iblk),Un_(:,:,iblk));
-            %end
-            dUnPre = repmat(eye(pa,'like',Un_),[1 1 (nrows*ncols)]);
-            
+
             %
-            dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples); 
-            %cdLd_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples);
             if strcmp(layer.Mode,'Analysis')
                 A_ = permute(Un_,[2 1 3]);
             else
                 A_ = Un_;
             end
             cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
-            for iSample = 1:nSamples
-                if isgpuarray(X)
-                    cdLd_low_iSample = permute(cdLd_low(:,:,iSample),[1 4 2 3]);
-                    cdLd_low_iSample = pagefun(@mtimes,A_,cdLd_low_iSample);
-                    cdLd_low(:,:,iSample) = ipermute(cdLd_low_iSample,[1 4 2 3]);                    
-                else
-                    for iblk = 1:(nrows*ncols)
-                        cdLd_low(:,iblk,iSample) = A_(:,:,iblk)*cdLd_low(:,iblk,iSample);
-                    end
-                end
-            end
+            cdLd_low = layer.applyBlockwiseMatrix(A_, cdLd_low);
             dLdX(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nSamples);
-            %dLdX = dLdX; %ipermute(adLd_,[3 1 2 4]);
 
             % dLdWi = <dLdZ,(dVdWi)X>
-            fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(anglesU);
-            nAngles = size(anglesU,1);
-            dLdW = zeros(nAngles,nrows*ncols,'like',dLdZ);
-            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);                        
-            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);  
-            for iAngle = uint32(1:nAngles)
-                [dUn,dUnPst,dUnPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUnPst,dUnPre);
-                if strcmp(layer.Mode,'Analysis')
-                    dA_ = dUn;
-                else
-                    dA_ = permute(dUn,[2 1 3]);
-                end
-                if isgpuarray(X)
-                    c_low_ext = permute(c_low,[1 4 2 3]); % idx 1 iblk iSample
-                    d_low_ext = pagefun(@mtimes,dA_,c_low_ext); % idx 1 iblk iSample
-                    d_low = ipermute(d_low_ext,[1 4 2 3]);
-                    dLdW(iAngle,:) = sum(bsxfun(@times,dldz_low,d_low),[1 3]);
-                else
-                    for iblk = 1:(nrows*ncols)
-                        dA_iblk = dA_(:,:,iblk);
-                        dldz_low_iblk = squeeze(dldz_low(:,iblk,:));
-                        c_low_iblk = squeeze(c_low(:,iblk,:));
-                        d_low_iblk = zeros(size(c_low_iblk),'like',c_low_iblk);
-                        for iSample = 1:nSamples
-                            d_low_iblk(:,iSample) = dA_iblk*c_low_iblk(:,iSample);
-                        end
-                        dLdW(iAngle,iblk) = sum(bsxfun(@times,dldz_low_iblk,d_low_iblk),'all');
-                    end
-                end
-            end
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dLdW = layer.computeAngleGradient(Un_, anglesU, musU, c_low, dldz_low);
         end
 
         function angles = get.Angles(layer)
