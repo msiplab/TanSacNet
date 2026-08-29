@@ -1,0 +1,6 @@
+# Downloaded third-party code and large intermediates are never committed.
+# Generated numbers (results/values*.json) and figures (results/figures/*.pdf)
+# are the interface to the manuscript repository and are kept.
+results/*.mat
+piDMD-main/
+databook_matlab-master/

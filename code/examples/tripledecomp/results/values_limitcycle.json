@@ -1,0 +1,21 @@
+{
+  "exp": "limitcycle",
+  "date": "2026-08-29",
+  "config": {
+    "nBins": 16,
+    "binSweep": [
+      4,
+      8,
+      16,
+      32,
+      64
+    ]
+  },
+  "metrics": {
+    "residualRatio": 0.025672232230554318,
+    "decayExponent": -1.9357904490411153,
+    "podModesNinetyNine": 7,
+    "podModesFourNines": 15,
+    "numBins": 16
+  }
+}

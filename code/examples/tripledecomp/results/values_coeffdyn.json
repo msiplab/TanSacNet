@@ -1,0 +1,27 @@
+{
+  "exp": "coeffdyn",
+  "date": "2026-08-29",
+  "config": {
+    "nBins": 16,
+    "K": 4,
+    "stride": [
+      4,
+      4
+    ],
+    "overlap": [
+      3,
+      3
+    ],
+    "nModesPod": 10
+  },
+  "metrics": {
+    "maxUnitCircleDeviation": 0.002471192094194663,
+    "medianUnitCircleDeviation": 0.00031286277335018653,
+    "maxUnitCircleDeviationUnitary": 1.3322676295501878E-15,
+    "relFitErrorExact": 0.026619735706513808,
+    "relFitErrorUnitary": 0.034043729143113328,
+    "numBins": 16,
+    "numChans": 4,
+    "numPodModes": 10
+  }
+}
