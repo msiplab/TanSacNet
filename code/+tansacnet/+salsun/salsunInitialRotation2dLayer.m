@@ -97,16 +97,25 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
             %
-            [W0_,U0_] = layer.buildRotationMatrices(Theta);
+            nAngles = size(Theta,1);
+            anglesW = Theta(1:nAngles/2,:,:);
+            anglesU = Theta(nAngles/2+1:end,:,:);
+            mus = cast(layer.Mus,'like',Theta);
+            muW = mus(1:ps,:);
+            muU = mus(ps+1:end,:);
             %
             Y = reshape(X,ps+pa,nrows*ncols,nSamples);
             Zs = zeros(ps,nrows*ncols,nSamples,'like',Y);
             Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
             for iSample = 1:nSamples
-                Zs(:,:,iSample) = layer.applyBlockwiseMatrix( ...
-                    W0_(:,:,:,iSample), Y(1:ps,:,iSample));
-                Za(:,:,iSample) = layer.applyBlockwiseMatrix( ...
-                    U0_(:,:,:,iSample), Y(ps+1:end,:,iSample));
+                % Build this sample's W0/U0 and apply them immediately,
+                % rather than materializing all samples' matrices at
+                % once, to keep peak memory independent of nSamples.
+                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesW(:,:,iSample));
+                W0_i = fcn_orthmtxgen(anglesW(:,:,iSample),muW);
+                U0_i = fcn_orthmtxgen(anglesU(:,:,iSample),muU);
+                Zs(:,:,iSample) = layer.applyBlockwiseMatrix(W0_i, Y(1:ps,:,iSample));
+                Za(:,:,iSample) = layer.applyBlockwiseMatrix(U0_i, Y(ps+1:end,:,iSample));
             end
             Z = reshape([Zs;Za],ps+pa,nrows,ncols,nSamples);
         end
@@ -134,8 +143,12 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             pa = layer.PrivateNumberOfChannels(2);
             nBlks = nrows*ncols;
             %
-            [W0_,U0_,muW,muU,anglesW,anglesU] = layer.buildRotationMatrices(Theta);
-            nAnglesH = size(anglesW,1);
+            nAnglesH = size(Theta,1)/2;
+            anglesW = Theta(1:nAnglesH,:,:);
+            anglesU = Theta(nAnglesH+1:end,:,:);
+            mus = cast(layer.Mus,'like',Theta);
+            muW = mus(1:ps,:);
+            muU = mus(ps+1:end,:);
 
             % dLdX = dZdX x dLdZ
             dldz_upp = reshape(dLdZ(1:ps,:,:,:),ps,nBlks,nSamples);
@@ -148,20 +161,25 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             dLdW = zeros(nAnglesH,nBlks,nSamples,'like',dLdZ);
             dLdU = zeros(nAnglesH,nBlks,nSamples,'like',dLdZ);
             for iSample = 1:nSamples
-                W0T = permute(W0_(:,:,:,iSample),[2 1 3]);
-                U0T = permute(U0_(:,:,:,iSample),[2 1 3]);
-                Zs(:,:,iSample) = layer.applyBlockwiseMatrix( ...
-                    W0T, dldz_upp(:,:,iSample));
-                Za(:,:,iSample) = layer.applyBlockwiseMatrix( ...
-                    U0T, dldz_low(:,:,iSample));
+                % Build this sample's W0/U0 and use them immediately,
+                % rather than materializing all samples' matrices at
+                % once, to keep peak memory independent of nSamples.
+                angW = anglesW(:,:,iSample);
+                angU = anglesU(:,:,iSample);
+                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angW);
+                W0_i = fcn_orthmtxgen(angW,muW);
+                U0_i = fcn_orthmtxgen(angU,muU);
+
+                W0T = permute(W0_i,[2 1 3]);
+                U0T = permute(U0_i,[2 1 3]);
+                Zs(:,:,iSample) = layer.applyBlockwiseMatrix(W0T, dldz_upp(:,:,iSample));
+                Za(:,:,iSample) = layer.applyBlockwiseMatrix(U0T, dldz_low(:,:,iSample));
 
                 % dLdWi = <dLdZ,(dVdWi)X>
                 dLdW(:,:,iSample) = layer.computeAngleGradient( ...
-                    W0_(:,:,:,iSample), anglesW(:,:,iSample), muW, ...
-                    c_upp(:,:,iSample), dldz_upp(:,:,iSample));
+                    W0_i, angW, muW, c_upp(:,:,iSample), dldz_upp(:,:,iSample));
                 dLdU(:,:,iSample) = layer.computeAngleGradient( ...
-                    U0_(:,:,:,iSample), anglesU(:,:,iSample), muU, ...
-                    c_low(:,:,iSample), dldz_low(:,:,iSample));
+                    U0_i, angU, muU, c_low(:,:,iSample), dldz_low(:,:,iSample));
             end
             dLdX = reshape([Zs;Za],ps+pa,nrows,ncols,nSamples);
             dLdTheta = cat(1,dLdW,dLdU);
@@ -185,29 +203,6 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             layer.PrivateMus = mus;
         end
 
-    end
-
-    methods (Access = private)
-        function [W0_,U0_,muW,muU,anglesW,anglesU] = buildRotationMatrices(layer,Theta)
-            ps = layer.PrivateNumberOfChannels(1);
-            pa = layer.PrivateNumberOfChannels(2);
-            nAngles = size(Theta,1);
-            nBlks = size(Theta,2);
-            nSamples = size(Theta,3);
-            anglesW = Theta(1:nAngles/2,:,:);
-            anglesU = Theta(nAngles/2+1:end,:,:);
-            mus = cast(layer.Mus,'like',Theta);
-            muW = mus(1:ps,:);
-            muU = mus(ps+1:end,:);
-            %
-            W0_ = zeros(ps,ps,nBlks,nSamples,'like',Theta);
-            U0_ = zeros(pa,pa,nBlks,nSamples,'like',Theta);
-            for iSample = 1:nSamples
-                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesW(:,:,iSample));
-                W0_(:,:,:,iSample) = fcn_orthmtxgen(anglesW(:,:,iSample),muW);
-                U0_(:,:,:,iSample) = fcn_orthmtxgen(anglesU(:,:,iSample),muU);
-            end
-        end
     end
 
 end
