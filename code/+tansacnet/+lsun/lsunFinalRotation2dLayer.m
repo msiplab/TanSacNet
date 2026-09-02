@@ -55,10 +55,6 @@ classdef lsunFinalRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %#cod
     end
 
     properties (Hidden, Constant)
-        % This layer always applies the transposed (synthesis-side)
-        % matrices W0'/U0' (see predict), so this constant lets the
-        % inherited, unmodified lsunRotation2dLayerBase.computeAngleGradient
-        % (which branches on layer.Mode) be reused as-is.
         Mode = 'Synthesis'
     end
 
