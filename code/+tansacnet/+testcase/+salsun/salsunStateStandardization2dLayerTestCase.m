@@ -17,6 +17,21 @@ classdef salsunStateStandardization2dLayerTestCase < matlab.unittest.TestCase
     %
     % http://msiplab.eng.niigata-u.ac.jp/
 
+    methods (TestClassTeardown)
+
+        function finalCheck(~)
+            import tansacnet.salsun.*
+            fprintf("\n --- Check layer for 2-D images (SA-LSUN) ---\n");
+            nFeat = 5;
+            nRows = 4;
+            nCols = 4;
+            layer = salsunStateStandardization2dLayer('Name','Std');
+            checkLayer(layer,[nFeat nRows nCols],...
+                'ObservationDimension',4)
+        end
+
+    end
+
     methods (Test)
 
         function testPredictZeroMeanUnitVariance(testCase)
@@ -69,6 +84,60 @@ classdef salsunStateStandardization2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyThat(actualZ,IsEqualTo(expctdZ,'Within',tolObj));
         end
 
+        function testGradientCorrectnessByFiniteDifference(testCase)
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            import tansacnet.salsun.*
+
+            nFeat = 3;
+            nRows = 3;
+            nCols = 3;
+            nSamples = 2;
+            X0 = 5*randn(nFeat,nRows,nCols,nSamples) + 10;
+
+            layer = salsunStateStandardization2dLayer('Name','Std');
+
+            dLdX = dlfeval(@localModelGradient,layer,dlarray(X0));
+            dLdX = extractdata(dLdX);
+
+            h = 1e-5;
+            tol = 1e-4;
+            numGrad = zeros(size(X0));
+            for idx = 1:numel(X0)
+                Xp = X0; Xp(idx) = Xp(idx) + h;
+                Xm = X0; Xm(idx) = Xm(idx) - h;
+                Lp = sum(layer.predict(Xp).^2,'all');
+                Lm = sum(layer.predict(Xm).^2,'all');
+                numGrad(idx) = (Lp-Lm)/(2*h);
+            end
+            testCase.verifyThat(numGrad,IsEqualTo(dLdX,'Within',AbsoluteTolerance(tol)));
+        end
+
+        function testZeroVarianceNoNanOrInf(testCase)
+            import tansacnet.salsun.*
+
+            nFeat = 3;
+            nRows = 2;
+            nCols = 2;
+            nSamples = 2;
+            baseVals = randn(nFeat,1,1,nSamples);
+            X = repmat(baseVals,[1 nRows nCols 1]);
+
+            layer = salsunStateStandardization2dLayer('Name','Std');
+            Z = layer.predict(X);
+
+            testCase.verifyTrue(all(isfinite(Z),'all'));
+            
+            % Due to zero variance, the output should be all zeros (after standardization).
+            testCase.verifyEqual(Z,zeros(size(X)));
+        end
+
     end
 
+end
+
+function dLdX = localModelGradient(layer,X)
+Z = layer.predict(X);
+loss = sum(Z.^2,'all');
+dLdX = dlgradient(loss,X);
 end
