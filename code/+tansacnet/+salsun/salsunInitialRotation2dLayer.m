@@ -62,7 +62,7 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Name = p.Results.Name;
             layer.Mus = p.Results.Mus;
-            layer.Description = "SA-LSUN initial rotation (state-controlled) " ...
+            layer.Description = "SA-LSUN initial rotation " ...
                 + "(ps,pa) = (" ...
                 + layer.PrivateNumberOfChannels(1) + "," ...
                 + layer.PrivateNumberOfChannels(2) + "), "  ...
@@ -143,9 +143,9 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             pa = layer.PrivateNumberOfChannels(2);
             nBlks = nrows*ncols;
             %
-            nAnglesH = size(Theta,1)/2;
-            anglesW = Theta(1:nAnglesH,:,:);
-            anglesU = Theta(nAnglesH+1:end,:,:);
+            nAngles = size(Theta,1)/2;
+            anglesW = Theta(1:nAngles,:,:);
+            anglesU = Theta(nAngles+1:end,:,:);
             mus = cast(layer.Mus,'like',Theta);
             muW = mus(1:ps,:);
             muU = mus(ps+1:end,:);
@@ -158,8 +158,8 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
 
             Zs = zeros(ps,nBlks,nSamples,'like',dLdZ);
             Za = zeros(pa,nBlks,nSamples,'like',dLdZ);
-            dLdW = zeros(nAnglesH,nBlks,nSamples,'like',dLdZ);
-            dLdU = zeros(nAnglesH,nBlks,nSamples,'like',dLdZ);
+            dLdW = zeros(nAngles,nBlks,nSamples,'like',dLdZ);
+            dLdU = zeros(nAngles,nBlks,nSamples,'like',dLdZ);
             for iSample = 1:nSamples
                 % Build this sample's W0/U0 and use them immediately,
                 % rather than materializing all samples' matrices at
