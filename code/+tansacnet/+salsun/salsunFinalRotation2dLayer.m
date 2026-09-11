@@ -1,13 +1,11 @@
-classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %#codegen
-    %SALSUNINITIALROTATION2DLAYER
+classdef salsunFinalRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %#codegen
+    %SALSUNFINALROTATION2DLAYER
     %
-    %   Data-path input  'x'     : nChsTotal x nRows x nCols x nSamples
-    %
+    %   Data-path input  'x'      : nChsTotal x nRows x nCols x nSamples
     %   Control-path input 'theta': nAngles x (nRows*nCols) x nSamples
     %                               where nAngles = (nChsTotal-2)*nChsTotal/4
     %                               (first half: anglesW, second half: anglesU)
-    %
-    %   Output                   : nChsTotal x nRows x nCols x nSamples
+    %   Output                    : nChsTotal x nRows x nCols x nSamples
     %
     % Requirements: MATLAB R2022a
     %
@@ -40,17 +38,17 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
     end
 
     properties (Hidden, Constant)
-        Mode = 'Analysis'
+        Mode = 'Synthesis'
     end
 
     methods
-        function layer = salsunInitialRotation2dLayer(varargin)
+        function layer = salsunFinalRotation2dLayer(varargin)
             % (Optional) Create a myLayer.
             % This function must have the same name as the class.
             p = inputParser;
             addParameter(p,'Stride',[])
-            addParameter(p,'Name','')
             addParameter(p,'Mus',[])
+            addParameter(p,'Name','')
             addParameter(p,'NumberOfBlocks',[1 1])
             addParameter(p,'DType','double')
             addParameter(p,'Device','cuda')
@@ -62,7 +60,7 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             layer.PrivateNumberOfChannels = [ceil(prod(layer.Stride)/2) floor(prod(layer.Stride)/2)];
             layer.Name = p.Results.Name;
             layer.Mus = p.Results.Mus;
-            layer.Description = "SA-LSUN initial rotation " ...
+            layer.Description = "SA-LSUN final rotation " ...
                 + "(ps,pa) = (" ...
                 + layer.PrivateNumberOfChannels(1) + "," ...
                 + layer.PrivateNumberOfChannels(2) + "), "  ...
@@ -89,8 +87,6 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             % Outputs:
             %         Z     - Output of layer forward function
 
-            % Layer forward function for prediction goes here.
-
             nrows = size(X,2);
             ncols = size(X,3);
             nSamples = size(X,4);
@@ -108,14 +104,13 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             Zs = zeros(ps,nrows*ncols,nSamples,'like',Y);
             Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
             for iSample = 1:nSamples
-                % Build this sample's W0/U0 and apply them immediately,
-                % rather than materializing all samples' matrices at
-                % once, to keep peak memory independent of nSamples.
                 fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesW(:,:,iSample));
                 W0_i = fcn_orthmtxgen(anglesW(:,:,iSample),muW);
                 U0_i = fcn_orthmtxgen(anglesU(:,:,iSample),muU);
-                Zs(:,:,iSample) = layer.applyBlockwiseMatrix(W0_i, Y(1:ps,:,iSample));
-                Za(:,:,iSample) = layer.applyBlockwiseMatrix(U0_i, Y(ps+1:end,:,iSample));
+                W0T_i = permute(W0_i,[2 1 3]);
+                U0T_i = permute(U0_i,[2 1 3]);
+                Zs(:,:,iSample) = layer.applyBlockwiseMatrix(W0T_i, Y(1:ps,:,iSample));
+                Za(:,:,iSample) = layer.applyBlockwiseMatrix(U0T_i, Y(ps+1:ps+pa,:,iSample));
             end
             Z = reshape([Zs;Za],ps+pa,nrows,ncols,nSamples);
         end
@@ -150,7 +145,6 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             muW = mus(1:ps,:);
             muU = mus(ps+1:end,:);
 
-            % dLdX = dZdX x dLdZ
             dldz_upp = reshape(dLdZ(1:ps,:,:,:),ps,nBlks,nSamples);
             dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nBlks,nSamples);
             c_upp = reshape(X(1:ps,:,:,:),ps,nBlks,nSamples);
@@ -161,21 +155,17 @@ classdef salsunInitialRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %
             dLdW = zeros(nAngles,nBlks,nSamples,'like',dLdZ);
             dLdU = zeros(nAngles,nBlks,nSamples,'like',dLdZ);
             for iSample = 1:nSamples
-                % Build this sample's W0/U0 and use them immediately,
-                % rather than materializing all samples' matrices at
-                % once, to keep peak memory independent of nSamples.
                 angW = anglesW(:,:,iSample);
                 angU = anglesU(:,:,iSample);
                 fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angW);
                 W0_i = fcn_orthmtxgen(angW,muW);
                 U0_i = fcn_orthmtxgen(angU,muU);
 
-                W0T = permute(W0_i,[2 1 3]);
-                U0T = permute(U0_i,[2 1 3]);
-                Zs(:,:,iSample) = layer.applyBlockwiseMatrix(W0T, dldz_upp(:,:,iSample));
-                Za(:,:,iSample) = layer.applyBlockwiseMatrix(U0T, dldz_low(:,:,iSample));
+                Zs(:,:,iSample) = layer.applyBlockwiseMatrix(W0_i, dldz_upp(:,:,iSample));
+                Za(:,:,iSample) = layer.applyBlockwiseMatrix(U0_i, dldz_low(:,:,iSample));
 
-                % dLdWi = <dLdZ,(dVdWi)X>
+                % dLdWi = <dLdZ,(dVdWi)X> (Mode='Synthesis' selects the
+                % transposed per-angle derivative, matching predict).
                 dLdW(:,:,iSample) = layer.computeAngleGradient( ...
                     W0_i, angW, muW, c_upp(:,:,iSample), dldz_upp(:,:,iSample));
                 dLdU(:,:,iSample) = layer.computeAngleGradient( ...
