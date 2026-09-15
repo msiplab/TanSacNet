@@ -75,13 +75,13 @@ nAnglesPredicted = nAnglesFull-nZeroPad;
 nFeat = numel(channels)*prod(nNeighbor);
 
 layers = [
-    salsunLocalStateExtraction2dLayer('Name',[prefix 'Extract'],...
+    salsunLocalStateExtraction2dLayer('Name',[prefix 'Ext'],...
         'NumberOfNeighborBlocks',nNeighbor,'Channels',channels)
-    salsunStateStandardization2dLayer('Name',[prefix 'Standardize'])
+    salsunStateStandardization2dLayer('Name',[prefix 'Std'])
     ];
 for iBlock = 1:nResBlocks
     layers = [layers %#ok<AGROW>
-        salsunResidualEstimatorBlock2dLayer('Name',[prefix 'ResBlock' num2str(iBlock)],...
+        salsunResidualEstimatorBlock2dLayer('Name',[prefix 'ResBlk' num2str(iBlock)],...
             'InputSize',nFeat,'Width',width)
         ];
 end
