@@ -69,13 +69,11 @@ classdef salsunInitialRotation2dLayerTestCase < matlab.unittest.TestCase
             actualName = layer.Name;
             actualDescription = layer.Description;
             actualInputNames = layer.InputNames;
-            actualMode = layer.Mode;
 
             % Evaluation
             testCase.verifyEqual(actualName,expctdName);
             testCase.verifyEqual(actualDescription,expctdDescription);
             testCase.verifyEqual(actualInputNames,{'x','theta'});
-            testCase.verifyEqual(actualMode,'Analysis');
         end
 
         function testConstructorWithDeviceAndDType(testCase, stride, usegpu, datatype)

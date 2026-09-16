@@ -1,4 +1,4 @@
-classdef salsunIntermediateRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerBase %#codegen
+classdef salsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
     %SALSUNINTERMEDIATEROTATION2DLAYER
     %
     %   Data-path input  'x'     : nChsTotal x nRows x nCols x nSamples
@@ -105,16 +105,33 @@ classdef salsunIntermediateRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerB
             Y = X;
             Ya = reshape(Y(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             Za = zeros(pa,nrows*ncols,nSamples,'like',Y);
-            for iSample = 1:nSamples
-                anglesU = Theta(:,:,iSample);
-                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
-                Un_i = fcn_orthmtxgen(anglesU,musU);
+            if isgpuarray(X)
+                nAngles = size(Theta,1);
+                angles_ = reshape(Theta,nAngles,nrows*ncols*nSamples);
+                mus_ = repmat(musU,[1 nSamples]);
+                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angles_);
+                Un = fcn_orthmtxgen(angles_,mus_);
                 if isAnalysis
-                    A_ = Un_i;
+                    A_ = Un;
                 else
-                    A_ = permute(Un_i,[2 1 3]);
+                    A_ = permute(Un,[2 1 3]);
                 end
-                Za(:,:,iSample) = layer.applyBlockwiseMatrix(A_, Ya(:,:,iSample));
+                Ya_ext = reshape(Ya,pa,1,nrows*ncols*nSamples);
+                Za = reshape(pagefun(@mtimes,A_,Ya_ext),pa,nrows*ncols,nSamples);
+            else
+                for iSample = 1:nSamples
+                    anglesU = Theta(:,:,iSample);
+                    fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
+                    Un_i = fcn_orthmtxgen(anglesU,musU);
+                    if isAnalysis
+                        A_ = Un_i;
+                    else
+                        A_ = permute(Un_i,[2 1 3]);
+                    end
+                    for iblk = 1:nrows*ncols
+                        Za(:,iblk,iSample) = A_(:,:,iblk)*Ya(:,iblk,iSample);
+                    end
+                end
             end
             Y(ps+1:ps+pa,:,:,:) = reshape(Za,pa,nrows,ncols,nSamples);
             Z = Y;
@@ -141,33 +158,77 @@ classdef salsunIntermediateRotation2dLayer < tansacnet.lsun.lsunRotation2dLayerB
             nSamples = size(dLdZ,4);
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
-            nBlks = nrows*ncols;
             %
             isAnalysis = strcmp(layer.Mode,'Analysis');
             musU = cast(layer.PrivateMus,'like',Theta);
 
             % dLdX = dZdX x dLdZ
             dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples);
-            cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nBlks,nSamples);
-            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nBlks,nSamples);
-            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nBlks,nSamples);
+            cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            dldz_low = reshape(dLdZ(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
+            c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             nAngles = size(Theta,1);
-            dLdTheta = zeros(nAngles,nBlks,nSamples,'like',dLdZ);
-            for iSample = 1:nSamples
-                anglesU = Theta(:,:,iSample);
-                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
-                Un_i = fcn_orthmtxgen(anglesU,musU);
+            dLdTheta = zeros(nAngles,nrows*ncols,nSamples,'like',dLdZ);
+            if isgpuarray(dLdZ)
+                angles_ = reshape(Theta,nAngles,nrows*ncols*nSamples);
+                mus_ = repmat(musU,[1 nSamples]);
+                fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angles_);
+                Un = fcn_orthmtxgen(angles_,mus_);
                 if isAnalysis
-                    A_ = permute(Un_i,[2 1 3]);
+                    A_ = permute(Un,[2 1 3]);
                 else
-                    A_ = Un_i;
+                    A_ = Un;
                 end
-                cdLd_low(:,:,iSample) = layer.applyBlockwiseMatrix(A_, cdLd_low(:,:,iSample));
+                cdLd_low_ext = reshape(cdLd_low,pa,1,nrows*ncols*nSamples);
+                cdLd_low = reshape(pagefun(@mtimes,A_,cdLd_low_ext),pa,nrows*ncols,nSamples);
 
-                % dLdTheta_i = <dLdZ,(dVdTheta_i)X>
-                dLdTheta(:,:,iSample) = layer.computeAngleGradient( ...
-                    Un_i, anglesU, musU, ...
-                    c_low(:,:,iSample), dldz_low(:,:,iSample));
+                % dLdTheta_i = <dLdZ,(dVdTheta_i)X>, batched across
+                % blocks and samples together.
+                c_low_ext = reshape(c_low,pa,1,nrows*ncols*nSamples);
+                fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(angles_);
+                dUPst = bsxfun(@times,permute(mus_,[1 3 2]),Un);
+                dUPre = repmat(eye(pa,'like',Un),[1 1 nrows*ncols*nSamples]);
+                for iAngle = uint32(1:nAngles)
+                    [dU,dUPst,dUPre] = fcn_orthmtxgen_diff(angles_,mus_,iAngle,dUPst,dUPre);
+                    if isAnalysis
+                        dU_ = dU;
+                    else
+                        dU_ = permute(dU,[2 1 3]);
+                    end
+                    d_low = reshape(pagefun(@mtimes,dU_,c_low_ext),pa,nrows*ncols,nSamples);
+                    dLdTheta(iAngle,:,:) = sum(bsxfun(@times,dldz_low,d_low),1);
+                end
+            else
+                for iSample = 1:nSamples
+                    anglesU = Theta(:,:,iSample);
+                    fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
+                    Un_i = fcn_orthmtxgen(anglesU,musU);
+                    if isAnalysis
+                        A_ = permute(Un_i,[2 1 3]);
+                    else
+                        A_ = Un_i;
+                    end
+                    for iblk = 1:nrows*ncols
+                        cdLd_low(:,iblk,iSample) = A_(:,:,iblk)*cdLd_low(:,iblk,iSample);
+                    end
+
+                    % dLdTheta_i = <dLdZ,(dVdTheta_i)X>
+                    fcn_orthmtxgen_diff = tansacnet.lsun.get_fcn_orthmtxgen_diff(anglesU);
+                    dUPst = bsxfun(@times,permute(musU,[1 3 2]),Un_i);
+                    dUPre = repmat(eye(pa,'like',Un_i),[1 1 nrows*ncols]);
+                    for iAngle = uint32(1:nAngles)
+                        [dU,dUPst,dUPre] = fcn_orthmtxgen_diff(anglesU,musU,iAngle,dUPst,dUPre);
+                        if isAnalysis
+                            dU_ = dU;
+                        else
+                            dU_ = permute(dU,[2 1 3]);
+                        end
+                        for iblk = 1:nrows*ncols
+                            d_low = dU_(:,:,iblk)*c_low(:,iblk,iSample);
+                            dLdTheta(iAngle,iblk,iSample) = sum(dldz_low(:,iblk,iSample).*d_low);
+                        end
+                    end
+                end
             end
             dLdX(ps+1:ps+pa,:,:,:) = reshape(cdLd_low,pa,nrows,ncols,nSamples);
         end
