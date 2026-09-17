@@ -162,6 +162,10 @@ classdef salsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             isAnalysis = strcmp(layer.Mode,'Analysis');
             musU = cast(layer.PrivateMus,'like',Theta);
 
+            if isgpuarray(X) && ~isgpuarray(dLdZ)
+                dLdZ = gpuArray(dLdZ);
+            end
+
             % dLdX = dZdX x dLdZ
             dLdX = reshape(dLdZ,ps+pa,nrows,ncols,nSamples);
             cdLd_low = reshape(dLdX(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
@@ -169,7 +173,7 @@ classdef salsunIntermediateRotation2dLayer < nnet.layer.Layer %#codegen
             c_low = reshape(X(ps+1:ps+pa,:,:,:),pa,nrows*ncols,nSamples);
             nAngles = size(Theta,1);
             dLdTheta = zeros(nAngles,nrows*ncols,nSamples,'like',dLdZ);
-            if isgpuarray(dLdZ)
+            if isgpuarray(X)
                 angles_ = reshape(Theta,nAngles,nrows*ncols*nSamples);
                 mus_ = repmat(musU,[1 nSamples]);
                 fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(angles_);

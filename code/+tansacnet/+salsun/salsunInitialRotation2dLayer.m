@@ -151,6 +151,9 @@ classdef salsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             ps = layer.PrivateNumberOfChannels(1);
             pa = layer.PrivateNumberOfChannels(2);
             %
+            if isgpuarray(X) && ~isgpuarray(dLdZ)
+                dLdZ = gpuArray(dLdZ);
+            end
             nAngles = size(Theta,1)/2;
             anglesW = Theta(1:nAngles,:,:);
             anglesU = Theta(nAngles+1:end,:,:);
@@ -168,7 +171,7 @@ classdef salsunInitialRotation2dLayer < nnet.layer.Layer %#codegen
             Za = zeros(pa,nrows*ncols,nSamples,'like',dLdZ);
             dLdW = zeros(nAngles,nrows*ncols,nSamples,'like',dLdZ);
             dLdU = zeros(nAngles,nrows*ncols,nSamples,'like',dLdZ);
-            if isgpuarray(dLdZ)
+            if isgpuarray(X)
                 anglesW_ = reshape(anglesW,nAngles,nrows*ncols*nSamples);
                 anglesU_ = reshape(anglesU,nAngles,nrows*ncols*nSamples);
                 muW_ = repmat(muW,[1 nSamples]);
