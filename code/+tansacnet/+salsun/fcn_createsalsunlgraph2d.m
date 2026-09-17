@@ -316,7 +316,7 @@ if isSynthesizer
                 % inverts what the analysis side's V0 did (guaranteeing
                 % unitarity/perfect reconstruction when no dimension
                 % reduction occurs in between).
-                estV0Prefix = [compPrefix 'V0~_'];
+                estV0Prefix = [compPrefix 'V0_'];
                 salsunLgraph = salsunLgraph.connectLayers(...
                     [estV0Prefix 'Theta'],[v0sName '/theta']);
             else
@@ -457,7 +457,7 @@ if strcmp(thetaMode,'Reuse')
     % corresponding stage (guaranteeing unitarity/perfect
     % reconstruction when no dimension reduction occurs in between).
     estPrefix = [prefix 'V' stage.name '_Theta'];
-    lgraph = lgraph.connectLayers([estPrefix 'Theta'],[rotName '/theta']);
+    lgraph = lgraph.connectLayers(estPrefix,[rotName '/theta']);
 else
     estPrefix = [prefix 'V' stage.name '~_'];
     lgraph = fcn_createparamestimator2dlgraph(lgraph,'Prefix',estPrefix,...
