@@ -107,9 +107,11 @@ class LsunInitialRotation2dLayer(nn.Module):
         #    self.number_of_blocks = [ nrows, ncols ]
         #self.update_parameters()
         if self.__no_dc_leakage:
-            mus_ = self.orthTransW0.mus
-            mus_[:,0] = 1.0
-            self.orthTransW0.mus = mus_
+            # Avoid in-place modification of mus, which is saved for backward
+            if not torch.all(self.orthTransW0.mus[:,0] == 1.0):
+                mus_ = self.orthTransW0.mus.clone()
+                mus_[:,0] = 1.0
+                self.orthTransW0.mus = mus_
             #
             with torch.no_grad():            
                 angles_ = self.orthTransW0.angles

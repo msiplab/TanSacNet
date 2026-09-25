@@ -92,9 +92,11 @@ class LsunFinalRotation2dLayer(nn.Module):
         #    self.number_of_blocks = [ nrows, ncols ]
         #    self.update_parameters()
         if self.__no_dc_leakage:
-            mus__ = self.orthTransW0T.mus
-            mus__[:,0] = 1.0
-            self.orthTransW0T.mus = mus__
+            # Avoid in-place modification of mus, which is saved for backward
+            if not torch.all(self.orthTransW0T.mus[:,0] == 1.0):
+                mus__ = self.orthTransW0T.mus.clone()
+                mus__[:,0] = 1.0
+                self.orthTransW0T.mus = mus__
             #
             with torch.no_grad():
                 angles_ = self.orthTransW0T.angles
