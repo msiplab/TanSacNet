@@ -84,7 +84,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")    
-        rtol,atol = 1e-5,1e-8
+        rtol,atol = 1e-5,1e-5 # float32 rounding of the block IDCT exceeds 1e-8 for randn inputs
 
         # Parameters
         nSamples = 8
@@ -113,7 +113,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         A = permuteIdctCoefs_(V,stride)        
         arrayshape = stride.copy() # FIXME
         arrayshape.insert(0,-1)
-        expctdZ = dct.idct_2d(A.view(arrayshape),norm='ortho').reshape(nSamples,nComponents,height,width)        
+        expctdZ = fromBlocks_(dct.idct_2d(A.view(arrayshape),norm='ortho'),nSamples,nComponents,height,width)        
         
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -306,7 +306,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         A = permuteIdctCoefs_(V,stride)
         arrayshape = stride.copy() 
         arrayshape.insert(0,-1)
-        expctdZ = dct.idct_2d(A.view(arrayshape),norm='ortho').reshape(nSamples,nComponents,height,width)
+        expctdZ = fromBlocks_(dct.idct_2d(A.view(arrayshape),norm='ortho'),nSamples,nComponents,height,width)
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -358,7 +358,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         # Expected values
         A = permuteIdctCoefs_(X,stride)
         Y = dct.idct_2d(A,norm='ortho')
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
+        expctdZ = fromBlocks_(Y,nSamples,nComponents,height,width)
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -441,7 +441,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         A = permuteIdctCoefs_(Z,stride)
         Y = dct.idct_2d(A,norm='ortho')
         # Samples x nComponents x (nrows x decV)x (decH x decH)
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
+        expctdZ = fromBlocks_(Y,nSamples,nComponents,height,width)
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -550,7 +550,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         A = permuteIdctCoefs_(Z,stride)
         Y = dct.idct_2d(A,norm='ortho')
         # Samples x nComponents x (nrows x decV)x (decH x decH)
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
+        expctdZ = fromBlocks_(Y,nSamples,nComponents,height,width)
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -657,7 +657,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
         A = permuteIdctCoefs_(Z,stride)
         Y = dct.idct_2d(A,norm='ortho')
         # Samples x nComponents x (nrows x decV)x (decH x decH)
-        expctdZ = Y.reshape(nSamples,nComponents,height,width)
+        expctdZ = fromBlocks_(Y,nSamples,nComponents,height,width)
 
         # Instantiation of target class
         network = LsunSynthesis2dNetwork(
@@ -787,7 +787,7 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
             # Update
             nrows_ *= stride[Direction.VERTICAL]
             ncols_ *= stride[Direction.HORIZONTAL]            
-            Xdc = Y.reshape(nSamples,nrows_,ncols_,1)
+            Xdc = fromBlocks_(Y,nSamples,1,nrows_,ncols_).reshape(nSamples,nrows_,ncols_,1)
         expctdZ = Xdc.view(nSamples,nComponents,height,width)
 
         # Instantiation of target class
@@ -966,6 +966,27 @@ class LsunSynthesis2dNetworkTestCase(unittest.TestCase):
     Local functions
 """
 
+def toBlocks_(x,block_size):
+    """
+    Split nSamples x nComponents x height x width arrays into
+    decV x decH blocks as MATLAB blockproc does. The blocks are ordered
+    by (sample, component, row, column).
+    """
+    nSamples, nComponents, height, width = x.shape
+    decV = block_size[Direction.VERTICAL]
+    decH = block_size[Direction.HORIZONTAL]
+    return x.reshape(nSamples,nComponents,height//decV,decV,width//decH,decH)\
+        .permute(0,1,2,4,3,5).reshape(-1,decV,decH)
+
+def fromBlocks_(y,nSamples,nComponents,height,width):
+    """
+    Place decV x decH blocks ordered by (sample, component, row, column)
+    into nSamples x nComponents x height x width arrays (inverse of toBlocks_)
+    """
+    decV, decH = y.size(1), y.size(2)
+    return y.reshape(nSamples,nComponents,height//decV,width//decH,decV,decH)\
+        .permute(0,1,2,4,3,5).reshape(nSamples,nComponents,height,width)
+
 def permuteIdctCoefs_(x,block_size):
     coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size)) 
     decY_ = block_size[Direction.VERTICAL]
@@ -982,11 +1003,12 @@ def permuteIdctCoefs_(x,block_size):
     coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
     ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
     nBlocks = coefs.size(0)
+    # Coefficients in each group are in column-major order as in MATLAB
     value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype,device=x.device)
-    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
-    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
-    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
-    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
+    value[:,0::2,0::2] = cee.view(nBlocks,chDecX,chDecY).transpose(1,2)
+    value[:,1::2,1::2] = coo.view(nBlocks,fhDecX,fhDecY).transpose(1,2)
+    value[:,1::2,0::2] = coe.view(nBlocks,chDecX,fhDecY).transpose(1,2)
+    value[:,0::2,1::2] = ceo.view(nBlocks,fhDecX,chDecY).transpose(1,2)
     return value
 
 def block_butterfly_(X,nchs):

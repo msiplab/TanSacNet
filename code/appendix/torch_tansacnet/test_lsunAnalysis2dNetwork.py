@@ -91,7 +91,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
                 return
         else:
             device = torch.device("cpu")        
-        rtol,atol = 1e-5,1e-8
+        rtol,atol = 1e-5,1e-6 # float32 rounding of the block DCT exceeds 1e-8
 
         # Parameters
         nSamples = 8
@@ -106,7 +106,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(toBlocks_(X,stride),norm='ortho')
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
         V = A.view(nSamples,nrows,ncols,nDecs)
@@ -300,7 +300,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH)
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(toBlocks_(X,stride),norm='ortho')
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -369,7 +369,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(toBlocks_(X,stride),norm='ortho')
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -447,7 +447,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(toBlocks_(X,stride),norm='ortho')
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -544,7 +544,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(toBlocks_(X,stride),norm='ortho')
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -660,7 +660,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         # Block DCT (nSamples x nComponents x nrows x ncols) x decV x decH
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
-        Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
+        Y = dct.dct_2d(toBlocks_(X,stride),norm='ortho')
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -780,7 +780,7 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
         for iStage in range(nlevels):
             Z = X_
             iLevel = iStage+1
-            Y = dct.dct_2d(Z.view(arrayshape),norm='ortho')
+            Y = dct.dct_2d(toBlocks_(Z,stride_),norm='ortho')
             Y = Y.to(device)
             # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
             A = permuteDctCoefs_(Y)
@@ -1003,11 +1003,34 @@ class LsunAnalysis2dNetworkTestCase(unittest.TestCase):
     Local functions
 """
 
+def toBlocks_(x,block_size):
+    """
+    Split nSamples x nComponents x height x width arrays into
+    decV x decH blocks as MATLAB blockproc does. The blocks are ordered
+    by (sample, component, row, column).
+    """
+    nSamples, nComponents, height, width = x.shape
+    decV = block_size[Direction.VERTICAL]
+    decH = block_size[Direction.HORIZONTAL]
+    return x.reshape(nSamples,nComponents,height//decV,decV,width//decH,decH)\
+        .permute(0,1,2,4,3,5).reshape(-1,decV,decH)
+
+def fromBlocks_(y,nSamples,nComponents,height,width):
+    """
+    Place decV x decH blocks ordered by (sample, component, row, column)
+    into nSamples x nComponents x height x width arrays (inverse of toBlocks_)
+    """
+    decV, decH = y.size(1), y.size(2)
+    return y.reshape(nSamples,nComponents,height//decV,width//decH,decV,decH)\
+        .permute(0,1,2,4,3,5).reshape(nSamples,nComponents,height,width)
+
 def permuteDctCoefs_(x):
-    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
-    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
-    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
-    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
+    # Coefficients in each group are arranged in column-major order as
+    # coefs(1:2:end,1:2:end) etc. in MATLAB
+    cee = x[:,0::2,0::2].transpose(1,2).reshape(x.size(0),-1)
+    coo = x[:,1::2,1::2].transpose(1,2).reshape(x.size(0),-1)
+    coe = x[:,1::2,0::2].transpose(1,2).reshape(x.size(0),-1)
+    ceo = x[:,0::2,1::2].transpose(1,2).reshape(x.size(0),-1)
     return torch.cat((cee,coo,coe,ceo),dim=-1)
 
 def block_butterfly_(X,nchs):

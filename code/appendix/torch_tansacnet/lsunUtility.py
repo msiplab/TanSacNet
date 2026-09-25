@@ -340,36 +340,34 @@ class OrthonormalMatrixGenerationSystem:
         self.mus = self.mus.to(dtype=self.dtype,device=self.device)
         return self
 
-def permuteDctCoefs(x):
-    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
-    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
-    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
-    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
-    return torch.cat((cee,coo,coe,ceo),dim=-1)
+def dctmtx(n,dtype=None,device=None):
+    """
+    Orthonormal DCT-II matrix, equivalent to MATLAB dctmtx(n)
+    """
+    k = torch.arange(n,dtype=dtype,device=device).view(-1,1)
+    i = torch.arange(n,dtype=dtype,device=device).view(1,-1)
+    C = math.sqrt(2./n)*torch.cos(math.pi*(2*i+1)*k/(2*n))
+    C[0,:] = C[0,:]/math.sqrt(2.)
+    return C
 
-def permuteIdctCoefs(x,block_size):
-    #coefs = x.view(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size)) 
-    coefs = x.reshape(-1,block_size[Direction.VERTICAL]*block_size[Direction.HORIZONTAL]) # x.view(-1,math.prod(block_size))     
-    decY_ = block_size[Direction.VERTICAL]
-    decX_ = block_size[Direction.HORIZONTAL]
-    chDecY = int(math.ceil(decY_/2.)) #.astype(int)
-    chDecX = int(math.ceil(decX_/2.)) #.astype(int)
-    fhDecY = int(math.floor(decY_/2.)) #.astype(int)
-    fhDecX = int(math.floor(decX_/2.)) #.astype(int)
-    nQDecsee = chDecY*chDecX
-    nQDecsoo = fhDecY*fhDecX
-    nQDecsoe = fhDecY*chDecX
-    cee = coefs[:,:nQDecsee]
-    coo = coefs[:,nQDecsee:nQDecsee+nQDecsoo]
-    coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
-    ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
-    nBlocks = coefs.size(0)
-    value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype,device=x.device)
-    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
-    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
-    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
-    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
-    return value
+def block_dct_matrix_2d(stride,dtype=None,device=None):
+    """
+    2-D block DCT matrix, equivalent to Cvh in MATLAB lsunBlockDct2dLayer
+
+    Rows are ordered as [ Cee; Coo; Coe; Ceo ] and columns correspond to
+    the pixels of a decV x decH block in column-major order (v + decV*h).
+    """
+    decV = stride[Direction.VERTICAL]
+    decH = stride[Direction.HORIZONTAL]
+    Cv = dctmtx(decV,dtype=dtype,device=device)
+    Ch = dctmtx(decH,dtype=dtype,device=device)
+    Cve, Cvo = Cv[0::2,:], Cv[1::2,:]
+    Che, Cho = Ch[0::2,:], Ch[1::2,:]
+    Cee = torch.kron(Che,Cve)
+    Coo = torch.kron(Cho,Cvo)
+    Coe = torch.kron(Che,Cvo)
+    Ceo = torch.kron(Cho,Cve)
+    return torch.cat((Cee,Coo,Coe,Ceo),dim=0)
 
 """
 def block_butterfly(X,nchs):

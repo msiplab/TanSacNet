@@ -98,7 +98,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
         #Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
-        Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
+        Y = torch.tensor(fftpack.dct(fftpack.dct(toBlocks_(X.cpu(),stride).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -152,7 +152,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
         #Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
-        Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
+        Y = torch.tensor(fftpack.dct(fftpack.dct(toBlocks_(X.cpu(),stride).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -217,7 +217,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         arrayshape = stride.copy()
         arrayshape.insert(0,-1)
         #Y = dct.dct_2d(X.view(arrayshape),norm='ortho')
-        Y = torch.tensor(fftpack.dct(fftpack.dct(X.cpu().view(arrayshape).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
+        Y = torch.tensor(fftpack.dct(fftpack.dct(toBlocks_(X.cpu(),stride).detach().numpy(),axis=2,type=2,norm='ortho'),axis=1,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
         # Rearrange the DCT Coefs. (nSamples x nComponents x nrows x ncols) x (decV x decH)
         A = permuteDctCoefs_(Y)
@@ -284,7 +284,7 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         #Y = dct.idct_2d(A,norm='ortho')
         Y = torch.tensor(fftpack.idct(fftpack.idct(A.detach().numpy(),axis=1,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),dtype=datatype)
         Y = Y.to(device)
-        expctddLdX = Y.reshape(nSamples,nComponents,height,width)
+        expctddLdX = fromBlocks_(Y,nSamples,nComponents,height,width)
         
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
@@ -353,9 +353,9 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         Yb = Yb.to(device)
         
         expctddLdX = torch.cat((
-            Yr.reshape(nSamples,1,height,width),
-            Yg.reshape(nSamples,1,height,width),
-            Yb.reshape(nSamples,1,height,width)),dim=1)
+            fromBlocks_(Yr,nSamples,1,height,width),
+            fromBlocks_(Yg,nSamples,1,height,width),
+            fromBlocks_(Yb,nSamples,1,height,width)),dim=1)
         
         # Instantiation of target class
         layer = LsunBlockDct2dLayer(
@@ -378,11 +378,34 @@ class LsunBlockDct2dLayerTestCase(unittest.TestCase):
         self.assertTrue(Zg.requires_grad)
         self.assertTrue(Zb.requires_grad)
 
+def toBlocks_(x,block_size):
+    """
+    Split nSamples x nComponents x height x width arrays into
+    decV x decH blocks as MATLAB blockproc does. The blocks are ordered
+    by (sample, component, row, column).
+    """
+    nSamples, nComponents, height, width = x.shape
+    decV = block_size[Direction.VERTICAL]
+    decH = block_size[Direction.HORIZONTAL]
+    return x.reshape(nSamples,nComponents,height//decV,decV,width//decH,decH)\
+        .permute(0,1,2,4,3,5).reshape(-1,decV,decH)
+
+def fromBlocks_(y,nSamples,nComponents,height,width):
+    """
+    Place decV x decH blocks ordered by (sample, component, row, column)
+    into nSamples x nComponents x height x width arrays (inverse of toBlocks_)
+    """
+    decV, decH = y.size(1), y.size(2)
+    return y.reshape(nSamples,nComponents,height//decV,width//decH,decV,decH)\
+        .permute(0,1,2,4,3,5).reshape(nSamples,nComponents,height,width)
+
 def permuteDctCoefs_(x):
-    cee = x[:,0::2,0::2].reshape(x.size(0),-1)
-    coo = x[:,1::2,1::2].reshape(x.size(0),-1)
-    coe = x[:,1::2,0::2].reshape(x.size(0),-1)
-    ceo = x[:,0::2,1::2].reshape(x.size(0),-1)
+    # Coefficients in each group are arranged in column-major order as
+    # coefs(1:2:end,1:2:end) etc. in MATLAB
+    cee = x[:,0::2,0::2].transpose(1,2).reshape(x.size(0),-1)
+    coo = x[:,1::2,1::2].transpose(1,2).reshape(x.size(0),-1)
+    coe = x[:,1::2,0::2].transpose(1,2).reshape(x.size(0),-1)
+    ceo = x[:,0::2,1::2].transpose(1,2).reshape(x.size(0),-1)
     return torch.cat((cee,coo,coe,ceo),dim=-1)
 
 def permuteIdctCoefs_(x,block_size):
@@ -401,11 +424,12 @@ def permuteIdctCoefs_(x,block_size):
     coe = coefs[:,nQDecsee+nQDecsoo:nQDecsee+nQDecsoo+nQDecsoe]
     ceo = coefs[:,nQDecsee+nQDecsoo+nQDecsoe:]
     nBlocks = coefs.size(0)
+    # Coefficients in each group are in column-major order as in MATLAB
     value = torch.zeros(nBlocks,decY_,decX_,dtype=x.dtype)
-    value[:,0::2,0::2] = cee.view(nBlocks,chDecY,chDecX)
-    value[:,1::2,1::2] = coo.view(nBlocks,fhDecY,fhDecX)
-    value[:,1::2,0::2] = coe.view(nBlocks,fhDecY,chDecX)
-    value[:,0::2,1::2] = ceo.view(nBlocks,chDecY,fhDecX)
+    value[:,0::2,0::2] = cee.view(nBlocks,chDecX,chDecY).transpose(1,2)
+    value[:,1::2,1::2] = coo.view(nBlocks,fhDecX,fhDecY).transpose(1,2)
+    value[:,1::2,0::2] = coe.view(nBlocks,chDecX,fhDecY).transpose(1,2)
+    value[:,0::2,1::2] = ceo.view(nBlocks,fhDecX,chDecY).transpose(1,2)
     return value
 
 if __name__ == '__main__':
