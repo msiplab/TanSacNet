@@ -90,11 +90,13 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
             
             % Actual values
             actualName = layer.Name;
+            actualMode = layer.Mode;
             actualDevice = layer.Device;
             actualDType = layer.DType;
 
             % Evaluation
             testCase.verifyEqual(actualName,expctdName);
+            testCase.verifyEqual(actualMode,expctdMode);
             testCase.verifyEqual(actualDevice,expctdDevice);
             testCase.verifyEqual(actualDType,expctdDType);  
             
@@ -762,7 +764,8 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
                 'Stride',stride,...
                 'NumberOfBlocks',[nrows ncols],...
                 'Name','Vn',...
-                'Mode','Analysis');            
+                'Mode','Analysis',...
+                'Device',device_);
             %expctdZ = layer.predict(X);
             
             % Actual values
