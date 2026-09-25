@@ -793,6 +793,29 @@ classdef lsunIntermediateRotation2dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdW,'Within',tolObj));
         end
 
+
+        function testPredictInvalidMode(testCase, stride)
+
+            % Parameters
+            nrows_ = 2;
+            ncols_ = 2;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            X = zeros(nChsTotal,nrows_,ncols_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows_ ncols_],...
+                'Mode','InvalidMode',...
+                'Device','cpu');
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidMode');
+        end
+
     end
 
     

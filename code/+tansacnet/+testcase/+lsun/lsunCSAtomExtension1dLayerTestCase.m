@@ -1939,6 +1939,142 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
             
         end
         
+
+        function testPredictInvalidDirection(testCase, stride, target, mode)
+
+            % Parameters
+            nblks_ = 4;
+            nSamples = 1;
+            nChsTotal = stride;
+            X = zeros(nChsTotal,1,nblks_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_,...
+                'Direction','InvalidDirection',...
+                'TargetChannels',target,...
+                'Mode',mode);
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidDirection');
+        end
+
+        function testBackwardInvalidDirection(testCase, stride, target, mode)
+
+            % Parameters
+            nblks_ = 4;
+            nSamples = 1;
+            nChsTotal = stride;
+            X = zeros(nChsTotal,1,nblks_,nSamples);
+            dLdZ = zeros(nChsTotal,1,nblks_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_,...
+                'Direction','InvalidDirection',...
+                'TargetChannels',target,...
+                'Mode',mode);
+
+            % Evaluation
+            testCase.verifyError(@() layer.backward(X,[],dLdZ,[]),...
+                'LsunLayer:InvalidDirection');
+        end
+
+        function testPredictInvalidTargetChannels(testCase, stride, dir, mode)
+
+            % Parameters
+            nblks_ = 4;
+            nSamples = 1;
+            nChsTotal = stride;
+            X = zeros(nChsTotal,1,nblks_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_,...
+                'Direction',dir,...
+                'TargetChannels','InvalidTargetChannels',...
+                'Mode',mode);
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidTargetChannels');
+        end
+
+        function testBackwardInvalidTargetChannels(testCase, stride, dir, mode)
+
+            % Parameters
+            nblks_ = 4;
+            nSamples = 1;
+            nChsTotal = stride;
+            X = zeros(nChsTotal,1,nblks_,nSamples);
+            dLdZ = zeros(nChsTotal,1,nblks_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_,...
+                'Direction',dir,...
+                'TargetChannels','InvalidTargetChannels',...
+                'Mode',mode);
+
+            % Evaluation
+            testCase.verifyError(@() layer.backward(X,[],dLdZ,[]),...
+                'LsunLayer:InvalidTargetChannels');
+        end
+
+        function testPredictInvalidMode(testCase, stride, dir, target)
+
+            % Parameters
+            nblks_ = 4;
+            nSamples = 1;
+            nChsTotal = stride;
+            X = zeros(nChsTotal,1,nblks_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_,...
+                'Direction',dir,...
+                'TargetChannels',target,...
+                'Mode','InvalidMode');
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidMode');
+        end
+
+        function testBackwardInvalidMode(testCase, stride, dir, target)
+
+            % Parameters
+            nblks_ = 4;
+            nSamples = 1;
+            nChsTotal = stride;
+            X = zeros(nChsTotal,1,nblks_,nSamples);
+            dLdZ = zeros(nChsTotal,1,nblks_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunCSAtomExtension1dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',nblks_,...
+                'Direction',dir,...
+                'TargetChannels',target,...
+                'Mode','InvalidMode');
+
+            % Evaluation
+            testCase.verifyError(@() layer.backward(X,[],dLdZ,[]),...
+                'LsunLayer:InvalidMode');
+        end
+
     end
     
 end
