@@ -1,0 +1,46 @@
+* Release notes on Tangent Space Adaptive Control Networks (TanSacNet) Package
+
+- Unreleased (after v0.2.0)
+-- (Major) Changed the coefficient order in each group of the 3-D block DCT/IDCT to that of getMatrixE0_ in the test cases (depth fastest, vertical slowest)
+   This affects strides with two or more coefficients along multiple directions in a group, e.g., [4 4 2], [2 4 4] and [4 4 4]. Outputs for [1 1 1], [2 2 2] and [1 2 4] are unchanged.
+--- tansacnet.lsun.lsunBlockDct3dLayer
+--- tansacnet.lsun.lsunBlockIdct3dLayer
+-- (Major) Revised the PyTorch block DCT/IDCT modules to split images into 2-D blocks and to order coefficients as in tansacnet.lsun
+   The previous modules formed blocks from consecutive pixels in raster order and ordered coefficients row-major in each group. The PyTorch modules and analysis/synthesis networks now give the same outputs as the MATLAB layers for the same input. permuteDctCoefs and permuteIdctCoefs were replaced with dctmtx and block_dct_matrix_2d in lsunUtility.
+--- appendix/torch_tansacnet/lsunBlockDct2dLayer.py
+--- appendix/torch_tansacnet/lsunBlockIdct2dLayer.py
+--- appendix/torch_tansacnet/lsunUtility.py
+-- (Minor) Fixed in-place modification of mus in the initial and final rotation layers with no DC leakage, which made backward (and gradcheck) fail after repeated forward calls
+--- appendix/torch_tansacnet/lsunInitialRotation2dLayer.py
+--- appendix/torch_tansacnet/lsunFinalRotation2dLayer.py
+-- (Minor) Renamed the error identifiers NsoltLayer:InvalidMode, NsoltLayer:InvalidDirection and NsoltLayer:InvalidTargetChannels to LsunLayer:InvalidMode, LsunLayer:InvalidDirection and LsunLayer:InvalidTargetChannels
+   Code that catches these exceptions by identifier needs to be updated.
+--- tansacnet.lsun.lsunIntermediateRotation2dLayer
+--- tansacnet.lsun.lsunIntermediateRotation3dLayer
+--- tansacnet.lsun.lsunAtomExtension2dLayer
+--- tansacnet.lsun.lsunAtomExtension3dLayer
+--- tansacnet.lsun.lsunCSAtomExtension1dLayer
+-- (Minor) Added tests verifying the LsunLayer:* error identifiers for invalid Mode, Direction and TargetChannels
+--- tansacnet.testcase.lsun.lsunIntermediateRotation2dLayerTestCase
+--- tansacnet.testcase.lsun.lsunIntermediateRotation3dLayerTestCase
+--- tansacnet.testcase.lsun.lsunAtomExtension2dLayerTestCase
+--- tansacnet.testcase.lsun.lsunAtomExtension3dLayerTestCase
+--- tansacnet.testcase.lsun.lsunCSAtomExtension1dLayerTestCase
+-- (Minor) Added strides [4 4 2] and [2 4 4] to the 3-D block DCT/IDCT tests
+--- tansacnet.testcase.lsun.lsunBlockDct3dLayerTestCase
+--- tansacnet.testcase.lsun.lsunBlockIdct3dLayerTestCase
+-- (Minor) Verified Mode in testConstructorWithDeviceAndDType and passed Device in testBackwardGrayscaleAnalysisMode, which were defined but unused
+--- tansacnet.testcase.lsun.lsunIntermediateRotation2dLayerTestCase
+--- tansacnet.testcase.lsun.lsunIntermediateRotation3dLayerTestCase
+-- (Minor) Updated the expected values of the PyTorch block DCT/IDCT and network tests to follow the MATLAB tests, and relaxed atol of testForwardGrayScale from 1e-8 to 1e-6 (analysis) and 1e-5 (synthesis) for float32 rounding
+--- appendix/torch_tansacnet/test_lsunBlockDct2dLayer.py
+--- appendix/torch_tansacnet/test_lsunBlockIdct2dLayer.py
+--- appendix/torch_tansacnet/test_lsunAnalysis2dNetwork.py
+--- appendix/torch_tansacnet/test_lsunSynthesis2dNetwork.py
+-- (Minor) Fixed the misspelled usegpu parameter in the PyTorch block DCT/IDCT backward tests, so that the CPU cases are run on the CPU
+--- appendix/torch_tansacnet/test_lsunBlockDct2dLayer.py
+--- appendix/torch_tansacnet/test_lsunBlockIdct2dLayer.py
+-- (Minor) Updated README.md (package structure, unit test instructions and contributors)
+
+- v0.2.0
+- v0.1.0
