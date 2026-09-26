@@ -241,7 +241,7 @@ class LsunBlockIdct2dLayerTestCase(unittest.TestCase):
         list(itertools.product(stride,height,width,datatype,usegpu))
     )
     def testBackwardGrayScale(self,
-        stride, height, width, datatype,usergpu):
+        stride, height, width, datatype, usegpu):
         if usegpu:
             if torch.cuda.is_available():
                 device = torch.device("cuda:0")
