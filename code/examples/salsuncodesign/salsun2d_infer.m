@@ -1,0 +1,221 @@
+function [y,coefs,thetas] = salsun2d_infer(x,params)
+%SALSUN2D_INFER Reference SA-LSUN 2-D analysis and synthesis
+%
+%   y = salsun2d_infer(x,params) passes the image x (single, szy x szx)
+%   through the SA-LSUN analyzer, the coefficient mask and the synthesizer,
+%   and returns the reconstructed image y. params comes from
+%   salsun2d_extract_params. The result matches predict of the dlnetwork
+%   (Mode 'Whole', ThetaMode 'Reuse') that params was extracted from.
+%
+%   [y,coefs] = salsun2d_infer(...) also returns the masked analysis
+%   coefficients (prod(Stride) x szy/My x szx/Mx).
+%
+%   [y,coefs,thetas] = salsun2d_infer(...) also returns the estimated
+%   rotation angles: thetas{1} for the initial rotation and thetas{k+1}
+%   for the k-th intermediate stage, each nAngles x (number of blocks).
+%
+%   Only plain arithmetic is used (no Deep Learning Toolbox), as a
+%   reference for the HLS implementation. The synthesizer reuses the
+%   rotation angles estimated by the analyzer. The computation follows the
+%   class of x, so casting x and params to double gives a high-precision
+%   reference.
+%
+% Requirements: MATLAB R2026b
+%
+% Copyright (c) 2026, Shogo MURAMATSU
+%
+% All rights reserved.
+%
+% Contact address: Shogo MURAMATSU,
+%    Faculty of Engineering, Niigata University,
+%    8050 2-no-cho Ikarashi, Nishi-ku,
+%    Niigata, 950-2181, JAPAN
+%
+% http://msiplab.eng.niigata-u.ac.jp/
+%
+arguments
+    x (:,:) {mustBeFloat}
+    params (1,1) struct
+end
+
+dec = params.Stride;
+nDec = prod(dec);
+[szy,szx] = size(x);
+nRows = szy/dec(1);
+nCols = szx/dec(2);
+
+% Analysis: block DCT and initial rotation
+Y = blockDct(x,params.Cvh,dec);
+theta0 = estimateAngles(Y,params.V0.Estimator);
+Y = rotateInitial(Y,theta0,params.V0.MusW,params.V0.MusU);
+
+% Analysis: intermediate stages
+nStages = numel(params.Stages);
+thetaStages = cell(nStages,1);
+for iStage = 1:nStages
+    stage = params.Stages(iStage);
+    Y = atomExtension(Y,stage.Shift,stage.Target);
+    thetaStages{iStage} = estimateAngles(Y,stage.Estimator);
+    Y = rotateIntermediate(Y,thetaStages{iStage},stage.Mus,false);
+end
+
+% Coefficient mask
+Y = Y.*params.Mask(:);
+coefs = reshape(Y,nDec,nRows,nCols);
+
+% Synthesis: intermediate stages in reverse order, reusing the angles
+for iStage = nStages:-1:1
+    stage = params.Stages(iStage);
+    Y = rotateIntermediate(Y,thetaStages{iStage},stage.SynMus,true);
+    Y = atomExtension(Y,stage.SynShift,stage.SynTarget);
+end
+
+% Synthesis: final rotation and block IDCT
+Y = rotateFinal(Y,theta0,params.V0t.MusW,params.V0t.MusU);
+y = blockIdct(Y,params.Cvh,dec);
+thetas = [{theta0}; thetaStages];
+end
+
+%% Block transforms
+function Y = blockDct(x,Cvh,dec)
+% Y(:,r,c) = Cvh * (block (r,c) of x, column-major)
+[szy,szx] = size(x);
+nRows = szy/dec(1);
+nCols = szx/dec(2);
+blocks = permute(reshape(x,dec(1),nRows,dec(2),nCols),[1 3 2 4]);
+Y = reshape(Cvh*reshape(blocks,prod(dec),[]),prod(dec),nRows,nCols);
+end
+
+function x = blockIdct(Y,Cvh,dec)
+[nDec,nRows,nCols] = size(Y);
+blocks = reshape(Cvh.'*reshape(Y,nDec,[]),dec(1),dec(2),nRows,nCols);
+x = reshape(ipermute(blocks,[1 3 2 4]),dec(1)*nRows,dec(2)*nCols);
+end
+
+%% Atom extension
+function Y = atomExtension(Y,shift,target)
+% Butterfly, circular shift of the sum or difference half, butterfly
+nDec = size(Y,1);
+ps = nDec/2;
+Ys = Y(1:ps,:,:) + Y(ps+1:end,:,:);
+Ya = Y(1:ps,:,:) - Y(ps+1:end,:,:);
+if strcmp(target,'Difference')
+    Ya = circshift(Ya,[0 shift]);
+else
+    Ys = circshift(Ys,[0 shift]);
+end
+Y = 0.5*cat(1,Ys+Ya,Ys-Ya);
+end
+
+%% Rotations
+function Y = rotateInitial(Y,theta,musW,musU)
+[nDec,nRows,nCols] = size(Y);
+ps = nDec/2;
+nAngles = size(theta,1);
+Y = reshape(Y,nDec,[]);
+for iBlk = 1:nRows*nCols
+    W = orthMatrix(theta(1:nAngles/2,iBlk),musColumn(musW,iBlk));
+    U = orthMatrix(theta(nAngles/2+1:end,iBlk),musColumn(musU,iBlk));
+    Y(1:ps,iBlk) = W*Y(1:ps,iBlk);
+    Y(ps+1:end,iBlk) = U*Y(ps+1:end,iBlk);
+end
+Y = reshape(Y,nDec,nRows,nCols);
+end
+
+function Y = rotateFinal(Y,theta,musW,musU)
+[nDec,nRows,nCols] = size(Y);
+ps = nDec/2;
+nAngles = size(theta,1);
+Y = reshape(Y,nDec,[]);
+for iBlk = 1:nRows*nCols
+    W = orthMatrix(theta(1:nAngles/2,iBlk),musColumn(musW,iBlk));
+    U = orthMatrix(theta(nAngles/2+1:end,iBlk),musColumn(musU,iBlk));
+    Y(1:ps,iBlk) = W.'*Y(1:ps,iBlk);
+    Y(ps+1:end,iBlk) = U.'*Y(ps+1:end,iBlk);
+end
+Y = reshape(Y,nDec,nRows,nCols);
+end
+
+function Y = rotateIntermediate(Y,theta,mus,isSynthesis)
+% Rotate the antisymmetric half; the transpose is used for synthesis
+[nDec,nRows,nCols] = size(Y);
+ps = nDec/2;
+Y = reshape(Y,nDec,[]);
+for iBlk = 1:nRows*nCols
+    U = orthMatrix(theta(:,iBlk),musColumn(mus,iBlk));
+    if isSynthesis
+        U = U.';
+    end
+    Y(ps+1:end,iBlk) = U*Y(ps+1:end,iBlk);
+end
+Y = reshape(Y,nDec,nRows,nCols);
+end
+
+function mu = musColumn(mus,iBlk)
+if size(mus,2) == 1
+    mu = mus;
+else
+    mu = mus(:,iBlk);
+end
+end
+
+function M = orthMatrix(angles,mus)
+% Product of Givens rotations followed by sign flips (as fcn_orthmtxgen)
+n = (1+sqrt(1+8*numel(angles)))/2;
+M = eye(n,'like',angles);
+iAng = 1;
+for iTop = 1:n-1
+    vt = M(iTop,:);
+    for iBtm = iTop+1:n
+        c = cos(angles(iAng));
+        s = sin(angles(iAng));
+        vb = M(iBtm,:);
+        u = s.*(vt+vb);
+        vt = (c+s).*vt-u;
+        M(iBtm,:) = (c-s).*vb+u;
+        iAng = iAng + 1;
+    end
+    M(iTop,:) = vt;
+end
+M = mus(:).*M;
+end
+
+%% Angle estimator (control path)
+function theta = estimateAngles(Y,est)
+[~,nRows,nCols] = size(Y);
+nBlks = nRows*nCols;
+
+% Local state extraction: neighbor blocks with circular boundary
+Xc = Y(est.Channels,:,:);
+nv = est.Neighbor(1);
+nh = est.Neighbor(2);
+F = zeros(numel(est.Channels)*nv*nh,nRows,nCols,'like',Y);
+iF = 0;
+nCh = numel(est.Channels);
+for vshift = fix(nv/2):-1:-fix(nv/2)
+    for hshift = fix(nh/2):-1:-fix(nh/2)
+        F(iF+(1:nCh),:,:) = circshift(Xc,[0 vshift hshift]);
+        iF = iF + nCh;
+    end
+end
+F = reshape(F,[],nBlks);
+
+% State standardization over all blocks of the image
+mu = mean(F,2);
+v = sum((F-mu).^2,2)/(nBlks-1);
+F = (F-mu)./(sqrt(v)+est.Epsilon);
+
+% Residual estimator blocks: LayerNorm, FC, GELU (tanh), FC, skip
+for iRes = 1:numel(est.ResBlocks)
+    r = est.ResBlocks(iRes);
+    mu = mean(F,1);
+    v = mean((F-mu).^2,1);
+    ln = r.Gamma.*((F-mu)./sqrt(v+1e-5)) + r.Beta;
+    z1 = r.W1*ln + r.B1;
+    a = 0.5.*z1.*(1+tanh(sqrt(2/pi).*(z1+0.044715.*z1.^3)));
+    F = F + r.W2*a + r.B2;
+end
+
+% Output: angles, with zero-padded leading angles for no-DC-leakage
+theta = [zeros(est.NumberOfZeroPadAngles,nBlks,'like',F); est.Wo*F + est.Bo];
+end
