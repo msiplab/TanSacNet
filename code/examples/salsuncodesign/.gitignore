@@ -12,3 +12,6 @@ _x/
 *.xo
 emconfig.json
 xrt.run_summary
+
+# MEX binaries (build with build_mex_salsun2d)
+*.mex*
