@@ -1,5 +1,5 @@
 classdef Salsun2dHlsTestCase < matlab.unittest.TestCase
-    %SALSUN2DHLSTESTCASE Test case for salsun2d_hls and salsun2d_pack_params
+    %SALSUN2DHLSTESTCASE Test case for salsun2d_hls(_opt) and salsun2d_pack_params
     %
     % Compares the HLS version salsun2d_hls with the reference
     % salsun2d_infer on a network with randomly perturbed parameters (see
@@ -91,6 +91,27 @@ classdef Salsun2dHlsTestCase < matlab.unittest.TestCase
                 sprintf('Error from double: HLS %g, reference %g',errActual,errRef));
             testCase.verifyEqual(yActual,yRef,'AbsTol',single(1e-2), ...
                 'A large difference means an implementation error, not rounding.');
+        end
+
+        function testOptimizedMatchesExactly(testCase,inputSize)
+            % salsun2d_hls_opt keeps the order of every summation, so it
+            % must give bit-identical results to salsun2d_hls
+
+            rng(7)
+            nCoefs = 2;
+            coefMask = reshape([ones(nCoefs,1); zeros(16-nCoefs,1)],2,[]).';
+            net = salsun2d_create_test_network(inputSize,coefMask(:));
+            x = rand(inputSize,'single');
+            w = salsun2d_pack_params(salsun2d_extract_params(net));
+
+            % Expected values
+            yExpctd = salsun2d_hls(x,w);
+
+            % Actual values
+            yActual = salsun2d_hls_opt(x,w);
+
+            % Evaluation
+            testCase.verifyEqual(yActual,yExpctd);
         end
 
     end

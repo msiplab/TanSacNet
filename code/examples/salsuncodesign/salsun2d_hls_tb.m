@@ -1,7 +1,8 @@
 %SALSUN2D_HLS_TB Testbench for salsun2d_hls (used by HDL Coder HLS workflow)
 %
-% The image size is set by hlsInputSize in the base workspace (default
-% [32 32]); run_salsun2d_hls_codegen sets it.
+% The image size is set by hlsInputSize and the design by hlsDesignName
+% in the base workspace (defaults [32 32] and 'salsun2d_hls');
+% run_salsun2d_hls_codegen sets them.
 %
 % Requirements: MATLAB R2026b, Deep Learning Toolbox
 %
@@ -20,6 +21,9 @@
 if ~exist('hlsInputSize','var')
     hlsInputSize = [32 32];
 end
+if ~exist('hlsDesignName','var')
+    hlsDesignName = 'salsun2d_hls';
+end
 rng(0)
 nCoefs = 2;
 coefMask = reshape([ones(nCoefs,1); zeros(16-nCoefs,1)],2,[]).';
@@ -28,7 +32,11 @@ params = salsun2d_extract_params(net);
 w = salsun2d_pack_params(params);
 for iFrame = 1:2
     x = rand(hlsInputSize,'single');
-    y = salsun2d_hls(x,w);
+    if strcmp(hlsDesignName,'salsun2d_hls_opt')
+        y = salsun2d_hls_opt(x,w);
+    else
+        y = salsun2d_hls(x,w);
+    end
     yRef = salsun2d_infer(x,params);
     fprintf('salsun2d_hls_tb: frame %d, max abs difference from reference = %g\n', ...
         iFrame,max(abs(y(:)-yRef(:))));

@@ -1,2 +1,14 @@
 # HDL Coder output (regenerate with run_salsun2d_hls_codegen)
 codegen/
+
+# Vitis build outputs
+build/
+_x/
+.Xil/
+.run/
+*.log
+*.jou
+*.xclbin
+*.xo
+emconfig.json
+xrt.run_summary

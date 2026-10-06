@@ -1,8 +1,13 @@
-function run_salsun2d_hls_codegen(inputSize)
+function run_salsun2d_hls_codegen(inputSize,designName)
 %RUN_SALSUN2D_HLS_CODEGEN Generate Vitis HLS C++ for salsun2d_hls
 %
 %   run_salsun2d_hls_codegen(inputSize) generates code for images of size
-%   inputSize (default [32 32]) into codegen/salsun2d_hls/hdlsrc.
+%   inputSize (default [32 32]) into
+%   codegen/<szy>x<szx>/salsun2d_hls/hdlsrc.
+%
+%   run_salsun2d_hls_codegen(inputSize,designName) generates code for
+%   designName, 'salsun2d_hls' (default) or 'salsun2d_hls_opt', into
+%   codegen/<szy>x<szx>/<designName>/hdlsrc.
 %
 % Requirements: MATLAB R2026b, HDL Coder, Deep Learning Toolbox
 %
@@ -19,10 +24,12 @@ function run_salsun2d_hls_codegen(inputSize)
 %
 arguments
     inputSize (1,2) double = [32 32]
+    designName {mustBeMember(designName,{'salsun2d_hls','salsun2d_hls_opt'})} = 'salsun2d_hls'
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
 assignin('base','hlsInputSize',inputSize);
+assignin('base','hlsDesignName',designName);
 
 L = salsun2d_hls_layout();
 cfg = coder.config('hls');
@@ -36,6 +43,7 @@ cfg.SynthesisToolDeviceName = 'xcu250';
 cfg.SynthesisToolPackageName = 'figd2104';
 cfg.SynthesisToolSpeedValue = '-2L-e';
 
-codegen('-config',cfg,'salsun2d_hls','-args', ...
-    {zeros(inputSize,'single'),zeros(L.NParams,1,'single')});
+codegen('-config',cfg,designName,'-args', ...
+    {zeros(inputSize,'single'),zeros(L.NParams,1,'single')}, ...
+    '-d',fullfile(here,'codegen',sprintf('%dx%d',inputSize)));
 end
