@@ -16,7 +16,7 @@ train on GPU ──> params (.mat) ───────────────
 | Step | Description | Status |
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
-| 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | |
+| 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
 | 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | |
@@ -29,11 +29,20 @@ train on GPU ──> params (.mat) ───────────────
 | `salsun2d_infer.m` | Reference inference: `[y,coefs,thetas] = salsun2d_infer(x,params)` |
 | `salsun2d_cast_params.m` | Casts the parameters, e.g. to double for a high-precision reference |
 | `Salsun2dInferTestCase.m` | Compares `salsun2d_infer` with `predict` of the `dlnetwork` |
+| `salsun2d_hls_layout.m` | Fixed configuration of the HLS version and offsets of each parameter in the packed vector |
+| `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
+| `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
+| `Salsun2dHlsTestCase.m` | Compares `salsun2d_hls` with `salsun2d_infer` |
+| `salsun2d_create_test_network.m` | Network with randomly perturbed parameters, used by the tests |
+| `salsun2d_hls_tb.m`, `run_salsun2d_hls_codegen.m` | HDL Coder (Vitis HLS 2024.1) code generation into `codegen/salsun2d_hls/hdlsrc` |
 
 ```matlab
 params = salsun2d_extract_params(reconnet);   % reconnet as in main_salsun2d.m
 y = salsun2d_infer(single(x),params);         % same as reconnet.predict
-runtests('Salsun2dInferTestCase')
+w = salsun2d_pack_params(params);
+y = salsun2d_hls(single(x),w);                % HLS version, same result
+runtests({'Salsun2dInferTestCase','Salsun2dHlsTestCase'})
+run_salsun2d_hls_codegen([300 300])           % Vitis HLS C++ for 300 x 300 images
 ```
 
 ## Structure of the inference
@@ -49,6 +58,27 @@ over all blocks of the image -> 3 residual blocks (LayerNorm, FC, GELU with
 tanh, FC, skip) -> FC to the angles. With block 4 x 4, overlap 3 x 3 and
 width 2, this is about 480k multiply-accumulates per block, almost all in the
 estimators.
+
+## HLS version
+
+`salsun2d_hls` fixes the configuration of `main_salsun2d.m` (stride [4 4],
+overlapping factor [3 3], no DC leakage, neighbor [3 3], 3 residual blocks,
+width 2) and takes all parameters in one vector `w`, so that retraining on
+the GPU does not require rebuilding the FPGA kernel. Two observations keep it
+simple:
+
+- The features of an estimator are circular shifts of the same channels, so
+  their mean and variance over the image equal those of the channels. The
+  standardization statistics are computed once per channel.
+- Each estimator reads the neighbors of a block before rotation, so rotated
+  coefficients are written to a second buffer.
+
+HDL Coder generates Vitis HLS C++ for 300 x 300 images with no conformance
+errors or warnings. The generated C++, compiled with the Vitis HLS math
+library (C simulation, 32 x 32 with mask), differs from the double-precision
+reference by 7.7e-4, against 6.7e-4 for the single-precision MATLAB version.
+The generated code is not optimized yet (everything is inlined into one
+function, no pragmas); that is step 3.
 
 ## Numerical note
 

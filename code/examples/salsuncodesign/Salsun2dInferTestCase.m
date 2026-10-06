@@ -2,9 +2,8 @@ classdef Salsun2dInferTestCase < matlab.unittest.TestCase
     %SALSUN2DINFERTESTCASE Test case for salsun2d_infer
     %
     % Compares the reference implementation salsun2d_infer with predict of
-    % the dlnetwork it was extracted from. The learnable parameters are
-    % perturbed randomly, because the initial angle estimators output zero
-    % angles (Wo = 0), which would leave the rotations untested.
+    % the dlnetwork it was extracted from. The network has randomly
+    % perturbed parameters (see salsun2d_create_test_network).
     %
     % Requirements: MATLAB R2026b, Deep Learning Toolbox
     %
@@ -33,40 +32,12 @@ classdef Salsun2dInferTestCase < matlab.unittest.TestCase
         end
     end
 
-    methods (Static, Access=private)
-        function net = createNetwork(inputSize,coefMask)
-            % Same settings as main_salsun2d.m, on the CPU
-            import tansacnet.salsun.*
-            lg = fcn_createsalsunlgraph2d([], ...
-                'InputSize',inputSize, ...
-                'Stride',[4 4], ...
-                'OverlappingFactor',[3 3], ...
-                'NumberOfVanishingMoments',true, ...
-                'NumberOfNeighborBlocks',[3 3], ...
-                'NumberOfResidualBlocks',3, ...
-                'Width',2, ...
-                'Mode','Whole', ...
-                'ThetaMode','Reuse', ...
-                'Device','cpu');
-            if ~isempty(coefMask)
-                lg = lg.disconnectLayers('Lv1_AcOut','Lv1_AcIn');
-                lg = lg.addLayers(maskLayer('Name','Lv1_AcMask', ...
-                    'Mask',coefMask(2:end),'NumberOfChannels',numel(coefMask)-1));
-                lg = lg.connectLayers('Lv1_AcOut','Lv1_AcMask');
-                lg = lg.connectLayers('Lv1_AcMask','Lv1_AcIn');
-            end
-            net = dlnetwork(lg);
-            % Perturb all learnables so that the angles are not zero
-            net = dlupdate(@(w) w + 0.1*randn(size(w),'like',w),net);
-        end
-    end
-
     methods (Test)
 
         function testPerfectReconstruction(testCase,inputSize)
 
             rng(1)
-            net = Salsun2dInferTestCase.createNetwork(inputSize,[]);
+            net = salsun2d_create_test_network(inputSize,[]);
             x = rand(inputSize,'single');
 
             % Expected values
@@ -90,7 +61,7 @@ classdef Salsun2dInferTestCase < matlab.unittest.TestCase
             nChsTotal = 16;
             coefMask = reshape([ones(nCoefs,1); zeros(nChsTotal-nCoefs,1)],2,[]).';
             coefMask = coefMask(:);
-            net = Salsun2dInferTestCase.createNetwork(inputSize,coefMask);
+            net = salsun2d_create_test_network(inputSize,coefMask);
             x = rand(inputSize,'single');
 
             % Expected values
