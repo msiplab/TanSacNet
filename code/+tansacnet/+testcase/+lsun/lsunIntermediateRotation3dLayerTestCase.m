@@ -76,7 +76,7 @@ classdef lsunIntermediateRotation3dLayerTestCase < matlab.unittest.TestCase
             
             % Expected values
             expctdName = 'Vn~';
-            %expctdMode = 'Synthesis';
+            expctdMode = 'Synthesis';
      
             device_ = ["cpu", "cuda"];
             expctdDevice = device_(usegpu+1);
@@ -92,11 +92,13 @@ classdef lsunIntermediateRotation3dLayerTestCase < matlab.unittest.TestCase
             
             % Actual values
             actualName = layer.Name;
+            actualMode = layer.Mode;
             actualDevice = layer.Device;
             actualDType = layer.DType;
 
             % Evaluation
             testCase.verifyEqual(actualName,expctdName);
+            testCase.verifyEqual(actualMode,expctdMode);
             testCase.verifyEqual(actualDevice,expctdDevice);
             testCase.verifyEqual(actualDType,expctdDType);  
             
@@ -788,6 +790,30 @@ classdef lsunIntermediateRotation3dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdX,'Within',tolObj));
             testCase.verifyThat(actualdLdW,...
                 IsEqualTo(expctddLdW,'Within',tolObj));
+        end
+
+
+        function testPredictInvalidMode(testCase, stride)
+
+            % Parameters
+            nrows_ = 2;
+            ncols_ = 2;
+            nlays_ = 2;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            X = zeros(nChsTotal,nrows_,ncols_,nlays_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation3dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows_ ncols_ nlays_],...
+                'Mode','InvalidMode',...
+                'Device','cpu');
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidMode');
         end
 
     end

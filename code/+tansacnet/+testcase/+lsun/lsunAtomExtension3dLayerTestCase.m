@@ -344,6 +344,95 @@ classdef lsunAtomExtension3dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdX,'Within',tolObj));
             
         end
+
+        function testPredictInvalidDirection(testCase, stride, target)
+
+            % Parameters
+            nrows_ = 4;
+            ncols_ = 4;
+            nlays_ = 4;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            X = zeros(nChsTotal,nrows_,ncols_,nlays_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunAtomExtension3dLayer(...
+                'Stride',stride,...
+                'Direction','InvalidDirection',...
+                'TargetChannels',target);
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidDirection');
+        end
+
+        function testBackwardInvalidDirection(testCase, stride, target)
+
+            % Parameters
+            nrows_ = 4;
+            ncols_ = 4;
+            nlays_ = 4;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            dLdZ = zeros(nChsTotal,nrows_,ncols_,nlays_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunAtomExtension3dLayer(...
+                'Stride',stride,...
+                'Direction','InvalidDirection',...
+                'TargetChannels',target);
+
+            % Evaluation
+            testCase.verifyError(@() layer.backward([],[],dLdZ,[]),...
+                'LsunLayer:InvalidDirection');
+        end
+
+        function testPredictInvalidTargetChannels(testCase, stride, dir)
+
+            % Parameters
+            nrows_ = 4;
+            ncols_ = 4;
+            nlays_ = 4;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            X = zeros(nChsTotal,nrows_,ncols_,nlays_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunAtomExtension3dLayer(...
+                'Stride',stride,...
+                'Direction',dir,...
+                'TargetChannels','InvalidTargetChannels');
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidTargetChannels');
+        end
+
+        function testBackwardInvalidTargetChannels(testCase, stride, dir)
+
+            % Parameters
+            nrows_ = 4;
+            ncols_ = 4;
+            nlays_ = 4;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            dLdZ = zeros(nChsTotal,nrows_,ncols_,nlays_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunAtomExtension3dLayer(...
+                'Stride',stride,...
+                'Direction',dir,...
+                'TargetChannels','InvalidTargetChannels');
+
+            % Evaluation
+            testCase.verifyError(@() layer.backward([],[],dLdZ,[]),...
+                'LsunLayer:InvalidTargetChannels');
+        end
+
     end
     
 end
