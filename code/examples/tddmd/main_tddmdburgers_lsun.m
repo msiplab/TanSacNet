@@ -1,6 +1,6 @@
 %[text] # **Analysis of the Burgers equation by LSUN**
 %[text] First run TanSacNet/code/setpath
-%[text] Requirements: MATLAB R2022b 
+%[text] Requirements: MATLAB R2025a or later
 %[text] Contact address: Shogo MURAMATSU, Faculty of Engineering, Niigata University, 8050 2-no-cho Ikarashi, Nishi-ku, Niigata, 950-2181, JAPAN http://msiplab.eng.niigata-u.ac.jp  
 %[text] Copyright (c) 2023, Hayato Obara and Shogo MURAMATSU, All rights reserved.
 clc, clear
@@ -41,11 +41,17 @@ exportgraphics(ax,'fig03a.png')
 %%
 %[text] ## LSUN training
 %[text] 
-datatype = 'double';
+% Device and precision (override here to switch manually)
+useGpu = canUseGPU;
+if useGpu && ~tansacnet.utility.isFp64GpuAvailable
+    datatype = 'single'; % GPU without full-rate FP64
+else
+    datatype = 'double';
+end
 nX = size(DataT,2);
 filenamelsun = datafolder + "lsunnet_nX"+num2str(nX)+"_stride" + num2str(stride)+"_nCoefs"+num2str(nCoefs) + "_numEpochs" + num2str(numEpochs);
 %if exist(filenamelsun+".mat","file")~=2
-    [analsunnet, synlsunnet,coefMask] = fcn_lsun_train(DataT,stride,nCoefs,numEpochs,datatype);
+    [analsunnet, synlsunnet,coefMask] = fcn_lsun_train(DataT,stride,nCoefs,numEpochs,datatype,useGpu);
 %%
     save(filenamelsun,"analsunnet","synlsunnet","nX","stride","nCoefs","numEpochs","coefMask");
 %else
@@ -73,7 +79,11 @@ nT = size(DataT,1);
 ndim = nX
 analsunseq = zeros(nT,stride,ndim/stride,'like',DataT);
 for iT = 1:nT
-    [dc,ac] = analsunnet.predict(gpuArray(DataT(iT,:))); % dc: 1 x Pos., ac: Ch. x 1 x Pos
+    xT = cast(DataT(iT,:),datatype);
+    if useGpu
+        xT = gpuArray(xT);
+    end
+    [dc,ac] = analsunnet.predict(xT); % dc: 1 x Pos., ac: Ch. x 1 x Pos
     analsunseq(iT,:,:) = cat(2,permute(dc,[3 1 2]),permute(ac,[2 1 3]));
 end
 % 3-D array w/ Time x Ch. x Pos.
