@@ -14,8 +14,9 @@ function [y,theta] = salsun2d_hls_opt(x,w,theta) %#codegen
 %     generated code update theta in place.
 %
 %   - The angle estimators process one column of blocks (nRows blocks)
-%     at a time. The fully connected layers read one weight per cycle and
-%     apply it to all blocks of the column in parallel.
+%     at a time with nL = gcd(nRows,L.NLanes) parallel lanes. The fully
+%     connected layers read one weight per cycle and apply it to nL
+%     blocks per cycle.
 %   - The estimator and the fully connected layer are not inlined, so one
 %     piece of hardware serves all five estimators and all their layers.
 %   - The coefficients alternate between two buffers instead of a copy
@@ -301,20 +302,22 @@ for j = 1:nCh
 end
 
 % All intermediate arrays have MaxNHidden rows, so that one version of
-% each layer function serves every call, and are partitioned over the
-% blocks of the column (dimension 1 in the generated C++)
+% each layer function serves every call. They are split cyclically over
+% the blocks of the column (dimension 1 in the generated C++) into nL
+% banks, one per lane: block b is in bank mod(b-1,nL).
+nL = coder.const(gcd(nRows,L.NLanes));
 F = zeros(L.MaxNHidden,nRows,'single');
 LN = zeros(L.MaxNHidden,nRows,'single');
 Z1 = zeros(L.MaxNHidden,nRows,'single');
 A = zeros(L.MaxNHidden,nRows,'single');
 Z2 = zeros(L.MaxNHidden,nRows,'single');
 Th = zeros(L.MaxNHidden,nRows,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=F type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=LN type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Z1 type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=A type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Z2 type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Th type=complete dim=1")
+coder.hdl.literaltext(coder.const(partitionPragma('F',nL)))
+coder.hdl.literaltext(coder.const(partitionPragma('LN',nL)))
+coder.hdl.literaltext(coder.const(partitionPragma('Z1',nL)))
+coder.hdl.literaltext(coder.const(partitionPragma('A',nL)))
+coder.hdl.literaltext(coder.const(partitionPragma('Z2',nL)))
+coder.hdl.literaltext(coder.const(partitionPragma('Th',nL)))
 for c = 1:nCols
     % Local state of the blocks in column c
     for r = 1:nRows
@@ -333,10 +336,10 @@ for c = 1:nCols
 
     % Residual blocks: LayerNorm, FC, GELU (tanh), FC, skip
     for iRes = 1:L.NResBlocks
-        LN = layerNorm(F,w,int32(L.Gamma(iEst,iRes)),int32(L.Beta(iEst,iRes)),nF,L.LnEpsilon);
-        Z1 = fullyConnected(LN,w,int32(L.W1(iEst,iRes)),int32(L.B1(iEst,iRes)),nH,nF);
+        LN = layerNorm(F,w,int32(L.Gamma(iEst,iRes)),int32(L.Beta(iEst,iRes)),nF,L.LnEpsilon,nL);
+        Z1 = fullyConnected(LN,w,int32(L.W1(iEst,iRes)),int32(L.B1(iEst,iRes)),nH,nF,nL);
         A = gelu(Z1,nH);
-        Z2 = fullyConnected(A,w,int32(L.W2(iEst,iRes)),int32(L.B2(iEst,iRes)),nF,nH);
+        Z2 = fullyConnected(A,w,int32(L.W2(iEst,iRes)),int32(L.B2(iEst,iRes)),nF,nH,nL);
         for r = 1:nRows
             for i = 1:nF
                 F(i,r) = F(i,r) + Z2(i,r);
@@ -345,7 +348,7 @@ for c = 1:nCols
     end
 
     % Output angles (leading zeros for no DC leakage)
-    Th = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF);
+    Th = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF,nL);
     for r = 1:nRows
         for a = 1:nZ
             theta(offTheta+a,r,c) = single(0);
@@ -357,16 +360,17 @@ for c = 1:nCols
 end
 end
 
-function Z = fullyConnected(X,w,offW,offB,nOut,nIn)
+function Z = fullyConnected(X,w,offW,offB,nOut,nIn,nL)
 % Z(o,b) = B(o) + sum_i W(o,i)*X(i,b) for all blocks b of a column.
-% One weight W(o,i) per cycle (consecutive o), applied to every b in
-% parallel. Z(o,b) is updated again only nOut cycles later, so the adder
-% latency does not limit the pipeline.
+% Each weight W(o,i) is read once and applied to the blocks in groups of
+% nL lanes, one group per cycle. Z(o,b) is updated again only at the next
+% i, so the adder latency does not limit the pipeline.
 coder.inline('never')
 % Only rows 1..nOut are written and read, so Z is not zero-filled
 % (a zero fill would cost as many cycles as the layer itself)
 Z = coder.nullcopy(zeros(size(X),'single'));
 nB = size(X,2);
+nG = nB/nL;
 for o = 1:nOut
     for b = 1:nB
         Z(o,b) = w(offB+o);
@@ -374,44 +378,55 @@ for o = 1:nOut
 end
 for i = 1:nIn
     for o = 1:nOut
-        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-        coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=Z type=inter false")
         wv = w(offW + o + (i-1)*nOut);
-        for b = 1:nB
-            Z(o,b) = Z(o,b) + wv*X(i,b);
+        for g = 1:nG
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=Z type=inter false")
+            for lane = 1:nL
+                b = (g-1)*nL + lane;
+                Z(o,b) = Z(o,b) + wv*X(i,b);
+            end
         end
     end
 end
 end
 
-function Z = layerNorm(X,w,offGamma,offBeta,nF,lnEpsilon)
-% LayerNorm over the features of each block. The sums run over i in the
-% outer loop for all blocks b in parallel, keeping the order of summation
-% (so the result is bit-identical to salsun2d_hls). Each sum is updated
-% once per iteration of i, so the pipeline waits for the adder; with the
-% blocks in parallel this costs about nF times the adder latency in total.
+function Z = layerNorm(X,w,offGamma,offBeta,nF,lnEpsilon,nL)
+% LayerNorm over the features of each block. For each group of nL blocks
+% the sums run over i with the nL blocks in parallel, keeping the order of
+% summation (so the result is bit-identical to salsun2d_hls). Each sum is
+% updated once per iteration of i, so the pipeline waits for the adder.
 % The normalization uses one divider, pipelined over the blocks.
 coder.inline('never')
 nB = size(X,2);
+nG = nB/nL;
 Z = coder.nullcopy(zeros(size(X),'single'));   % rows 1..nF are all written
 m = zeros(1,nB,'single');
 s = zeros(1,nB,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=m type=complete dim=0")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=s type=complete dim=0")
-for i = 1:nF
-    coder.hdl.literaltext("#pragma HLS PIPELINE")
-    for b = 1:nB
-        m(b) = m(b) + X(i,b);
+coder.hdl.literaltext(coder.const(sprintf( ...
+    '#pragma HLS ARRAY_PARTITION variable=m type=cyclic factor=%d dim=1',nL)))
+coder.hdl.literaltext(coder.const(sprintf( ...
+    '#pragma HLS ARRAY_PARTITION variable=s type=cyclic factor=%d dim=1',nL)))
+for g = 1:nG
+    for i = 1:nF
+        coder.hdl.literaltext("#pragma HLS PIPELINE")
+        for lane = 1:nL
+            b = (g-1)*nL + lane;
+            m(b) = m(b) + X(i,b);
+        end
     end
 end
 for b = 1:nB
     m(b) = m(b)/single(nF);
 end
-for i = 1:nF
-    coder.hdl.literaltext("#pragma HLS PIPELINE")
-    for b = 1:nB
-        d = X(i,b) - m(b);
-        s(b) = s(b) + d*d;
+for g = 1:nG
+    for i = 1:nF
+        coder.hdl.literaltext("#pragma HLS PIPELINE")
+        for lane = 1:nL
+            b = (g-1)*nL + lane;
+            d = X(i,b) - m(b);
+            s(b) = s(b) + d*d;
+        end
     end
 end
 for b = 1:nB
@@ -442,4 +457,9 @@ end
 function i = wrap(i,n)
 % 1-based circular index
 i = mod(i-1,n) + 1;
+end
+
+function str = partitionPragma(name,nL)
+% Cyclic split over the blocks of a column (dimension 1 in C++)
+str = sprintf('#pragma HLS ARRAY_PARTITION variable=%s type=cyclic factor=%d dim=1',name,nL);
 end

@@ -37,6 +37,10 @@ L.Width = 2;
 L.Epsilon = 1e-8;            % state standardization
 L.LnEpsilon = 1e-5;          % LayerNorm in residual blocks
 L.NStages = 4;
+% Parallel lanes of the estimators: the blocks of a column are processed
+% by gcd(nRows,NLanes) lanes (15 for 300 x 300 frames). With 75 lanes the
+% hardware build failed in routing (congestion level 7).
+L.NLanes = 15;
 % Intermediate stages in analysis order: shift [v h] and target half
 % (1: difference, 2: sum), then the same for synthesis
 L.Shift    = [0 1; 0 -1; 1 0; -1 0];
