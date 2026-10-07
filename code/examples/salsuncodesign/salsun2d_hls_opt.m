@@ -48,6 +48,10 @@ nCols = szx/L.Stride(2);
 
 
 %% Analysis (Ya and Yb alternate)
+% The coefficient buffers (90,000 values each for 300 x 300 frames) are
+% bound to URAM, so that BRAM fits in one SLR next to the platform logic
+coder.hdl.literaltext("#pragma HLS BIND_STORAGE variable=Ya type=ram_2p impl=uram")
+coder.hdl.literaltext("#pragma HLS BIND_STORAGE variable=Yb type=ram_2p impl=uram")
 Ya = blockDct(x,w,L,nRows,nCols);
 % coder.ignoreConst keeps one estimator for all five calls
 theta = estimateAngles(theta,Ya,w,L,coder.ignoreConst(int32(1)),nRows,nCols);
