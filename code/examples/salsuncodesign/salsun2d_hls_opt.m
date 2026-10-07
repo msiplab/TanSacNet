@@ -353,7 +353,9 @@ function Z = fullyConnected(X,w,offW,offB,nOut,nIn)
 % parallel. Z(o,b) is updated again only nOut cycles later, so the adder
 % latency does not limit the pipeline.
 coder.inline('never')
-Z = zeros(size(X),'single');
+% Only rows 1..nOut are written and read, so Z is not zero-filled
+% (a zero fill would cost as many cycles as the layer itself)
+Z = coder.nullcopy(zeros(size(X),'single'));
 nB = size(X,2);
 for o = 1:nOut
     for b = 1:nB
@@ -373,24 +375,42 @@ end
 end
 
 function Z = layerNorm(X,w,offGamma,offBeta,nF,lnEpsilon)
+% LayerNorm over the features of each block. The sums run over i in the
+% outer loop for all blocks b in parallel, keeping the order of summation
+% (so the result is bit-identical to salsun2d_hls). Each sum is updated
+% once per iteration of i, so the pipeline waits for the adder; with the
+% blocks in parallel this costs about nF times the adder latency in total.
+% The normalization uses one divider, pipelined over the blocks.
 coder.inline('never')
 nB = size(X,2);
-Z = zeros(size(X),'single');
+Z = coder.nullcopy(zeros(size(X),'single'));   % rows 1..nF are all written
+m = zeros(1,nB,'single');
+s = zeros(1,nB,'single');
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=m type=complete dim=0")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=s type=complete dim=0")
+for i = 1:nF
+    coder.hdl.literaltext("#pragma HLS PIPELINE")
+    for b = 1:nB
+        m(b) = m(b) + X(i,b);
+    end
+end
 for b = 1:nB
-    acc = single(0);
-    for i = 1:nF
-        acc = acc + X(i,b);
+    m(b) = m(b)/single(nF);
+end
+for i = 1:nF
+    coder.hdl.literaltext("#pragma HLS PIPELINE")
+    for b = 1:nB
+        d = X(i,b) - m(b);
+        s(b) = s(b) + d*d;
     end
-    m = acc/single(nF);
-    acc = single(0);
-    for i = 1:nF
-        d = X(i,b) - m;
-        acc = acc + d*d;
-    end
-    s = sqrt(acc/single(nF) + single(lnEpsilon));
+end
+for b = 1:nB
+    s(b) = sqrt(s(b)/single(nF) + single(lnEpsilon));
+end
+for b = 1:nB
     for i = 1:nF
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-        Z(i,b) = w(offGamma+i)*((X(i,b) - m)/s) + w(offBeta+i);
+        Z(i,b) = w(offGamma+i)*((X(i,b) - m(b))/s(b)) + w(offBeta+i);
     end
 end
 end
@@ -398,7 +418,7 @@ end
 function A = gelu(Z,nH)
 coder.inline('never')
 nB = size(Z,2);
-A = zeros(size(Z),'single');
+A = coder.nullcopy(zeros(size(Z),'single'));   % rows 1..nH are all written
 for h = 1:nH
     for b = 1:nB
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
