@@ -1,4 +1,4 @@
-function [y,coefs,thetas] = salsun2d_infer(x,params)
+function [y,coefs,thetas,stageInputs] = salsun2d_infer(x,params)
 %SALSUN2D_INFER Reference SA-LSUN 2-D analysis and synthesis
 %
 %   y = salsun2d_infer(x,params) passes the image x (single, szy x szx)
@@ -13,6 +13,11 @@ function [y,coefs,thetas] = salsun2d_infer(x,params)
 %   [y,coefs,thetas] = salsun2d_infer(...) also returns the estimated
 %   rotation angles: thetas{1} for the initial rotation and thetas{k+1}
 %   for the k-th intermediate stage, each nAngles x (number of blocks).
+%
+%   [y,coefs,thetas,stageInputs] = salsun2d_infer(...) also returns the
+%   inputs of the angle estimators (the coefficients before each
+%   rotation), stageInputs{k} for estimator k, each prod(Stride) x nRows
+%   x nCols, for diagnostics such as the standardization statistics.
 %
 %   Only plain arithmetic is used (no Deep Learning Toolbox), as a
 %   reference for the HLS implementation. The synthesizer reuses the
@@ -46,6 +51,8 @@ nCols = szx/dec(2);
 
 % Analysis: block DCT and initial rotation
 Y = blockDct(x,params.Cvh,dec);
+stageInputs = cell(1+numel(params.Stages),1);
+stageInputs{1} = Y;
 theta0 = estimateAngles(Y,params.V0.Estimator);
 Y = rotateInitial(Y,theta0,params.V0.MusW,params.V0.MusU);
 
@@ -55,6 +62,7 @@ thetaStages = cell(nStages,1);
 for iStage = 1:nStages
     stage = params.Stages(iStage);
     Y = atomExtension(Y,stage.Shift,stage.Target);
+    stageInputs{iStage+1} = Y;
     thetaStages{iStage} = estimateAngles(Y,stage.Estimator);
     Y = rotateIntermediate(Y,thetaStages{iStage},stage.Mus,false);
 end
