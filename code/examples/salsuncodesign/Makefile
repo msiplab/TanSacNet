@@ -66,8 +66,8 @@ $(XO): hls/$(KERNEL).cpp $(HLS_CLASS)
 
 xclbin: $(XCLBIN) emconfig
 
-$(XCLBIN): $(XO)
-	$(VPP) -l $(VPP_FLAGS) -o $@ $<
+$(XCLBIN): $(XO) hls/$(KERNEL).cfg
+	$(VPP) -l $(VPP_FLAGS) --config hls/$(KERNEL).cfg -o $@ $<
 
 # emconfig.json is needed only for emulation targets
 emconfig:

@@ -8,6 +8,8 @@
 //   src        : num_frames frames of SZY x SZX single, MATLAB column-major
 //   params     : NPARAMS values packed by salsun2d_pack_params
 //   dst        : reconstructed frames, same layout as src
+//   theta      : work buffer in DDR for the estimated angles of one frame
+//                (NTHETA x SZY/4 x SZX/4 single); used by salsun2d_hls_opt
 //   num_frames : number of frames
 //
 // The parameters are read into on-chip memory once per call and reused
@@ -28,11 +30,11 @@
 #ifdef SALSUN2D_OPT
 #include "salsun2d_hls_optClass.hpp"
 typedef salsun2d_hls_optClass Design;
-#define RUN_DESIGN(dut, x, w, y) dut.salsun2d_hls_opt(x, w, y)
+#define RUN_DESIGN(dut, x, w, theta, y) dut.salsun2d_hls_opt(x, w, theta, y)
 #else
 #include "salsun2d_hlsClass.hpp"
 typedef salsun2d_hlsClass Design;
-#define RUN_DESIGN(dut, x, w, y) dut.salsun2d_hls(x, w, y)
+#define RUN_DESIGN(dut, x, w, theta, y) dut.salsun2d_hls(x, w, y)
 #endif
 
 #ifndef SZY
@@ -44,16 +46,22 @@ typedef salsun2d_hlsClass Design;
 #ifndef NPARAMS
 #define NPARAMS 489085
 #endif
+#ifndef NTHETA
+#define NTHETA 168
+#endif
 
 static const int FRAME_SIZE = SZY * SZX;
+static const int THETA_SIZE = NTHETA * (SZY / 4) * (SZX / 4);
 
 extern "C" {
 
-void salsun2d_kernel(const float *src, const float *params, float *dst, int num_frames)
+void salsun2d_kernel(const float *src, const float *params, float *dst,
+                     real32_T theta[SZX / 4][SZY / 4][NTHETA], int num_frames)
 {
 #pragma HLS INTERFACE m_axi port = src offset = slave bundle = gmem0 depth = FRAME_SIZE
 #pragma HLS INTERFACE m_axi port = params offset = slave bundle = gmem1 depth = NPARAMS
 #pragma HLS INTERFACE m_axi port = dst offset = slave bundle = gmem0 depth = FRAME_SIZE
+#pragma HLS INTERFACE m_axi port = theta offset = slave bundle = gmem2 depth = THETA_SIZE
 #pragma HLS INTERFACE s_axilite port = num_frames
 #pragma HLS INTERFACE s_axilite port = return
 
@@ -62,7 +70,10 @@ void salsun2d_kernel(const float *src, const float *params, float *dst, int num_
     static real32_T x[SZX][SZY];
     static real32_T y[SZX][SZY];
     static Design dut;
+// URAM for the large arrays, so that BRAM stays within one SLR
 #pragma HLS BIND_STORAGE variable = w type = ram_2p impl = uram
+#pragma HLS BIND_STORAGE variable = x type = ram_2p impl = uram
+#pragma HLS BIND_STORAGE variable = y type = ram_2p impl = uram
 
 load_params:
     for (int i = 0; i < NPARAMS; i++) {
@@ -78,7 +89,7 @@ frame_loop:
             x[i / SZY][i % SZY] = src[f * FRAME_SIZE + i];
         }
 
-        RUN_DESIGN(dut, x, w, y);
+        RUN_DESIGN(dut, x, w, theta, y);
 
     store_frame:
         for (int i = 0; i < FRAME_SIZE; i++) {

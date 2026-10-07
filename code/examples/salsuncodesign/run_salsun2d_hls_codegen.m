@@ -43,7 +43,10 @@ cfg.SynthesisToolDeviceName = 'xcu250';
 cfg.SynthesisToolPackageName = 'figd2104';
 cfg.SynthesisToolSpeedValue = '-2L-e';
 
-codegen('-config',cfg,designName,'-args', ...
-    {zeros(inputSize,'single'),zeros(L.NParams,1,'single')}, ...
+args = {zeros(inputSize,'single'),zeros(L.NParams,1,'single')};
+if strcmp(designName,'salsun2d_hls_opt')
+    args{end+1} = zeros([L.NThetaRows inputSize./L.Stride],'single');   % angle buffer
+end
+codegen('-config',cfg,designName,'-args',args, ...
     '-d',fullfile(here,'codegen',sprintf('%dx%d',inputSize)));
 end

@@ -12,7 +12,8 @@
 //   T : elapsed seconds [host-to-device, kernel, device-to-host]
 //
 // The frame size and the number of parameters must match those the
-// xclbin was built for. The device and kernel are opened on the first
+// xclbin was built for. Kernels with the DDR angle buffer (5 arguments)
+// get a work buffer allocated here; earlier kernels (4 arguments) do not. The device and kernel are opened on the first
 // call and reused while the same xclbin path is given.
 //
 // Copyright (c) 2026, Shogo MURAMATSU
@@ -32,6 +33,7 @@
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
+#include <xrt/experimental/xrt_xclbin.h>
 
 #include <chrono>
 #include <cstring>
@@ -41,11 +43,14 @@
 namespace {
 
 const char *KERNEL_NAME = "salsun2d_kernel";
+const size_t NTHETA = 168;   // rows of the angle buffer (salsun2d_hls_layout)
+const size_t STRIDE = 4;     // block size
 
 struct Accelerator {
     std::string xclbinPath;
     xrt::device device;
     xrt::kernel kernel;
+    bool hasTheta = false;   // kernel takes the DDR angle buffer (5 arguments)
 };
 
 std::unique_ptr<Accelerator> accel;
@@ -62,8 +67,15 @@ Accelerator &acquire(const std::string &xclbinPath)
         auto a = std::make_unique<Accelerator>();
         a->xclbinPath = xclbinPath;
         a->device = xrt::device(0);
-        auto uuid = a->device.load_xclbin(xclbinPath);
+        const xrt::xclbin xclbin(xclbinPath);
+        auto uuid = a->device.load_xclbin(xclbin);
         a->kernel = xrt::kernel(a->device, uuid, KERNEL_NAME);
+        // Earlier kernels keep the angles on chip and have no theta argument
+        for (const auto &k : xclbin.get_kernels()) {
+            if (k.get_name() == KERNEL_NAME) {
+                a->hasTheta = k.get_num_args() == 5;
+            }
+        }
         accel = std::move(a);
         mexAtExit(release);
     }
@@ -119,6 +131,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     const int numFrames = nDims > 2 ? static_cast<int>(dims[2]) : 1;
     const size_t nBytesX = frameSize * numFrames * sizeof(float);
     const size_t nBytesW = mxGetNumberOfElements(w) * sizeof(float);
+    const size_t nBytesTheta = NTHETA * (dims[0] / STRIDE) * (dims[1] / STRIDE) * sizeof(float);
 
     plhs[0] = mxCreateUninitNumericArray(nDims, const_cast<mwSize *>(dims), mxSINGLE_CLASS, mxREAL);
     double elapsedLocal[3] = {0.0, 0.0, 0.0};
@@ -136,6 +149,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         xrt::bo boX(a.device, nBytesX, a.kernel.group_id(0));
         xrt::bo boW(a.device, nBytesW, a.kernel.group_id(1));
         xrt::bo boY(a.device, nBytesX, a.kernel.group_id(2));
+        // Work buffer for the angles of one frame; written and read by the kernel
+        xrt::bo boTheta;
+        if (a.hasTheta) {
+            boTheta = xrt::bo(a.device, nBytesTheta, a.kernel.group_id(3));
+        }
 
         auto t0 = Clock::now();
         std::memcpy(boX.map<float *>(), mxGetSingles(x), nBytesX);
@@ -144,7 +162,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         boW.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
         auto t1 = Clock::now();
-        xrt::run run = a.kernel(boX, boW, boY, numFrames);
+        xrt::run run = a.hasTheta ? a.kernel(boX, boW, boY, boTheta, numFrames)
+                                  : a.kernel(boX, boW, boY, numFrames);
         run.wait();
 
         auto t2 = Clock::now();

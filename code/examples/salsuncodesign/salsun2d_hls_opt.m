@@ -1,8 +1,17 @@
-function y = salsun2d_hls_opt(x,w) %#codegen
+function [y,theta] = salsun2d_hls_opt(x,w,theta) %#codegen
 %SALSUN2D_HLS_OPT SA-LSUN 2-D analysis and synthesis optimized for HLS
 %
-%   y = salsun2d_hls_opt(x,w) computes the same result as
-%   salsun2d_hls(x,w), restructured for the FPGA:
+%   [y,theta] = salsun2d_hls_opt(x,w,theta) computes the same y as
+%   salsun2d_hls(x,w), restructured for the FPGA. theta is a work buffer
+%   of size L.NThetaRows x szy/My x szx/Mx (L = salsun2d_hls_layout)
+%   that receives the estimated angles; its input values are not used.
+%
+%   - The estimated angles (3.8 MB for 300 x 300 frames) are written by
+%     the analysis side and read once by the synthesis side. They are
+%     kept in theta, which the kernel places in DDR: on chip they filled
+%     a whole SLR of URAM, and the paths to them limited routing and
+%     timing. Using the same name for input and output makes the
+%     generated code update theta in place.
 %
 %   - The angle estimators process one column of blocks (nRows blocks)
 %     at a time. The fully connected layers read one weight per cycle and
@@ -10,7 +19,7 @@ function y = salsun2d_hls_opt(x,w) %#codegen
 %   - The estimator and the fully connected layer are not inlined, so one
 %     piece of hardware serves all five estimators and all their layers.
 %   - The coefficients alternate between two buffers instead of a copy
-%     per processing step, and the large arrays are bound to URAM.
+%     per processing step.
 %
 %   The HLS pragmas are written here with coder.hdl.literaltext, so that
 %   the generated C++ needs no manual edits.
@@ -37,9 +46,6 @@ L = coder.const(salsun2d_hls_layout());
 nRows = szy/L.Stride(1);
 nCols = szx/L.Stride(2);
 
-% Estimated angles of all estimators, reused by the synthesis side
-theta = zeros(L.NThetaRows,nRows,nCols,'single');
-coder.hdl.literaltext("#pragma HLS BIND_STORAGE variable=theta type=ram_2p impl=uram")
 
 %% Analysis (Ya and Yb alternate)
 Ya = blockDct(x,w,L,nRows,nCols);

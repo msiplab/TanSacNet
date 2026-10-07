@@ -33,7 +33,9 @@ w = salsun2d_pack_params(params);
 for iFrame = 1:2
     x = rand(hlsInputSize,'single');
     if strcmp(hlsDesignName,'salsun2d_hls_opt')
-        y = salsun2d_hls_opt(x,w);
+        L = salsun2d_hls_layout();
+        thetaBuf = zeros([L.NThetaRows hlsInputSize./L.Stride],'single');
+        y = salsun2d_hls_opt(x,w,thetaBuf);
     else
         y = salsun2d_hls(x,w);
     end

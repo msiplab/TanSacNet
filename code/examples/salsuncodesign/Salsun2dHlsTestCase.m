@@ -108,7 +108,8 @@ classdef Salsun2dHlsTestCase < matlab.unittest.TestCase
             yExpctd = salsun2d_hls(x,w);
 
             % Actual values
-            yActual = salsun2d_hls_opt(x,w);
+            L = salsun2d_hls_layout();
+            yActual = salsun2d_hls_opt(x,w,zeros([L.NThetaRows inputSize./L.Stride],'single'));
 
             % Evaluation
             testCase.verifyEqual(yActual,yExpctd);
