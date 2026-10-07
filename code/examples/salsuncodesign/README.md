@@ -29,6 +29,11 @@ train on GPU ──> params (.mat) ───────────────
 | `salsun2d_infer.m` | Reference inference: `[y,coefs,thetas] = salsun2d_infer(x,params)` |
 | `salsun2d_cast_params.m` | Casts the parameters, e.g. to double for a high-precision reference |
 | `Salsun2dInferTestCase.m` | Compares `salsun2d_infer` with `predict` of the `dlnetwork` |
+| `salsun2d_base_field.m` | Base field separation of a sequence: none, batch time average, or causal first-order IIR (`Rho`), on the whole frame or the block-DC part only |
+| `salsun2d_infer_sequence.m` | Frame-by-frame inference of a sequence with base field and causal standardization statistics (`'image'`, `'previous'`, `'ema'`, `'fir2'`); reference for a streaming implementation |
+| `Salsun2dSequenceTestCase.m` | Tests of the two above and of the `Statistics` option of `salsun2d_infer` |
+| `salsun2d_wave_data.m` | Wave equation data of `../salsun/createdata_waveEq.m`, vectorized |
+| `measure_receptive_field.m`, `measure_statistics_stability.m` | Measurements for the discussion on tiled/streamed processing (receptive field, frame-to-frame stability of the standardization statistics) |
 | `salsun2d_hls_layout.m` | Fixed configuration of the HLS version and offsets of each parameter in the packed vector |
 | `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
 | `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
@@ -44,6 +49,25 @@ y = salsun2d_hls(single(x),w);                % HLS version, same result
 runtests({'Salsun2dInferTestCase','Salsun2dHlsTestCase'})
 run_salsun2d_hls_codegen([300 300])           % Vitis HLS C++ for 300 x 300 images
 ```
+
+## Streaming options (reference only)
+
+`salsun2d_infer_sequence` adds two options that a streaming FPGA
+implementation can realize causally, without waiting for the whole frame
+or sequence. Both are open loop (computed from the original frames):
+
+- `BaseField='iir'`: a leaky integrator b_t = Rho*b_(t-1) + (1-Rho)*base(u_t)
+  of the block-DC part (`Scope='dc'`) or the whole frame; the network
+  processes u - b_(t-1) and b_(t-1) is added back to the output.
+- `Statistics='previous'|'ema'|'fir2'`: the estimator inputs are
+  standardized with the statistics of the previous frame(s) instead of
+  the current frame. `salsun2d_infer(x,params,Statistics=stats)` takes
+  such statistics and returns the measured ones.
+
+With `BaseField='none'` and `Statistics='image'` the result equals
+`salsun2d_infer` frame by frame; with a base field and no mask the
+reconstruction is still perfect. The HLS design does not have these
+options yet; they are meant for evaluation with trained networks first.
 
 ## Structure of the inference
 

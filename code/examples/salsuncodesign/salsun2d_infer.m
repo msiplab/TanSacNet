@@ -1,4 +1,4 @@
-function [y,coefs,thetas,stageInputs] = salsun2d_infer(x,params)
+function [y,coefs,thetas,stageInputs,stats] = salsun2d_infer(x,params,options)
 %SALSUN2D_INFER Reference SA-LSUN 2-D analysis and synthesis
 %
 %   y = salsun2d_infer(x,params) passes the image x (single, szy x szx)
@@ -18,6 +18,16 @@ function [y,coefs,thetas,stageInputs] = salsun2d_infer(x,params)
 %   inputs of the angle estimators (the coefficients before each
 %   rotation), stageInputs{k} for estimator k, each prod(Stride) x nRows
 %   x nCols, for diagnostics such as the standardization statistics.
+%
+%   [y,coefs,thetas,stageInputs,stats] = salsun2d_infer(...) also returns
+%   the standardization statistics measured on this image, a struct array
+%   with stats(k).Mu and stats(k).Sigma (per feature of estimator k).
+%
+%   salsun2d_infer(x,params,Statistics=stats) standardizes the estimator
+%   inputs with the given statistics instead of those of the image, for
+%   example the statistics of the previous frame of a sequence (see
+%   salsun2d_infer_sequence). stats must have the form returned above.
+%   The measured statistics of the image are still returned.
 %
 %   Only plain arithmetic is used (no Deep Learning Toolbox), as a
 %   reference for the HLS implementation. The synthesizer reuses the
@@ -41,7 +51,13 @@ function [y,coefs,thetas,stageInputs] = salsun2d_infer(x,params)
 arguments
     x (:,:) {mustBeFloat}
     params (1,1) struct
+    options.Statistics = []
 end
+nEst = 1 + numel(params.Stages);
+if ~isempty(options.Statistics) && numel(options.Statistics) ~= nEst
+    error('salsun2d_infer:statistics','Statistics must have %d elements.',nEst)
+end
+stats = repmat(struct('Mu',[],'Sigma',[]),nEst,1);
 
 dec = params.Stride;
 nDec = prod(dec);
@@ -51,9 +67,9 @@ nCols = szx/dec(2);
 
 % Analysis: block DCT and initial rotation
 Y = blockDct(x,params.Cvh,dec);
-stageInputs = cell(1+numel(params.Stages),1);
+stageInputs = cell(nEst,1);
 stageInputs{1} = Y;
-theta0 = estimateAngles(Y,params.V0.Estimator);
+[theta0,stats(1)] = estimateAngles(Y,params.V0.Estimator,givenStats(options.Statistics,1));
 Y = rotateInitial(Y,theta0,params.V0.MusW,params.V0.MusU);
 
 % Analysis: intermediate stages
@@ -63,7 +79,8 @@ for iStage = 1:nStages
     stage = params.Stages(iStage);
     Y = atomExtension(Y,stage.Shift,stage.Target);
     stageInputs{iStage+1} = Y;
-    thetaStages{iStage} = estimateAngles(Y,stage.Estimator);
+    [thetaStages{iStage},stats(iStage+1)] = estimateAngles(Y,stage.Estimator, ...
+        givenStats(options.Statistics,iStage+1));
     Y = rotateIntermediate(Y,thetaStages{iStage},stage.Mus,false);
 end
 
@@ -188,8 +205,17 @@ end
 M = mus(:).*M;
 end
 
+function s = givenStats(statistics,k)
+% Element k of the given statistics, or [] for the statistics of the image
+if isempty(statistics)
+    s = [];
+else
+    s = statistics(k);
+end
+end
+
 %% Angle estimator (control path)
-function theta = estimateAngles(Y,est)
+function [theta,measured] = estimateAngles(Y,est,given)
 [~,nRows,nCols] = size(Y);
 nBlks = nRows*nCols;
 
@@ -208,10 +234,16 @@ for vshift = fix(nv/2):-1:-fix(nv/2)
 end
 F = reshape(F,[],nBlks);
 
-% State standardization over all blocks of the image
+% State standardization over all blocks of the image (or with the given
+% statistics, e.g. of the previous frame)
 mu = mean(F,2);
 v = sum((F-mu).^2,2)/(nBlks-1);
-F = (F-mu)./(sqrt(v)+est.Epsilon);
+measured = struct('Mu',mu,'Sigma',sqrt(v)+est.Epsilon);
+if isempty(given)
+    F = (F-measured.Mu)./measured.Sigma;
+else
+    F = (F-given.Mu)./given.Sigma;
+end
 
 % Residual estimator blocks: LayerNorm, FC, GELU (tanh), FC, skip
 for iRes = 1:numel(est.ResBlocks)
