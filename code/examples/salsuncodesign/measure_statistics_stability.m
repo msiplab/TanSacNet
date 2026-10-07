@@ -5,10 +5,11 @@
 % script measures how much these statistics vary from frame to frame on
 % the wave equation data, for the raw frames u and for the fluctuation
 % u' = u - mean_t(u) (base-point separation), at the inputs of all five
-% estimators. The data path of an untrained network (zero rotation
-% angles) is used to produce the inputs of estimators 2 to 5, since no
-% trained network is available yet; the block DCT (estimator 1) does not
-% depend on the network.
+% estimators, for the configurations without DC leakage (estimator 1 uses
+% channels 2..16) and with DC leakage allowed (channels 1..16). The data
+% path of an untrained network (zero rotation angles) is used to produce
+% the inputs of estimators 2 to 5, since no trained network is available
+% yet; the block DCT (estimator 1) does not depend on the network.
 %
 % If the statistics are stable, the standardization of frame t can use
 % the statistics of frame t-1 (or fixed statistics) with little error,
@@ -48,35 +49,48 @@ nEst = numel(ests);
 
 ubar = mean(u,3);
 cases = {'raw u', u; 'u'' = u - mean_t(u)', u - ubar};
+% Estimator input channels in the two configurations. With zero angles
+% the data path is the identity, so the inputs of estimators 2 to 5 are
+% the same in both; only estimator 1 differs (DC channel included or not).
+configs = {'no DC leakage', {2:16, 9:16, 9:16, 9:16, 9:16}; ...
+           'DC leakage allowed', {1:16, 9:16, 9:16, 9:16, 9:16}};
 for iCase = 1:size(cases,1)
     data = cases{iCase,2};
-    mu = cell(nEst,1);
-    sigma = cell(nEst,1);
-    for k = 1:nEst
-        mu{k} = zeros(numel(ests(k).Channels),nFrames);
-        sigma{k} = zeros(numel(ests(k).Channels),nFrames);
-    end
+    mu = zeros(16,nFrames,nEst);
+    sigma = zeros(16,nFrames,nEst);
     for f = 1:nFrames
         [~,~,~,stageInputs] = salsun2d_infer(data(:,:,f),params);
         for k = 1:nEst
-            Y = reshape(stageInputs{k}(ests(k).Channels,:,:),numel(ests(k).Channels),[]);
-            mu{k}(:,f) = mean(Y,2);
-            sigma{k}(:,f) = std(Y,0,2);
+            Y = reshape(stageInputs{k},16,[]);
+            mu(:,f,k) = mean(Y,2);
+            sigma(:,f,k) = std(Y,0,2);
         end
     end
 
     fprintf('\n== %s\n',cases{iCase,1});
-    fprintf('   %-12s %8s %8s | %22s | %22s\n','estimator','sig min','sig max', ...
-        'prev frame: dsig/sig','fixed stats: dsig/sig');
-    fprintf('   %-12s %8s %8s | %10s %10s | %10s %10s\n','','','','max','median','max','median');
-    for k = 1:nEst
-        m = mu{k}; sg = sigma{k};
-        errSigma = abs(sg(:,2:end) - sg(:,1:end-1))./sg(:,2:end);
-        errSigmaFixed = abs(sg - mean(sg,2))./sg;
-        errMu = abs(m(:,2:end) - m(:,1:end-1))./sg(:,2:end);
-        fprintf('   %-12s %8.3g %8.3g | %10.3g %10.3g | %10.3g %10.3g   (|d mu|/sig max %.2g)\n', ...
-            sprintf('estimator %d',k),min(sg(:)),max(sg(:)), ...
-            max(errSigma(:)),median(errSigma(:)),max(errSigmaFixed(:)),median(errSigmaFixed(:)),max(errMu(:)));
+    fprintf('   DC channel at estimator 1: mean over frames of mu %.3g, of sigma %.3g; ', ...
+        mean(mu(1,:,1)),mean(sigma(1,:,1)));
+    dsDc = abs(diff(sigma(1,:,1)))./sigma(1,2:end,1);
+    dsDcFixed = abs(sigma(1,:,1) - mean(sigma(1,:,1)))./sigma(1,:,1);
+    fprintf('prev frame dsig/sig max %.3g (median %.3g), fixed max %.3g (median %.3g)\n', ...
+        max(dsDc),median(dsDc),max(dsDcFixed),median(dsDcFixed));
+    for iConfig = 1:size(configs,1)
+        fprintf('   -- %s\n',configs{iConfig,1});
+        fprintf('   %-12s %8s %8s | %22s | %22s\n','estimator','sig min','sig max', ...
+            'prev frame: dsig/sig','fixed stats: dsig/sig');
+        for k = 1:nEst
+            ch = configs{iConfig,2}{k};
+            if iConfig == 2 && k > 1
+                continue   % same as above for the untrained data path
+            end
+            sg = sigma(ch,:,k); m = mu(ch,:,k);
+            errSigma = abs(sg(:,2:end) - sg(:,1:end-1))./sg(:,2:end);
+            errSigmaFixed = abs(sg - mean(sg,2))./sg;
+            errMu = abs(m(:,2:end) - m(:,1:end-1))./sg(:,2:end);
+            fprintf('   %-12s %8.3g %8.3g | %10.3g %10.3g | %10.3g %10.3g   (|d mu|/sig max %.2g)\n', ...
+                sprintf('estimator %d',k),min(sg(:)),max(sg(:)), ...
+                max(errSigma(:)),median(errSigma(:)),max(errSigmaFixed(:)),median(errSigmaFixed(:)),max(errMu(:)));
+        end
     end
 end
 
