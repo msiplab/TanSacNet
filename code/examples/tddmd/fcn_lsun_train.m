@@ -1,4 +1,7 @@
-function [analsunnet,synlsunnet,coefMask] = fcn_lsun_train(DataT,stride,nCoefs,numEpochs,datatype)
+function [analsunnet,synlsunnet,coefMask] = fcn_lsun_train(DataT,stride,nCoefs,numEpochs,datatype,useGpu)
+if nargin < 6
+    useGpu = canUseGPU;
+end
 nT = size(DataT,1);
 nX = size(DataT,2);
 %Stride (block size)
@@ -17,10 +20,12 @@ strbuf = strbuf.append("Output dimension (per block): " + num2str(nCoefs) + newl
 strbuf = strbuf.append("Number of overlapping blocks: " + num2str(kx) + newline);
 disp(strbuf)
 
-if canUseGPU
+if useGpu
     Device = 'cuda';
+    outputEnvironment = 'gpu';
 else
     Device = 'cpu';
+    outputEnvironment = 'cpu';
 end
 
 
@@ -77,17 +82,17 @@ for iLearnable = 1:nLearnables
         if ~isempty(regexp(alayerName,expanalyzer,'once'))
             disp("Angles in " + alayerName + " are set to N(-pi/2,"+num2str(stdInitAng^2)+")")
             analysisnet.Learnables.Value(iLearnable) = ...
-                cellfun(@(x) double(x+stdInitAng*randn(size(x))-pi/2), ...
+                cellfun(@(x) cast(x+stdInitAng*randn(size(x))-pi/2,datatype), ...
                 analysisnet.Learnables.Value(iLearnable),'UniformOutput',false);
         else
             disp("Angles in " + alayerName + " are set to N(0,"+num2str(stdInitAng^2)+")")
             analysisnet.Learnables.Value(iLearnable) = ...
-                cellfun(@(x) double(x+stdInitAng*randn(size(x))), ...
+                cellfun(@(x) cast(x+stdInitAng*randn(size(x)),datatype), ...
                 analysisnet.Learnables.Value(iLearnable),'UniformOutput',false);
         end
     else
         analysisnet.Learnables.Value(iLearnable) = ...
-            cellfun(@(x) double(x), ...
+            cellfun(@(x) cast(x,datatype), ...
             analysisnet.Learnables.Value(iLearnable),'UniformOutput',false);
     end
 end
@@ -104,12 +109,12 @@ synthesisnet = dlnetwork(synthesislgraph);
 nLearnables = height(synthesisnet.Learnables);
 for iLearnable = 1:nLearnables
     synthesisnet.Learnables.Value(iLearnable) = ...
-        cellfun(@(x) double(x), ...
+        cellfun(@(x) cast(x,datatype), ...
         synthesisnet.Learnables.Value(iLearnable),'UniformOutput',false);
 end
 
 %
-x = rand([1 nX 1 nT],'double');
+x = rand([1 nX 1 nT],datatype);
 dlx = dlarray(x,"SSCB"); % Deep learning array (SSCB)
 [dls{1:2}] = analysisnet.predict(dlx);
 dly = synthesisnet.predict(dls{:});
@@ -169,9 +174,13 @@ hold off
 %}
 
 %Design preparation
-dlX = dlarray(gpuArray(arr(1,:)),"SSCB");
+arr1 = cast(arr(1,:),datatype);
+if useGpu
+    arr1 = gpuArray(arr1);
+end
+dlX = dlarray(arr1,"SSCB");
 trainnet = dlnetwork(analysislgraph,dlX);
-trainnet = dlupdate(@double, trainnet);%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+trainnet = dlupdate(@(x) cast(x,datatype), trainnet);%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 assert(trainnet.Initialized)
 figure
 monitor = trainingProgressMonitor(Metrics="Loss",Info="Epoch",XLabel="Iteration");
@@ -191,9 +200,9 @@ mbq = minibatchqueue(arrds,...
  "MinibatchSize",miniBatchSize,...
  "MiniBatchFcn",@(x) permute(cell2mat(x),[3 2 4 1]),...
  "OutputAsDlarray",1,...
- "OutputCast","double",...
+ "OutputCast",datatype,...
  "MiniBatchFormat", "SSCB",...
- "OutputEnvironment", "gpu",...
+ "OutputEnvironment", outputEnvironment,...
  "PartialMiniBatch","discard");
 % Training
 averageGrad = [];
