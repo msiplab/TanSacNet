@@ -108,9 +108,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictAnalysisShiftBottomCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -172,9 +172,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictAnalysisShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -236,10 +236,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictAnalysisShiftBottomCoefsWithAnglePi4(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -318,10 +318,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictAnalysisShiftBottomCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -403,10 +403,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictAnalysisShiftTopCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -488,10 +488,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardAnalysisShiftBottomCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -582,10 +582,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardAnalysisShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -676,10 +676,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardAnalysisShiftBottomCoefsWithAnglePi4(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -778,10 +778,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
          
         function testBackwardAnalysisShiftBottomCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -891,10 +891,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
          
         function testBackwardAnalysisShiftTopCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -1004,9 +1004,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
                  
         function testPredictSynthesisShiftBottomCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -1068,9 +1068,9 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictSynthesisShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
@@ -1132,10 +1132,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictSynthesisShiftBottomCoefsWithAnglePi4(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -1214,10 +1214,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictSynthesisShiftBottomCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -1299,10 +1299,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testPredictSynthesisShiftTopCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-6));
@@ -1384,10 +1384,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardSynthesisShiftBottomCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -1487,10 +1487,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardSynthesisShiftTopCoefs(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -1590,10 +1590,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardSynthesisShiftBottomCoefsWithAnglePi4(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -1700,10 +1700,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardSynthesisShiftBottomCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
@@ -1821,10 +1821,10 @@ classdef lsunCSAtomExtension1dLayerTestCase < matlab.unittest.TestCase
 
        function testBackwardSynthesisShiftTopCoefsWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, dir, datatype)
-             if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+             if usegpu
+                 testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                     'No GPU device supporting '+string(datatype)+' was detected.')
+             end
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-6,single(1e-5));
