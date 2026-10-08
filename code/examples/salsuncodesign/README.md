@@ -19,7 +19,7 @@ train on GPU ──> params (.mat) ───────────────
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
 | 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design in sw_emu done, hardware build running |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
-| 5 | Fixed-point conversion and accuracy evaluation | |
+| 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
 
 ## Files
 
@@ -137,6 +137,29 @@ library (C simulation, 32 x 32 with mask), differs from the double-precision
 reference by 7.7e-4, against 6.7e-4 for the single-precision MATLAB version.
 The generated code is not optimized yet (everything is inlined into one
 function, no pragmas); that is step 3.
+
+## Fixed-point word lengths (simulated)
+
+`evaluate_salsun2d_wordlength` runs the double-precision reference with
+simulated rounding (`salsun2d_fixed_quantizer`, one power-of-two scaling
+per tensor, or per channel for the block coefficients) on the trained
+network (5 frames of 300 x 300). MSE relative to the double reference:
+
+| bits | parameters only | signals only | both | both, coefficients per channel |
+|---|---|---|---|---|
+| 8  | 1.14 | 144 | 147 | – |
+| 10 | 1.005 | 12.8 | 12.8 | 1.47 |
+| 12 | 1.001 | 1.67 | 1.67 | 1.033 |
+| 14 | 1.000 | 1.035 | 1.035 | 1.002 |
+| 16 | 1.000 | 1.001 | 1.001 | 1.000 |
+
+Sensitivity at 12 bits, one signal class at a time: block coefficients
+1.66 (one scaling per tensor; the channels differ by orders of
+magnitude), angles 1.006, everything else (rotation matrices,
+standardized features, LayerNorm, hidden layer, parameters) <= 1.001.
+So the estimators, which hold about 98% of the arithmetic, can use
+12-bit signals and 10 to 12-bit weights, while the data path needs
+14 to 16 bits with per-channel scaling.
 
 ## Numerical note
 

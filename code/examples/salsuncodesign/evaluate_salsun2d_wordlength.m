@@ -11,7 +11,9 @@ function results = evaluate_salsun2d_wordlength(options)
 %
 %   A. parameters only, B. all intermediate signals only, C. both with
 %   the same word length, D. one signal class at a time at TagWordLength
-%   bits (sensitivity).
+%   bits (sensitivity), E. both with the same word length and one
+%   scaling per channel for the block coefficients (the channels differ
+%   by orders of magnitude, so one scaling per tensor wastes bits).
 %
 %   Options: ParamsFile, Frames (default 11:15), WordLengths (default
 %   [8 10 12 14 16 18]), TagWordLength (12).
@@ -76,11 +78,20 @@ for iTag = 1:numel(tags)
     results(end+1) = r; %#ok<AGROW>
     fprintf('%-28s %5d %10.4g %9.3f %10.3g %10.3g\n',r.Case,options.TagWordLength,r.Mse,r.MseRatio,r.MaxDiff,r.AngleErr);
 end
-wls = struct('weights',options.TagWordLength);  %#ok<NASGU>
 r = evaluateOne(u,salsun2d_quantize_params(params,options.TagWordLength),@(v,tag) v,yRef,thRef,mseRef, ...
     'D parameters only',options.TagWordLength,'weights');
 results(end+1) = r;
-fprintf('%-28s %5d %10.4g %9.3f %10.3g %10.3g\n',r.Case,options.TagWordLength,r.Mse,r.MseRatio,r.MaxDiff,r.AngleErr);
+fprintf('%-28s %5d %10.4g %9.3f %10.3g %10.3g\n\n',r.Case,options.TagWordLength,r.Mse,r.MseRatio,r.MaxDiff,r.AngleErr);
+
+% E. both, with one scaling per channel for the coefficients
+fprintf('%s\n',header);
+for wl = options.WordLengths
+    q = salsun2d_fixed_quantizer(wl,RowScaling={'coefs'});
+    r = evaluateOne(u,salsun2d_quantize_params(params,wl),q,yRef,thRef,mseRef, ...
+        'E both, coefs per channel',wl,'all');
+    results(end+1) = r; %#ok<AGROW>
+    fprintf('%-28s %5d %10.4g %9.3f %10.3g %10.3g\n',r.Case,wl,r.Mse,r.MseRatio,r.MaxDiff,r.AngleErr);
+end
 end
 
 function [y,th5] = run(u,params,q)

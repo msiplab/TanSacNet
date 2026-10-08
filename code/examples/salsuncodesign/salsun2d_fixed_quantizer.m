@@ -1,4 +1,4 @@
-function q = salsun2d_fixed_quantizer(wordLengths)
+function q = salsun2d_fixed_quantizer(wordLengths,options)
 %SALSUN2D_FIXED_QUANTIZER Quantizer handle for word-length studies
 %
 %   q = salsun2d_fixed_quantizer(wl) returns q(v,tag) for the Quantizer
@@ -12,6 +12,11 @@ function q = salsun2d_fixed_quantizer(wordLengths)
 %   magnitude (block floating point per tensor). This is the best case
 %   for a fixed-point implementation whose ranges are known; fixed
 %   scalings chosen from training data would be slightly worse.
+%
+%   salsun2d_fixed_quantizer(wl,RowScaling=tags) uses one scaling per
+%   row (first dimension) instead of per tensor for the listed tags,
+%   e.g. {'coefs'}: one scaling per block channel, as a fixed-point
+%   data path with a word length per channel would have.
 %
 % Requirements: MATLAB R2026b
 %
@@ -28,8 +33,9 @@ function q = salsun2d_fixed_quantizer(wordLengths)
 %
 arguments
     wordLengths
+    options.RowScaling cell = {}
 end
-q = @(v,tag) quantize(v,wordLengthOf(wordLengths,tag));
+q = @(v,tag) quantize(v,wordLengthOf(wordLengths,tag),any(strcmp(tag,options.RowScaling)));
 end
 
 function wl = wordLengthOf(wordLengths,tag)
@@ -44,15 +50,17 @@ else
 end
 end
 
-function v = quantize(v,wl)
+function v = quantize(v,wl,perRow)
 if isinf(wl) || isempty(v)
     return
 end
-m = max(abs(v(:)));
-if m == 0
-    return
+if perRow
+    m = max(abs(v),[],2:ndims(v));      % one scaling per row
+else
+    m = max(abs(v(:)));
 end
-scale = 2^(wl - 1 - ceil(log2(m)));      % largest magnitude fits in wl-1 bits
+m(m == 0) = 1;
+scale = 2.^(wl - 1 - ceil(log2(m)));    % largest magnitude fits in wl-1 bits
 limit = 2^(wl-1) - 1;
-v = max(min(round(v*scale),limit),-limit)/scale;
+v = max(min(round(v.*scale),limit),-limit)./scale;
 end
