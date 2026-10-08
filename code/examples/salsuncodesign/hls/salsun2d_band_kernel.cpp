@@ -14,9 +14,10 @@
 //               for the statistics of the next frame
 //
 // Bands of BAND block rows start at 0, BAND, 2*BAND, ...; the last band is
-// moved up so that it ends at the last block row, and its sums are scaled
-// by the share of rows it adds (as in salsun2d_band_frame.m). Each band
-// is loaded with HALO block rows of circular context above and below.
+// moved up so that it ends at the last block row, and the rows it repeats
+// are left out of the sums (skipRows, as in salsun2d_band_frame.m), so
+// the sums are exact. Each band is loaded with HALO block rows of
+// circular context above and below.
 // The parameters are read into on-chip memory once per call.
 //
 // Copyright (c) 2026, Shogo MURAMATSU
@@ -119,7 +120,7 @@ band_loop:
             }
         }
 
-        dut.salsun2d_hls_band(xb, w, mu, sigma, yb, sum1, sum2);
+        dut.salsun2d_hls_band(xb, w, mu, sigma, (int32_T)repeated, yb, sum1, sum2);
 
     store_band:
         for (int c = 0; c < SZX; c++) {
@@ -128,12 +129,11 @@ band_loop:
                 dst[c * SZY + r0 * MY + i] = yb[c][i];
             }
         }
-        const float share = (float)(BAND - repeated) / (float)BAND;
     accumulate:
         for (int i = 0; i < NSTATS; i++) {
 #pragma HLS PIPELINE II = 1
-            acc1[i / NDEC][i % NDEC] += sum1[i / NDEC][i % NDEC] * share;
-            acc2[i / NDEC][i % NDEC] += sum2[i / NDEC][i % NDEC] * share;
+            acc1[i / NDEC][i % NDEC] += sum1[i / NDEC][i % NDEC];
+            acc2[i / NDEC][i % NDEC] += sum2[i / NDEC][i % NDEC];
         }
     }
 

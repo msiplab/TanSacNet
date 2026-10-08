@@ -91,7 +91,7 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
             % Actual values: x is the band (rows 8..9) with its halo (7 above, 7 below)
             bandRows = L.Halo + (1:2);
             pixelRows = (bandRows(1)-1)*4 + (1:8);
-            [yActual,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma);
+            [yActual,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma,int32(0));
 
             % Evaluation
             testCase.verifySize(yActual,[8 32]);
@@ -133,12 +133,18 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
             [params,w,x,tol] = Salsun2dHlsBandTestCase.testData([64 16]);
             [~,~,~,~,stats] = salsun2d_infer(x,params);
             [mu,sigma] = Salsun2dHlsBandTestCase.channelStats(stats,params);
-            yExpctd = salsun2d_infer(x,params,Statistics=stats);
+            [yExpctd,~,~,~,measured] = salsun2d_infer(x,params,Statistics=stats);
+            [muExpctd,sigmaExpctd] = Salsun2dHlsBandTestCase.channelStats(measured,params);
 
-            [yActual,~,~,bands] = salsun2d_band_frame(x,w,mu,sigma,5);
+            [yActual,muActual,sigmaActual,bands] = salsun2d_band_frame(x,w,mu,sigma,5);
 
             testCase.verifyEqual(bands,[1 6 11 12]);
             testCase.verifyEqual(yActual,yExpctd,'AbsTol',tol);
+            % The repeated rows of the moved band are left out of the sums,
+            % so the statistics are exact
+            used = sigmaExpctd ~= 1;
+            testCase.verifyEqual(muActual(used),muExpctd(used),'AbsTol',single(1e-5));
+            testCase.verifyEqual(sigmaActual(used),sigmaExpctd(used),'RelTol',single(1e-3));
         end
 
     end

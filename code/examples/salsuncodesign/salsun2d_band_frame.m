@@ -10,11 +10,12 @@ function [y,mu,sigma,bands] = salsun2d_band_frame(x,w,mu,sigma,bandRows,bandFcn)
 %
 %   The bands start at 1, 1+bandRows, ... and the last band is moved up
 %   so that it ends at the last block row (its rows that were already
-%   produced are overwritten with the same values), because the band
-%   design is generated for one band size.
+%   produced are overwritten with the same values and left out of the
+%   sums), because the band design is generated for one band size.
 %
 %   bandFcn (optional) replaces salsun2d_hls_band, e.g. by the MEX
-%   gateway of the kernel; it must have the same interface.
+%   gateway of the kernel; it must have the same interface
+%   [yb,s1,s2] = bandFcn(xb,w,mu,sigma,skipRows).
 %
 %   bands (optional output) lists the first block row of every band.
 %
@@ -56,21 +57,15 @@ end
 y = zeros(szy,szx,'single');
 sum1 = zeros(L.NDec,L.NEst,'single');
 sum2 = zeros(L.NDec,L.NEst,'single');
+prevStart = -bandRows;
 for r0 = bands
     blockRows = mod((r0-H:r0+bandRows-1+H)-1,nRows) + 1;
     pixelRows = reshape((blockRows-1)*My + (1:My)',1,[]);
-    [yb,s1,s2] = bandFcn(x(pixelRows,:),w,mu,sigma);
+    % Rows of the band already produced (and counted) by the previous band
+    skipRows = max(prevStart + bandRows - r0,0);
+    prevStart = r0;
+    [yb,s1,s2] = bandFcn(x(pixelRows,:),w,mu,sigma,int32(skipRows));
     y((r0-1)*My+1:(r0+bandRows-1)*My,:) = yb;
-    % The moved last band repeats rows already counted: scale its share
-    if r0 == bands(end) && numel(bands) > 1 && bands(end) < bands(end-1) + bandRows
-        newRows = bands(end) + bandRows - (bands(end-1) + bandRows);
-        share = single(newRows/bandRows);
-        % the sums of the repeated rows are not separable; approximate the
-        % frame sums by the share of new rows (exact when the rows are
-        % statistically alike; the next frame tolerates this error)
-        s1 = s1*share;
-        s2 = s2*share;
-    end
     sum1 = sum1 + s1;
     sum2 = sum2 + s2;
 end

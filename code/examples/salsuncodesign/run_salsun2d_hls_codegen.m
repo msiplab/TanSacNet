@@ -59,7 +59,7 @@ switch designName
     case 'salsun2d_hls_band'
         subSize = [(options.BandRows + 2*L.Halo)*L.Stride(1) inputSize(2)];
         args = {zeros(subSize,'single'),zeros(L.NParams,1,'single'), ...
-            zeros(L.NDec,L.NEst,'single'),ones(L.NDec,L.NEst,'single')}; % mu, sigma
+            zeros(L.NDec,L.NEst,'single'),ones(L.NDec,L.NEst,'single'),int32(0)}; % mu, sigma, skipRows
     otherwise
         args = {zeros(inputSize,'single'),zeros(L.NParams,1,'single')};
 end

@@ -1,7 +1,7 @@
-function [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma) %#codegen
+function [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma,skipRows) %#codegen
 %SALSUN2D_HLS_BAND SA-LSUN 2-D analysis and synthesis of one band, for HLS
 %
-%   [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma) processes one band
+%   [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma,skipRows) processes one band
 %   of a frame in the streaming (overlap-save) form of
 %   salsun2d_infer_stream:
 %
@@ -14,10 +14,14 @@ function [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma) %#codegen
 %            channel statistics equal the per-feature statistics of the
 %            network, since the features are shifted channels).
 %   y      - reconstructed rows of the band only, B*My x szx.
+%   skipRows - int32, number of leading rows of the band whose blocks
+%            are left out of the sums (rows already counted by the
+%            previous band when the last band of a frame is moved up to
+%            end at the frame boundary); 0 otherwise.
 %   sum1, sum2 - L.NDec x L.NEst sums and sums of squares of the
-%            estimator input channels over the valid blocks of the band,
-%            to be accumulated over the bands of a frame for the
-%            statistics of the next frame.
+%            estimator input channels over the valid blocks of the band
+%            (minus the skipped rows), to be accumulated over the bands
+%            of a frame for the exact statistics of the next frame.
 %
 %   The halo L.Halo = 7 is the structural receptive field (6 block rows
 %   for the five estimators and the two vertical atom extensions, plus 1
@@ -56,6 +60,7 @@ nCols = szx/L.Stride(2);
 H = int32(L.Halo);
 rowFirst = H + 1;                  % valid rows of the band
 rowLast = int32(nRows) - H;
+sumFirst = rowFirst + int32(skipRows);   % first row counted in the sums
 
 % Angles of the band with halo, on chip. URAM words are 72 bits wide, so
 % two 32-bit values are packed per word (ARRAY_RESHAPE on the innermost
@@ -73,12 +78,12 @@ coder.hdl.literaltext("#pragma HLS BIND_STORAGE variable=Ya type=ram_2p impl=ura
 coder.hdl.literaltext("#pragma HLS BIND_STORAGE variable=Yb type=ram_2p impl=uram")
 Ya = blockDct(x,w,L,nRows,nCols);
 [theta,sum1,sum2] = estimateAngles(theta,sum1,sum2,Ya,w,L,coder.ignoreConst(int32(1)), ...
-    mu,sigma,nRows,nCols,rowFirst,rowLast);
+    mu,sigma,nRows,nCols,sumFirst,rowLast);
 Yb = rotateInitialOrFinal(Ya,theta,w,L,false,nRows,nCols);
 for iStage = int32(1):int32(L.NStages)
     Ya = atomExtension(Yb,int32(L.Shift(iStage,:)),int32(L.Target(iStage)),nRows,nCols);
     [theta,sum1,sum2] = estimateAngles(theta,sum1,sum2,Ya,w,L,coder.ignoreConst(iStage+1), ...
-        mu,sigma,nRows,nCols,rowFirst,rowLast);
+        mu,sigma,nRows,nCols,sumFirst,rowLast);
     Yb = rotateIntermediate(Ya,theta,w,L,iStage,false,nRows,nCols);
 end
 
@@ -286,11 +291,12 @@ end
 end
 
 %% Angle estimator (control path)
-function [theta,sum1,sum2] = estimateAngles(theta,sum1,sum2,Y,w,L,iEst,mu,sigma,nRows,nCols,rowFirst,rowLast)
+function [theta,sum1,sum2] = estimateAngles(theta,sum1,sum2,Y,w,L,iEst,mu,sigma,nRows,nCols,sumFirst,sumLast)
 % One column of blocks (nRows blocks, index b) is processed at a time.
 % The standardization uses the given statistics mu(:,iEst), sigma(:,iEst)
-% per channel; the channel sums over the valid rows are accumulated for
-% the statistics of the next frame.
+% per channel; the channel sums over the rows sumFirst..sumLast (the
+% band without rows already counted) are accumulated for the statistics
+% of the next frame.
 coder.inline('never')
 ch0 = int32(L.EstChannelFirst(iEst));
 nCh = int32(L.EstNCh(iEst));
@@ -307,7 +313,7 @@ for j = 1:nCh
     acc1 = single(0);
     acc2 = single(0);
     for c = 1:nCols
-        for r = rowFirst:rowLast
+        for r = sumFirst:sumLast
             v = Y(ch0+j-1,r,c);
             acc1 = acc1 + v;
             acc2 = acc2 + v*v;
