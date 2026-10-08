@@ -20,7 +20,10 @@ function results = train_salsun2d_variants(options)
 %   Scope ('dc'), MaxEpochs (100), MiniBatchSize (64), NumCoefs (2),
 %   Crop ([300 300], top-left crop of the frames), NumFrames (149, after
 %   the first frame, which the IIR variant leaves at zero), OutputDir,
-%   Seed (0), StatsRho (0.9).
+%   Seed (0), StatsRho (0.9), StatsModes (cell of statistics modes to
+%   evaluate, default {'image','previous','ema','fir2'}; the evaluation
+%   of each mode runs the reference on every frame, several minutes for
+%   300 x 300 frames).
 %
 %   Requires a GPU for practical training times; runs on the CPU for
 %   small settings, e.g. Crop=[32 32], NumFrames=8, MaxEpochs=2.
@@ -50,6 +53,7 @@ arguments
     options.OutputDir = fullfile(fileparts(mfilename('fullpath')),'results')
     options.Seed (1,1) double = 0
     options.StatsRho (1,1) double = 0.9
+    options.StatsModes cell = {'image','previous','ema','fir2'}
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -60,7 +64,7 @@ stride = [4 4];
 nChsTotal = prod(stride);
 coefMask = reshape([ones(options.NumCoefs,1); zeros(nChsTotal-options.NumCoefs,1)],2,[]).';
 coefMask = coefMask(:);
-statsModes = {'image','previous','ema','fir2'};
+statsModes = options.StatsModes;
 
 %% Data
 u = salsun2d_wave_data();
@@ -130,12 +134,16 @@ end
 save(fullfile(options.OutputDir,'results.mat'),'results','options');
 
 %% Summary
-fprintf('\n%-8s %10s %10s %10s %10s | %8s %8s %8s\n','variant','MSE image','previous','ema','fir2', ...
-    'leak est5','coefs','output');
+fprintf('\n%-8s','variant');
+fprintf(' %10s',statsModes{:});
+fprintf(' | %8s %8s %8s\n','leak est5','coefs','output');
 for iVariant = 1:numel(results)
     r = results(iVariant);
-    fprintf('%-8s %10.4g %10.4g %10.4g %10.4g | %8.2g %8.2g %8.2g\n',r.Variant, ...
-        r.Mse.image,r.Mse.previous,r.Mse.ema,r.Mse.fir2,r.Floor(5),r.Floor(6),r.Floor(7));
+    fprintf('%-8s',r.Variant);
+    for iMode = 1:numel(statsModes)
+        fprintf(' %10.4g',r.Mse.(statsModes{iMode}));
+    end
+    fprintf(' | %8.2g %8.2g %8.2g\n',r.Floor(5),r.Floor(6),r.Floor(7));
 end
 end
 
