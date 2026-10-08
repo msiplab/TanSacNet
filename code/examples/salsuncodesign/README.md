@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7 |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine (3.3x estimated) building |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
 
@@ -126,6 +126,26 @@ band are left out of the sums (`skipRows`). Throughput: 2.7 s/frame on
 the card against 1.06 s/frame for the MATLAB reference on the CPU; the
 kernel is a single unpipelined band engine (15 lanes), so the remaining
 work is throughput, not correctness.
+
+### Throughput of the band engine
+
+Cycle budget of the 15-lane engine from the HLS report, per band of 16
+rows (about 127 M cycles measured): fully connected layers 62% (two
+groups of 15 blocks per weight), rotations 12-18% (one Givens generator
+per block, sequential products), LayerNorm / GELU / residual add 15%,
+feature extraction 4%, band load and store under 1% (so overlapping the
+DDR transfers with the computation would gain nothing). The revised
+engine processes a group of `L.NColGroup` = 3 columns at a time with one
+lane per block in the fully connected layers (90 lanes, one weight per
+cycle), pipelines the feature extraction, the residual add and the
+LayerNorm (15 lanes), the GELU (3 tanh units) and the rotation products,
+and shares one instance of each rotation function between analysis and
+synthesis. HLS estimate: about 39 M cycles per band (3.3x), LUT 46%,
+DSP 33%, BRAM 34%, URAM 19% of one SLR. Two pitfalls met on the way:
+`mod` on doubles inside a pipelined loop becomes a 2100-cycle `fmod`
+replicated per pipeline stage (1.2 M LUT), so circular indices are
+integer; and the two generator calls of an unrolled block pair are
+serialized by HLS on one instance.
 
 ## HLS version (whole frame)
 

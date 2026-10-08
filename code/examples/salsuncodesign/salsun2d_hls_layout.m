@@ -37,10 +37,18 @@ L.Width = 2;
 L.Epsilon = 1e-8;            % state standardization
 L.LnEpsilon = 1e-5;          % LayerNorm in residual blocks
 L.NStages = 4;
-% Parallel lanes of the estimators: the blocks of a column are processed
-% by gcd(nRows,NLanes) lanes (15 for 300 x 300 frames). With 75 lanes the
-% hardware build failed in routing (congestion level 7).
+% Parallel lanes of the estimators (salsun2d_hls_opt): the blocks of a
+% column are processed by gcd(nRows,NLanes) lanes (15 for 300 x 300
+% frames). With 75 lanes the whole-frame build failed in routing.
 L.NLanes = 15;
+% Band design (salsun2d_hls_band): the estimators process a group of
+% gcd(nCols,NColGroup) columns at a time with one lane per block in the
+% fully connected layers (3 columns x 30 block rows = 90 lanes for
+% 300 x 300 frames with 16-row bands), NLnLanes blocks per cycle in the
+% LayerNorm and residual add, and NGeluUnits blocks per cycle in the GELU.
+L.NColGroup = 3;
+L.NLnLanes = 15;
+L.NGeluUnits = 3;
 % Halo of the band-wise streaming design (salsun2d_hls_band): the
 % structural receptive field in block rows, 6 for the analysis (five
 % estimators with 3 x 3 neighbors and the two vertical atom extensions)
