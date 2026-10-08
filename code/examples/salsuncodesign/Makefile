@@ -53,6 +53,8 @@ HLS_CLASS   := $(HLS_SRC_DIR)/$(DESIGN)Class.hpp
 BUILD_DIR   := build/$(TARGET)
 XO          := $(BUILD_DIR)/$(NAME).xo
 XCLBIN      := $(BUILD_DIR)/$(NAME).xclbin
+# Linker configuration (e.g. LINK_CFG=hls/salsun2d_band_kernel_slr2.cfg)
+LINK_CFG    ?= hls/$(KERNEL).cfg
 
 ifeq ($(DESIGN),salsun2d_hls_opt)
 DESIGN_FLAGS := -DSALSUN2D_OPT
@@ -83,8 +85,8 @@ $(XO): hls/$(KERNEL).cpp $(HLS_CLASS)
 
 xclbin: $(XCLBIN) emconfig
 
-$(XCLBIN): $(XO) hls/$(KERNEL).cfg
-	$(VPP) -l $(VPP_FLAGS) --config hls/$(KERNEL).cfg -o $@ $<
+$(XCLBIN): $(XO) $(LINK_CFG)
+	$(VPP) -l $(VPP_FLAGS) --config $(LINK_CFG) -o $@ $<
 
 # emconfig.json is needed only for emulation targets
 emconfig:

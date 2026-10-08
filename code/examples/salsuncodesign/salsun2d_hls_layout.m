@@ -43,10 +43,13 @@ L.NStages = 4;
 L.NLanes = 15;
 % Band design (salsun2d_hls_band): the estimators process a group of
 % gcd(nCols,NColGroup) columns at a time with one lane per block in the
-% fully connected layers (3 columns x 30 block rows = 90 lanes for
-% 300 x 300 frames with 16-row bands), NLnLanes blocks per cycle in the
-% LayerNorm and residual add, and NGeluUnits blocks per cycle in the GELU.
-L.NColGroup = 3;
+% fully connected layers (30 block rows = 30 lanes for 300 x 300 frames
+% with 16-row bands), NLnLanes blocks per cycle in the LayerNorm and
+% residual add, and NGeluUnits blocks per cycle in the GELU. With
+% NColGroup = 3 (90 lanes) the layers with fewer lanes reach blocks all
+% over the die: routing congestion level 7 in SLR0, and the DDR clocks of
+% the shell failed timing.
+L.NColGroup = 1;
 L.NLnLanes = 15;
 L.NGeluUnits = 3;
 % Halo of the band-wise streaming design (salsun2d_hls_band): the

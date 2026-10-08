@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine (3.3x estimated) building |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine building |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
 
@@ -146,6 +146,17 @@ DSP 33%, BRAM 34%, URAM 19% of one SLR. Two pitfalls met on the way:
 replicated per pipeline stage (1.2 M LUT), so circular indices are
 integer; and the two generator calls of an unrolled block pair are
 serialized by HLS on one instance.
+
+The 90-lane engine routed but failed timing: congestion level 6-7 in
+SLR0, the worst kernel path (in the 15-lane LayerNorm, reaching the 90
+banks of the intermediate arrays) had 6.3 ns of route delay, and the
+DDR clocks of the shell missed their target, which stops the build. The
+engine is now built with one column group (`L.NColGroup` = 1, 30 lanes
+in the fully connected layers: one weight per cycle for the 30 blocks of
+a column, 2x the 15-lane engine), LUT 34%, DSP 23%, BRAM 12% of one
+SLR. `hls/salsun2d_band_kernel_slr2.cfg` (with `LINK_CFG=`) places the
+kernel in SLR2 with DDR[2] and congestion-oriented directives, for
+trying the 90-lane engine away from the shell.
 
 ## HLS version (whole frame)
 
