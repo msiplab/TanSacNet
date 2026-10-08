@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design in sw_emu done, hardware build running |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | |
 
@@ -34,6 +34,11 @@ train on GPU ──> params (.mat) ───────────────
 | `Salsun2dSequenceTestCase.m` | Tests of the two above and of the `Statistics` option of `salsun2d_infer` |
 | `salsun2d_wave_data.m` | Wave equation data of `../salsun/createdata_waveEq.m`, vectorized |
 | `measure_receptive_field.m`, `measure_statistics_stability.m` | Measurements for the discussion on tiled/streamed processing (receptive field, frame-to-frame stability of the standardization statistics) |
+| `salsun2d_hls_band.m` | Streaming HLS design: one band of `BandRows` block rows with `L.Halo` = 7 rows of circular context; angles on chip; statistics given per channel; returns the band and the channel sums |
+| `hls/salsun2d_band_kernel.cpp`, `.cfg` | Vitis kernel: one frame per run, bands with halo loaded from DDR, valid rows stored, sums accumulated; placed in SLR0 |
+| `mex/salsun2d_band_mex.cpp`, `salsun2d_band_u250.m` | Run the band kernel from MATLAB (one frame per call; statistics policy on the host) |
+| `salsun2d_band_frame.m`, `salsun2d_band_sequence.m`, `salsun2d_stats_from_sums.m` | Host logic of the band kernel in MATLAB (same band schedule), sequence driver with previous / EMA / FIR statistics |
+| `Salsun2dHlsBandTestCase.m` | Band design vs. reference stream, frame assembly, moved last band |
 | `salsun2d_hls_layout.m` | Fixed configuration of the HLS version and offsets of each parameter in the packed vector |
 | `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
 | `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
@@ -83,7 +88,36 @@ tanh, FC, skip) -> FC to the angles. With block 4 x 4, overlap 3 x 3 and
 width 2, this is about 480k multiply-accumulates per block, almost all in the
 estimators.
 
-## HLS version
+## Streaming design for the FPGA (band-wise, overlap-save)
+
+`salsun2d_hls_band` implements the streaming form validated with
+`salsun2d_infer_stream`: a frame is processed in bands of `BAND` block
+rows, each with `L.Halo` = 7 block rows of circular context above and
+below (6 for the structural receptive field of the analysis, 1 for the
+synthesis; with this halo a band equals whole-frame processing exactly).
+The angles of a band stay on chip, the standardization statistics are an
+input (per channel and estimator) and the channel sums of the valid
+blocks are an output, so the policy (previous frame, EMA, 2-tap FIR)
+stays on the host.
+
+```sh
+make xclbin TARGET=sw_emu DESIGN=salsun2d_hls_band SZY=32 SZX=32 BAND=2
+make xclbin TARGET=hw DESIGN=salsun2d_hls_band BAND=16        # 300 x 300, 5 bands
+```
+
+```matlab
+build_mex_salsun2d
+y = salsun2d_band_u250(u,params,'hw',BandRows=16,Statistics='fir2');
+```
+
+Software emulation (32 x 32, band 2, trained parameters): kernel vs.
+whole-frame reference 5e-7, statistics within 1e-6. HLS for 300 x 300
+with 16-row bands: URAM 38%, BRAM 24%, DSP 14%, LUT 42% of one SLR,
+Fmax 369 MHz (two floats per URAM word with `ARRAY_RESHAPE`; without it
+URAM is 86%). Compute overhead (16 + 14)/16 = 1.9x, plus the moved last
+band: 5 bands of 30 rows for 75 rows, 2.0x.
+
+## HLS version (whole frame)
 
 `salsun2d_hls` fixes the configuration of `main_salsun2d.m` (stride [4 4],
 overlapping factor [3 3], no DC leakage, neighbor [3 3], 3 residual blocks,
