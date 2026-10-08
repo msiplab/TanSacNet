@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design in sw_emu done, hardware build running |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7 |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
 
@@ -116,6 +116,16 @@ with 16-row bands: URAM 38%, BRAM 24%, DSP 14%, LUT 42% of one SLR,
 Fmax 369 MHz (two floats per URAM word with `ARRAY_RESHAPE`; without it
 URAM is 86%). Compute overhead (16 + 14)/16 = 1.9x, plus the moved last
 band: 5 bands of 30 rows for 75 rows, 2.0x.
+
+Hardware (U250, temsip02, 2024.1): the build runs through place and
+route without congestion warnings (3 h 46 m); the kernel clock is scaled
+to 237.7 MHz. Ten frames of the wave data (300 x 300, FIR-2 statistics)
+match the whole-frame reference with the same statistics to 8e-7, and
+the statistics are exact because the rows repeated by the moved last
+band are left out of the sums (`skipRows`). Throughput: 2.7 s/frame on
+the card against 1.06 s/frame for the MATLAB reference on the CPU; the
+kernel is a single unpipelined band engine (15 lanes), so the remaining
+work is throughput, not correctness.
 
 ## HLS version (whole frame)
 
