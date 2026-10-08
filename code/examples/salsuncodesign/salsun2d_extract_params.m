@@ -13,7 +13,8 @@ function params = salsun2d_extract_params(net)
 %     Stride      - block size [My Mx]
 %     Cvh         - prod(Stride) x prod(Stride) block DCT matrix
 %     Mask        - prod(Stride) x 1 coefficient mask (DC first)
-%     V0          - initial rotation: MusW, MusU, Estimator
+%     V0          - initial rotation: MusW, MusU (one column when the
+%                   signs are the same for all blocks), Estimator
 %     V0t         - final rotation (synthesis): MusW, MusU
 %     Stages      - intermediate stages in analysis order, each with
 %                   Shift, Target, Mus, Estimator (analysis side) and
@@ -95,11 +96,11 @@ while true
     vt = getLayer(char(extractBefore(vName,strlength(vName)) + "~"));
     stage.Shift = directionToShift(q.Direction);
     stage.Target = char(q.TargetChannels);
-    stage.Mus = single(v.Mus);
+    stage.Mus = collapseMus(v.Mus);
     stage.Estimator = extractEstimator(getLayer,char(vName));
     stage.SynShift = directionToShift(qt.Direction);
     stage.SynTarget = char(qt.TargetChannels);
-    stage.SynMus = single(vt.Mus);
+    stage.SynMus = collapseMus(vt.Mus);
     stages(end+1) = stage; %#ok<AGROW>
     cur = vName;
 end
@@ -107,9 +108,19 @@ params.Stages = stages;
 end
 
 function [muW,muU] = splitMus(mus,ps)
-mus = single(mus);
+mus = collapseMus(mus);
 muW = mus(1:ps,:);
 muU = mus(ps+1:end,:);
+end
+
+function mus = collapseMus(mus)
+% The layers store the sign flips per block (nChannels x nBlocks). When
+% all blocks have the same signs, keep one column, so that the
+% parameters do not depend on the image size (bands, tiles, the FPGA).
+mus = single(gather(mus));
+if size(mus,2) > 1 && all(mus == mus(:,1),'all')
+    mus = mus(:,1);
+end
 end
 
 function shift = directionToShift(direction)

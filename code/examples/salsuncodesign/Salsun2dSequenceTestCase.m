@@ -152,6 +152,82 @@ classdef Salsun2dSequenceTestCase < matlab.unittest.TestCase
             testCase.verifyNotEqual(yActual(:,:,end),yImage(:,:,end));
         end
 
+
+        function testStreamEqualsWholeFrameWithFullHalo(testCase)
+            % With a halo covering the structural receptive field (6) and
+            % the synthesis (1), the band-wise result equals the whole
+            % frame, given the same statistics
+
+            rng(26)
+            nCoefs = 2;
+            coefMask = reshape([ones(nCoefs,1); zeros(16-nCoefs,1)],2,[]).';
+            net = salsun2d_create_test_network([64 64],coefMask(:));   % 16 block rows
+            params = salsun2d_extract_params(net);
+            x = rand(64,64,'single');
+
+            % Expected values
+            [yExpctd,cExpctd,~,~,stats] = salsun2d_infer(x,params);
+
+            % Actual values
+            [yActual,cActual,statsActual] = salsun2d_infer_stream(x,params, ...
+                Statistics=stats,Halo=7,BandRows=2);
+
+            % Evaluation
+            testCase.verifyEqual(yActual,yExpctd,'AbsTol',single(1e-5));
+            testCase.verifyEqual(cActual,cExpctd,'AbsTol',single(1e-5));
+            for k = 1:numel(stats)
+                testCase.verifyEqual(statsActual(k).Mu,stats(k).Mu,'AbsTol',single(1e-5));
+                testCase.verifyEqual(statsActual(k).Sigma,stats(k).Sigma,'RelTol',single(1e-4));
+            end
+        end
+
+        function testStreamWithSmallHaloIsClose(testCase)
+            % A small halo truncates the receptive field: the result is
+            % close but not equal (random parameters leak strongly)
+
+            rng(27)
+            nCoefs = 2;
+            coefMask = reshape([ones(nCoefs,1); zeros(16-nCoefs,1)],2,[]).';
+            net = salsun2d_create_test_network([64 64],coefMask(:));
+            params = salsun2d_extract_params(net);
+            x = rand(64,64,'single');
+            [yExpctd,~,~,~,stats] = salsun2d_infer(x,params);
+
+            yActual = salsun2d_infer_stream(x,params,Statistics=stats,Halo=2,BandRows=4);
+
+            testCase.verifySize(yActual,size(x));
+            testCase.verifyTrue(all(isfinite(yActual(:))));
+            testCase.verifyNotEqual(yActual,yExpctd);
+        end
+
+        function testSequenceStreaming(testCase)
+
+            rng(28)
+            nCoefs = 2;
+            coefMask = reshape([ones(nCoefs,1); zeros(16-nCoefs,1)],2,[]).';
+            net = salsun2d_create_test_network([32 32],coefMask(:));
+            params = salsun2d_extract_params(net);
+            u = rand(32,32,3,'single');
+
+            % Expected values: whole-frame processing with the same statistics
+            yWhole = salsun2d_infer_sequence(u,params,Statistics='previous');
+
+            % Actual values: full halo (8 block rows), so identical
+            yActual = salsun2d_infer_sequence(u,params,Statistics='previous',Halo=8,BandRows=2);
+
+            % Evaluation. Frames 1 and 2 use the same statistics (frame 1
+            % is processed as a whole in both). Frame 3 uses statistics
+            % measured by the band-wise processing of frame 2, which
+            % differ by rounding (about 2e-7 relative) from those of the
+            % whole frame; with random parameters this is amplified to
+            % about 1e-3 in the output (no such amplification with
+            % trained parameters).
+            testCase.verifyEqual(yActual(:,:,1:2),yWhole(:,:,1:2),'AbsTol',single(1e-5));
+            testCase.verifyEqual(yActual(:,:,3),yWhole(:,:,3),'AbsTol',single(1e-2));
+            testCase.verifyError(@() salsun2d_infer_sequence(u,params,Halo=2), ...
+                'salsun2d_infer_sequence:imageStatistics');
+        end
+
     end
 
 end

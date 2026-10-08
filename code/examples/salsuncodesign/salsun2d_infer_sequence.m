@@ -26,6 +26,14 @@ function [y,info] = salsun2d_infer_sequence(u,params,options)
 %                The first frame (and the second for 'fir2') falls back
 %                to the statistics of the image.
 %   StatsRho   - forgetting factor for 'ema' (default 0.9).
+%   Halo       - 0 (default): every frame is processed as a whole.
+%                Otherwise the frames are processed in bands of BandRows
+%                block rows with Halo block rows of context
+%                (salsun2d_infer_stream). The first frame, and the second
+%                for 'fir2', are still processed as a whole to obtain
+%                initial statistics; Statistics='image' is not available
+%                with Halo > 0.
+%   BandRows   - block rows per band for Halo > 0 (default 5).
 %
 %   [y,info] = salsun2d_infer_sequence(...) also returns info with fields
 %   BaseField (b), Fluctuation (u - b), Statistics (measured statistics
@@ -52,6 +60,12 @@ arguments
     options.Scope {mustBeMember(options.Scope,{'dc','full'})} = 'dc'
     options.Statistics {mustBeMember(options.Statistics,{'image','previous','ema','fir2'})} = 'image'
     options.StatsRho (1,1) double {mustBeGreaterThanOrEqual(options.StatsRho,0),mustBeLessThan(options.StatsRho,1)} = 0.9
+    options.Halo (1,1) double {mustBeInteger,mustBeNonnegative} = 0
+    options.BandRows (1,1) double {mustBeInteger,mustBePositive} = 5
+end
+if options.Halo > 0 && strcmp(options.Statistics,'image')
+    error('salsun2d_infer_sequence:imageStatistics', ...
+        'Statistics=''image'' needs the whole frame; use ''previous'', ''ema'' or ''fir2'' with Halo > 0.')
 end
 
 [uf,b] = salsun2d_base_field(u,Method=options.BaseField,Rho=options.Rho, ...
@@ -77,7 +91,12 @@ for t = 1:nFrames
                 given = previousOrEmpty(measured,t-1);
             end
     end
-    [y(:,:,t),coefs{t},~,~,measured{t}] = salsun2d_infer(uf(:,:,t),params,Statistics=given);
+    if options.Halo > 0 && ~isempty(given)
+        [y(:,:,t),coefs{t},measured{t}] = salsun2d_infer_stream(uf(:,:,t),params, ...
+            Statistics=given,Halo=options.Halo,BandRows=options.BandRows);
+    else
+        [y(:,:,t),coefs{t},~,~,measured{t}] = salsun2d_infer(uf(:,:,t),params,Statistics=given);
+    end
     y(:,:,t) = y(:,:,t) + b(:,:,t);
     if strcmp(options.Statistics,'ema')
         if isempty(smoothed)
