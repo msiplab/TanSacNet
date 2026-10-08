@@ -41,6 +41,12 @@ L.NStages = 4;
 % by gcd(nRows,NLanes) lanes (15 for 300 x 300 frames). With 75 lanes the
 % hardware build failed in routing (congestion level 7).
 L.NLanes = 15;
+% Halo of the band-wise streaming design (salsun2d_hls_band): the
+% structural receptive field in block rows, 6 for the analysis (five
+% estimators with 3 x 3 neighbors and the two vertical atom extensions)
+% plus 1 for the synthesis. With this halo the rows of a band equal
+% whole-frame processing with the same statistics.
+L.Halo = 7;
 % Intermediate stages in analysis order: shift [v h] and target half
 % (1: difference, 2: sum), then the same for synthesis
 L.Shift    = [0 1; 0 -1; 1 0; -1 0];

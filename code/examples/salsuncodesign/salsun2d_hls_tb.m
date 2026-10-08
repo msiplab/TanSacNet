@@ -32,14 +32,29 @@ params = salsun2d_extract_params(net);
 w = salsun2d_pack_params(params);
 for iFrame = 1:2
     x = rand(hlsInputSize,'single');
-    if strcmp(hlsDesignName,'salsun2d_hls_opt')
+    if strcmp(hlsDesignName,'salsun2d_hls_band')
+        % One frame band by band (host logic of the streaming kernel)
+        L = salsun2d_hls_layout();
+        if ~exist('hlsBandRows','var'), hlsBandRows = 31; end
+        [~,~,~,~,stats] = salsun2d_infer(x,params);
+        ests = [params.V0.Estimator, params.Stages.Estimator];
+        mu = zeros(L.NDec,L.NEst,'single'); sigma = ones(L.NDec,L.NEst,'single');
+        for k = 1:L.NEst
+            ch = ests(k).Channels;
+            mu(ch,k) = stats(k).Mu(1:numel(ch)); sigma(ch,k) = stats(k).Sigma(1:numel(ch));
+        end
+        y = salsun2d_band_frame(x,w,mu,sigma,hlsBandRows);
+        yRef = salsun2d_infer(x,params,Statistics=stats);
+    elseif strcmp(hlsDesignName,'salsun2d_hls_opt')
         L = salsun2d_hls_layout();
         thetaBuf = zeros([L.NThetaRows hlsInputSize./L.Stride],'single');
         y = salsun2d_hls_opt(x,w,thetaBuf);
     else
         y = salsun2d_hls(x,w);
     end
-    yRef = salsun2d_infer(x,params);
+    if ~strcmp(hlsDesignName,'salsun2d_hls_band')
+        yRef = salsun2d_infer(x,params);
+    end
     fprintf('salsun2d_hls_tb: frame %d, max abs difference from reference = %g\n', ...
         iFrame,max(abs(y(:)-yRef(:))));
 end
