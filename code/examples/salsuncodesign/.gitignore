@@ -16,3 +16,6 @@ xrt.run_summary
 # MEX binaries (build with build_mex_salsun2d)
 *.mex*
 .ipcache/
+
+# Training results (train_salsun2d_variants)
+results/
