@@ -76,6 +76,16 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(L.Halo,7);
         end
 
+        function testMaskCheck(testCase)
+            % The band design supports masks that keep only the first
+            % antisymmetric channel
+            [~,w] = Salsun2dHlsBandTestCase.testData([64 16]);
+            L = salsun2d_hls_layout();
+            salsun2d_check_band_mask(w);   % the test network keeps channels 1 and 9
+            w(L.Mask+L.Ps+2) = 1;
+            testCase.verifyError(@() salsun2d_check_band_mask(w),'salsun2d_check_band_mask:mask');
+        end
+
         function testBandMatchesStreamReference(testCase)
             % One band of 2 block rows with its halo: 16 block rows in all
 

@@ -40,6 +40,7 @@ arguments
     bandRows (1,1) double {mustBeInteger,mustBePositive}
     bandFcn = @salsun2d_hls_band
 end
+salsun2d_check_band_mask(w);
 L = salsun2d_hls_layout();
 My = L.Stride(1);
 [szy,szx] = size(x);

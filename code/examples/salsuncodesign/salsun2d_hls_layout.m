@@ -78,6 +78,19 @@ L.EstNZeroPad = [7 0 0 0 0];           % leading zero angles (no DC leakage)
 L.EstNAnglesTotal = L.EstNAngles + L.EstNZeroPad;             % 56, 28, ...
 L.ThetaOffset = [0 cumsum(L.EstNAnglesTotal(1:end-1))];       % rows in theta store
 L.NThetaRows = sum(L.EstNAnglesTotal);                        % 168
+% Band design: with a coefficient mask that keeps only the first
+% antisymmetric channel (Ps+1) after the last stage, only the first row
+% of the last rotation U = D*G_K*...*G_1 matters, and the Givens rotations
+% G_k on pairs (i,j) with i > 1 do not change that row. Those are all
+% but the first Pa-1 rotations (pairs (1,2)..(1,Pa)), so the last
+% estimator predicts only its first Pa-1 angles. salsun2d_check_band_mask
+% checks the mask.
+L.LastStageNAngles = L.Pa - 1;                                % 7 of 28
+% Pairs of the Givens rotations in the order of fcn_orthmtxgen
+% (1,2),(1,3),...,(1,n),(2,3),...,(n-1,n), for n = Ps = Pa
+[L.GivensTop,L.GivensBottom] = givensPairs(L.Pa);
+L.EstNAnglesUsed = L.EstNAngles;
+L.EstNAnglesUsed(end) = L.LastStageNAngles;
 L.MaxNFeat = max(L.EstNFeat);
 L.MaxNHidden = max(L.EstNHidden);
 
@@ -122,4 +135,17 @@ end
 
 function [offset,next] = take(offset,n)
 next = offset + n;
+end
+
+function [tops,btms] = givensPairs(n)
+tops = zeros(1,n*(n-1)/2);
+btms = zeros(1,n*(n-1)/2);
+k = 0;
+for iTop = 1:n-1
+    for iBtm = iTop+1:n
+        k = k + 1;
+        tops(k) = iTop;
+        btms(k) = iBtm;
+    end
+end
 end

@@ -177,13 +177,24 @@ end
 end
 
 %% Rotations
+% The rotations are applied to the coefficients of a block directly as
+% the sequence of Givens rotations, without forming the matrices: for
+% U = D*G_K*...*G_1 (D the sign flips mus), the analysis computes
+% D*(G_K*(...*(G_1*y))) and the synthesis U.'*y = G_1.'*(...*(G_K.'*(D*y))),
+% K multiply-add pairs per block instead of the K x n matrix updates of
+% the generator and the n x n product. G_k rotates the pair (i,j) of
+% L.GivensTop(k), L.GivensBottom(k) as [c -s; s c] (as fcn_orthmtxgen).
+% For each column, the cosines and sines of all blocks are computed
+% first (one angle per cycle), and the blocks are then rotated in a
+% pipeline with one rotation per cycle on average.
+
 function Z = rotateInitialOrFinal(Y,theta,w,L,isFinal,nRows,nCols)
-% Two blocks of a column are rotated at a time (two generators each for
-% W and U), and the products are pipelined over the output index. The
-% callers pass isFinal with coder.ignoreConst, so that the analysis and
-% the synthesis share one instance of the function.
+% Initial rotation (W on the symmetric, U on the antisymmetric channels)
+% or its transpose (isFinal). The callers pass isFinal with
+% coder.ignoreConst, so that the analysis and the synthesis share one
+% instance of the function.
 coder.inline('never')
-nHalf = L.EstNAnglesTotal(1)/2;
+nHalf = coder.const(L.EstNAnglesTotal(1)/2);   % angles of W and of U (28)
 if isFinal
     offMusW = L.V0tMusW;
     offMusU = L.V0tMusU;
@@ -191,138 +202,161 @@ else
     offMusW = L.V0MusW;
     offMusU = L.V0MusU;
 end
+tops = coder.const(L.GivensTop);
+btms = coder.const(L.GivensBottom);
 Z = coder.nullcopy(zeros(size(Y),'single'));   % all elements are written
-anglesW = zeros(nHalf,1,'single');
-anglesU = zeros(nHalf,1,'single');
-yv = zeros(L.NDec,1,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=anglesW type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=anglesU type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=yv type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=W type=complete dim=0")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=U type=complete dim=0")
+musW = zeros(L.Ps,1,'single');
+musU = zeros(L.Pa,1,'single');
+for i = 1:L.Ps
+    musW(i) = w(offMusW+i);
+    musU(i) = w(offMusU+i);
+end
+csW = zeros(nHalf,nRows,'single');
+snW = zeros(nHalf,nRows,'single');
+csU = zeros(nHalf,nRows,'single');
+snU = zeros(nHalf,nRows,'single');
+vs = zeros(L.Ps,1,'single');
+va = zeros(L.Pa,1,'single');
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=musW type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=musU type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=vs type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=1")
 for c = 1:nCols
     for r = 1:nRows
-        coder.hdl.literaltext("#pragma HLS UNROLL factor=2")
         for a = 1:nHalf
             coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            anglesW(a) = theta(a,r,c);
-            anglesU(a) = theta(nHalf+a,r,c);
+            tw = theta(a,r,c);
+            tu = theta(nHalf+a,r,c);
+            csW(a,r) = cos(tw);
+            snW(a,r) = sin(tw);
+            csU(a,r) = cos(tu);
+            snU(a,r) = sin(tu);
         end
-        for k = 1:L.NDec
-            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            yv(k) = Y(k,r,c);
+    end
+    for r = 1:nRows
+        coder.hdl.literaltext(coder.const(sprintf('#pragma HLS PIPELINE II=%d',nHalf)))
+        for j = 1:L.Ps
+            vs(j) = Y(j,r,c);
+            va(j) = Y(L.Ps+j,r,c);
         end
-        W = orthMatrix(anglesW,w,offMusW,L.Ps);
-        U = orthMatrix(anglesU,w,offMusU,L.Pa);
-        for i = 1:L.Ps
-            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            accS = single(0);
-            accA = single(0);
+        if isFinal
             for j = 1:L.Ps
-                if isFinal
-                    accS = accS + W(j,i)*yv(j);
-                    accA = accA + U(j,i)*yv(L.Ps+j);
-                else
-                    accS = accS + W(i,j)*yv(j);
-                    accA = accA + U(i,j)*yv(L.Ps+j);
-                end
+                vs(j) = musW(j)*vs(j);
+                va(j) = musU(j)*va(j);
             end
-            Z(i,r,c) = accS;
-            Z(L.Ps+i,r,c) = accA;
+            for a = nHalf:-1:1
+                [vs(tops(a)),vs(btms(a))] = givensT(vs(tops(a)),vs(btms(a)),csW(a,r),snW(a,r));
+                [va(tops(a)),va(btms(a))] = givensT(va(tops(a)),va(btms(a)),csU(a,r),snU(a,r));
+            end
+        else
+            for a = 1:nHalf
+                [vs(tops(a)),vs(btms(a))] = givens(vs(tops(a)),vs(btms(a)),csW(a,r),snW(a,r));
+                [va(tops(a)),va(btms(a))] = givens(va(tops(a)),va(btms(a)),csU(a,r),snU(a,r));
+            end
+            for j = 1:L.Ps
+                vs(j) = musW(j)*vs(j);
+                va(j) = musU(j)*va(j);
+            end
+        end
+        for j = 1:L.Ps
+            Z(j,r,c) = vs(j);
+            Z(L.Ps+j,r,c) = va(j);
         end
     end
 end
 end
 
 function Z = rotateIntermediate(Y,theta,w,L,iStage,isSynthesis,nRows,nCols)
-% Two blocks of a column are rotated at a time (two generators), and
-% the product is pipelined over the output index. The callers pass
-% isSynthesis with coder.ignoreConst (one instance of the function).
+% Rotation U of the antisymmetric channels of an intermediate stage, or
+% its transpose (isSynthesis; passed with coder.ignoreConst by the
+% callers, so that one instance serves both). In the last stage only the
+% first L.LastStageNAngles rotations are applied: with the mask checked
+% by salsun2d_check_band_mask, only channel Ps+1 of the analysis output
+% is kept (the other outputs are set to zero, as the mask would), and
+% the synthesis input is zero in the other antisymmetric channels, on
+% which the remaining rotations act.
 coder.inline('never')
 iEst = iStage + 1;
-nAngles = int32(L.EstNAnglesTotal(iEst));
 offTheta = int32(L.ThetaOffset(iEst));
 if isSynthesis
     offMus = int32(L.StageSynMus(iStage));
 else
     offMus = int32(L.StageMus(iStage));
 end
+nAng = coder.const(L.Pa*(L.Pa-1)/2);
+isLast = iStage == int32(L.NStages);
+if isLast
+    nRot = int32(L.LastStageNAngles);
+else
+    nRot = int32(nAng);
+end
+tops = coder.const(L.GivensTop);
+btms = coder.const(L.GivensBottom);
 Z = Y;
-angles = zeros(L.Pa*(L.Pa-1)/2,1,'single');
-yv = zeros(L.Pa,1,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=angles type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=yv type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=U type=complete dim=0")
+mus = zeros(L.Pa,1,'single');
+for i = 1:L.Pa
+    mus(i) = w(offMus+i);
+end
+cs = zeros(nAng,nRows,'single');
+sn = zeros(nAng,nRows,'single');
+va = zeros(L.Pa,1,'single');
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=mus type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=1")
 for c = 1:nCols
     for r = 1:nRows
-        coder.hdl.literaltext("#pragma HLS UNROLL factor=2")
-        for a = 1:nAngles
+        for a = 1:nAng
             coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            angles(a) = theta(offTheta+a,r,c);
+            t = theta(offTheta+a,r,c);
+            cs(a,r) = cos(t);
+            sn(a,r) = sin(t);
         end
+    end
+    for r = 1:nRows
+        coder.hdl.literaltext(coder.const(sprintf('#pragma HLS PIPELINE II=%d',nAng)))
         for j = 1:L.Pa
-            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            yv(j) = Y(L.Ps+j,r,c);
+            va(j) = Y(L.Ps+j,r,c);
         end
-        U = orthMatrix(angles,w,offMus,L.Pa);
-        for i = 1:L.Pa
-            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            acc = single(0);
+        if isSynthesis
             for j = 1:L.Pa
-                if isSynthesis
-                    acc = acc + U(j,i)*yv(j);
-                else
-                    acc = acc + U(i,j)*yv(j);
+                va(j) = mus(j)*va(j);
+            end
+            for a = nAng:-1:1
+                if a <= nRot
+                    [va(tops(a)),va(btms(a))] = givensT(va(tops(a)),va(btms(a)),cs(a,r),sn(a,r));
                 end
             end
-            Z(L.Ps+i,r,c) = acc;
+        else
+            for a = 1:nAng
+                if a <= nRot
+                    [va(tops(a)),va(btms(a))] = givens(va(tops(a)),va(btms(a)),cs(a,r),sn(a,r));
+                end
+            end
+            for j = 1:L.Pa
+                va(j) = mus(j)*va(j);
+            end
+            if isLast
+                for j = 2:L.Pa
+                    va(j) = single(0);
+                end
+            end
+        end
+        for j = 1:L.Pa
+            Z(L.Ps+j,r,c) = va(j);
         end
     end
 end
 end
 
-function M = orthMatrix(angles,w,offMus,n)
-% Product of Givens rotations followed by sign flips (as fcn_orthmtxgen).
-% The cosines and sines are computed first in a pipelined loop. Not
-% inlined: the generator is a module, and the name M used by the pragma
-% below is kept. The chain of rotations is sequential (every rotation
-% updates two rows), so several generators run in parallel in the callers.
-coder.inline('never')
-cs = zeros(numel(angles),1,'single');
-sn = zeros(numel(angles),1,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=cs type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=sn type=complete dim=1")
-for a = 1:numel(angles)
-    coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-    cs(a) = cos(angles(a));
-    sn(a) = sin(angles(a));
+function [t,b] = givens(t0,b0,c,s)
+% [t; b] = [c -s; s c]*[t0; b0]
+t = c*t0 - s*b0;
+b = s*t0 + c*b0;
 end
-M = zeros(n,n,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=M type=complete dim=0")
-for i = 1:n
-    M(i,i) = single(1);
-end
-iAng = int32(1);
-for iTop = 1:n-1
-    for iBtm = iTop+1:n
-        for j = 1:n
-            coder.hdl.literaltext("#pragma HLS UNROLL")
-            vt = M(iTop,j);
-            vb = M(iBtm,j);
-            u = sn(iAng)*(vt + vb);
-            M(iTop,j) = (cs(iAng) + sn(iAng))*vt - u;
-            M(iBtm,j) = (cs(iAng) - sn(iAng))*vb + u;
-        end
-        iAng = iAng + 1;
-    end
-end
-for i = 1:n
-    coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-    mu = w(offMus+i);
-    for j = 1:n
-        M(i,j) = mu*M(i,j);
-    end
-end
+
+function [t,b] = givensT(t0,b0,c,s)
+% [t; b] = [c -s; s c].'*[t0; b0]
+t = c*t0 + s*b0;
+b = c*b0 - s*t0;
 end
 
 %% Angle estimation
@@ -341,7 +375,8 @@ ch0 = int32(L.EstChannelFirst(iEst));
 nCh = int32(L.EstNCh(iEst));
 nF = int32(L.EstNFeat(iEst));
 nH = int32(L.EstNHidden(iEst));
-nA = int32(L.EstNAngles(iEst));
+nA = int32(L.EstNAngles(iEst));          % predicted angles
+nAU = int32(L.EstNAnglesUsed(iEst));     % angles computed (7 in the last stage)
 nZ = int32(L.EstNZeroPad(iEst));
 offTheta = int32(L.ThetaOffset(iEst));
 nv = L.Neighbor(1);
@@ -416,7 +451,10 @@ for c0 = 1:nCG:nCols
         F = residualAdd(F,Z2,nF,L);
     end
 
-    % Output angles (leading zeros for no DC leakage)
+    % Output angles (leading zeros for no DC leakage). In the last stage
+    % only the first nAU angles are used; all nA rows are still computed,
+    % because the pipeline of fullyConnected needs nOut >= 28 (and the
+    % output layer is 3% of the multiply-adds)
     Z1 = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF);
     for cc = 1:nCG
         c = c0 + cc - 1;
@@ -426,7 +464,7 @@ for c0 = 1:nCG:nCols
                 coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
                 theta(offTheta+a,r,c) = single(0);
             end
-            for a = 1:nA
+            for a = 1:nAU
                 coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
                 theta(offTheta+nZ+a,r,c) = Z1(a,b);
             end
@@ -440,7 +478,8 @@ function Z = fullyConnected(X,w,offW,offB,nOut,nIn)
 % One weight is read per cycle and applied to all blocks at once (one
 % lane per block). The loops over i and o are flattened into one
 % pipeline; Z(o,b) is updated again only nOut cycles later, which is
-% more than the adder latency for every layer (nOut >= 28), so the
+% more than the adder latency for every layer (nOut >= 28; smaller nOut
+% would break the pipeline), so the
 % dependence through Z is declared false.
 coder.inline('never')
 % Only rows 1..nOut are written and read, so Z is not zero-filled

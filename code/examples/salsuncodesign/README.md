@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine building |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine with direct Givens rotations building |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
 
@@ -157,6 +157,34 @@ a column, 2x the 15-lane engine), LUT 34%, DSP 23%, BRAM 12% of one
 SLR. `hls/salsun2d_band_kernel_slr2.cfg` (with `LINK_CFG=`) places the
 kernel in SLR2 with DDR[2] and congestion-oriented directives, for
 trying the 90-lane engine away from the shell.
+
+### The estimators predict rotation angles
+
+Measured with the trained parameters (frames 11-15, MSE relative to the
+reference): angle noise of 0.003 / 0.01 / 0.03 rad gives 1.03 / 1.28 /
+3.5, so the angles need about 11-12 bits; constant angles (no
+adaptation) give 162 and angles computed on every other block 86, since
+neighboring angles differ by 0.11-0.35 rad against a spread of 0.3-0.9
+rad (the local adaptation is essential). The output layer is 3% of the
+multiply-adds of the estimators; the residual weights are nearly full
+rank (rank 125 of 135 for 99% of the energy), so a low-rank
+approximation without retraining does not work (half rank: 3.5).
+
+Two consequences are used in the band design without changing the
+model:
+
+* With the mask keeping channels 1 and 9, only the first row of the
+  last rotation matters, which depends only on its first Pa-1 = 7
+  angles (pairs (1,2)..(1,8)); noise of 1 rad on the other 21 angles
+  leaves the MSE unchanged. The last stage applies 7 rotations, and the
+  last estimator stores 7 angles (`L.LastStageNAngles`,
+  `salsun2d_check_band_mask`).
+* The rotations are applied to the coefficients directly as the
+  sequence of Givens rotations (synthesis: transposes in reverse order)
+  instead of forming the matrix and multiplying, with the cosines and
+  sines of a column computed first. HLS: 0.14-0.18 M cycles per call
+  with a fixed latency, against 0.8-5.3 M before (about 1.7 M instead
+  of 10-33 M cycles per band); LUT 30%, DSP 20% of one SLR.
 
 ## HLS version (whole frame)
 

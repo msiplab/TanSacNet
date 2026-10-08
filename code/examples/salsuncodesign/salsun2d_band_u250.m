@@ -48,6 +48,7 @@ if exist('salsun2d_band_mex','file') ~= 3
 end
 L = salsun2d_hls_layout();
 w = salsun2d_pack_params(params);
+salsun2d_check_band_mask(w);
 
 % One target per MATLAB session (see salsun2d_u250)
 sessionTarget = getenv('SALSUN2D_U250_TARGET');
