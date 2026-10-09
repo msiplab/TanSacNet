@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine validated on the U250 (238.8 MHz, 1.52 s/frame, 10 frames to 7.5e-7); with direct Givens rotations building |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine with direct Givens rotations validated on the U250 (262.9 MHz, 1.01 s/frame, 10 frames to 6.9e-7) |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
 
@@ -192,6 +192,15 @@ model:
   sines of a column computed first. HLS: 0.14-0.18 M cycles per call
   with a fixed latency, against 0.8-5.3 M before (about 1.7 M instead
   of 10-33 M cycles per band); LUT 30%, DSP 20% of one SLR.
+
+Hardware, 30-lane engine with the direct Givens rotations: built in 4 h
+20 m, kernel clock 262.9 MHz; ten frames match the reference to 6.9e-7;
+1.01 s/frame for the kernel call (1.12 s/frame with the host policy),
+1.5x the matrix rotations and 2.65x the 15-lane engine, against 0.94
+s/frame for the MATLAB reference on the CPU. About 53 M cycles per band,
+of which the fully connected layers are about 36 M. The 90-lane engine
+placed in SLR2 (`salsun2d_band_kernel_slr2.cfg`) routed but missed a
+DDR clock of the shell by 0.004 ns.
 
 ## HLS version (whole frame)
 
