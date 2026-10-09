@@ -47,6 +47,10 @@ cfg.GenerateHLSTestBench = false;
 cfg.SimulateGeneratedCode = false;
 cfg.SynthesizeGeneratedCode = false;
 cfg.SynthesisTool = "Xilinx Vitis HLS";
+% Integer arithmetic wraps as in C: the index and loop arithmetic never
+% overflows, and saturation logic would hide the structure of the
+% addresses from HLS (e.g. consecutive elements of one reshaped word)
+cfg.SaturateOnIntegerOverflow = false;
 cfg.SynthesisToolChipFamily = 'Virtex UltraScale+';
 cfg.SynthesisToolDeviceName = 'xcu250';
 cfg.SynthesisToolPackageName = 'figd2104';

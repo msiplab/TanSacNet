@@ -359,18 +359,32 @@ t = c*t0 + s*b0;
 b = c*b0 - s*t0;
 end
 
-%% Angle estimation
+%% Angle estimation (fixed point)
+% The estimators compute in fixed point: the inputs of the fully connected
+% layers (standardized features and residual sums F, LayerNorm outputs LN,
+% GELU outputs A) are L.FixSignal = [word fraction] lengths, the weights
+% L.FixWeight, the accumulators L.FixAcc (exact sums of the products), as
+% chosen with evaluate_salsun2d_fixed_estimator (Common=true). The
+% LayerNorm scaling, the GELU and the standardization are computed in
+% single precision from the exact sums and rounded to the signal format;
+% the angles are converted to single precision. In MATLAB the fixed-point
+% values are emulated in double precision with the same rounding
+% (salsun2d_round_fixed), so that the MATLAB execution of this design is
+% fast and matches the generated code; in code generation they are fi
+% objects (ap_fixed in the generated C++).
+
 function [theta,sum1,sum2] = estimateAngles(theta,sum1,sum2,Y,w,L,iEst,mu,sigma,nRows,nCols,sumFirst,sumLast)
 % A group of nCG = gcd(nCols,L.NColGroup) columns of blocks is processed
 % at a time: nB = nCG*nRows blocks, block (r,c0+cc-1) at index
 % b = (cc-1)*nRows + r. The fully connected layers have one lane per
-% block (nB parallel multiply-adds); the other layers use fewer lanes
-% (L.NLnLanes, L.NGeluUnits), as they are a small part of the work.
+% block, each with L.FcInputs multipliers; the other layers use fewer
+% lanes (L.NLnLanes, L.NGeluUnits), as they are a small part of the work.
 % The standardization uses the given statistics mu(:,iEst), sigma(:,iEst)
 % per channel; the channel sums over the rows sumFirst..sumLast (the
 % band without rows already counted) are accumulated for the statistics
 % of the next frame.
 coder.inline('never')
+T = fixedTypes(L);
 ch0 = int32(L.EstChannelFirst(iEst));
 nCh = int32(L.EstNCh(iEst));
 nF = int32(L.EstNFeat(iEst));
@@ -409,11 +423,11 @@ end
 % All intermediate arrays have MaxNHidden rows, so that one version of
 % each layer function serves every call. They are split completely over
 % the blocks (dimension 1 in the generated C++): one bank per block.
-F = zeros(L.MaxNHidden,nB,'single');
-LN = zeros(L.MaxNHidden,nB,'single');
-Z1 = zeros(L.MaxNHidden,nB,'single');
-A = zeros(L.MaxNHidden,nB,'single');
-Z2 = zeros(L.MaxNHidden,nB,'single');
+F = zeros(L.MaxNHidden,nB,'like',T.X);
+LN = zeros(L.MaxNHidden,nB,'like',T.X);
+Z1 = zeros(L.MaxNHidden,nB,'like',T.Acc);
+A = zeros(L.MaxNHidden,nB,'like',T.X);
+Z2 = zeros(L.MaxNHidden,nB,'like',T.Acc);
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=F type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=LN type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Z1 type=complete dim=1")
@@ -435,7 +449,7 @@ for c0 = 1:nCG:nCols
                         rs = wrap(int32(r)-vshift,int32(nRows));
                         cs = wrap(int32(c)-hshift,int32(nCols));
                         iF = ((iv-1)*nh + (ih-1))*nCh + j;
-                        F(iF,b) = (Y(ch0+j-1,rs,cs) - mu(ch0+j-1,iEst))*invSigma(j);
+                        F(iF,b) = toX((Y(ch0+j-1,rs,cs) - mu(ch0+j-1,iEst))*invSigma(j),T,L);
                     end
                 end
             end
@@ -445,9 +459,9 @@ for c0 = 1:nCG:nCols
     % Residual blocks: LayerNorm, FC, GELU (tanh), FC, skip
     for iRes = 1:L.NResBlocks
         LN = layerNorm(F,w,int32(L.Gamma(iEst,iRes)),int32(L.Beta(iEst,iRes)),nF,L.LnEpsilon,L);
-        Z1 = fullyConnected(LN,w,int32(L.W1(iEst,iRes)),int32(L.B1(iEst,iRes)),nH,nF);
+        Z1 = fullyConnected(LN,w,int32(L.W1(iEst,iRes)),int32(L.B1(iEst,iRes)),nH,nF,L);
         A = gelu(Z1,nH,L);
-        Z2 = fullyConnected(A,w,int32(L.W2(iEst,iRes)),int32(L.B2(iEst,iRes)),nF,nH);
+        Z2 = fullyConnected(A,w,int32(L.W2(iEst,iRes)),int32(L.B2(iEst,iRes)),nF,nH,L);
         F = residualAdd(F,Z2,nF,L);
     end
 
@@ -455,7 +469,7 @@ for c0 = 1:nCG:nCols
     % only the first nAU angles are used; all nA rows are still computed,
     % because the pipeline of fullyConnected needs nOut >= 28 (and the
     % output layer is 3% of the multiply-adds)
-    Z1 = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF);
+    Z1 = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF,L);
     for cc = 1:nCG
         c = c0 + cc - 1;
         for r = 1:nRows
@@ -466,47 +480,89 @@ for c0 = 1:nCG:nCols
             end
             for a = 1:nAU
                 coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-                theta(offTheta+nZ+a,r,c) = Z1(a,b);
+                theta(offTheta+nZ+a,r,c) = single(Z1(a,b));
             end
         end
     end
 end
 end
 
-function Z = fullyConnected(X,w,offW,offB,nOut,nIn)
-% Z(o,b) = B(o) + sum_i W(o,i)*X(i,b) for all blocks b of the group.
-% One weight is read per cycle and applied to all blocks at once (one
-% lane per block). The loops over i and o are flattened into one
-% pipeline; Z(o,b) is updated again only nOut cycles later, which is
-% more than the adder latency for every layer (nOut >= 28; smaller nOut
-% would break the pipeline), so the
-% dependence through Z is declared false.
+function Z = fullyConnected(X,w,offW,offB,nOut,nIn,L)
+% Z(o,b) = B(o) + sum_i W(o,i)*X(i,b) for all blocks b of the group, in
+% fixed point with exact accumulation. The weights are stored row by row
+% (salsun2d_pack_params(...,RowMajorWeights=true)), W(o,i) at
+% offW + (o-1)*nIn + i, so that the P = L.FcInputs weights W(o,i0+1..i0+P)
+% of one cycle are consecutive. For each group of P inputs, the inputs
+% of every block are held in registers, and each cycle adds P products
+% to Z(o,b) for all blocks at once (one lane per block). Z(o,b) is
+% updated again only nOut cycles later, more than the adder latency
+% (nOut >= 28), so the dependence through Z is declared false. Inputs
+% beyond nIn are zero, so the weights read past the end of a row do not
+% contribute.
 coder.inline('never')
-% Only rows 1..nOut are written and read, so Z is not zero-filled
-Z = coder.nullcopy(zeros(size(X),'single'));
+T = fixedTypes(L);
+P = coder.const(L.FcInputs);
 nB = size(X,2);
+% Only rows 1..nOut are written and read, so Z is not zero-filled
+Z = coder.nullcopy(zeros(size(X),'like',T.Acc));
+xr = zeros(P,nB,'like',T.X);
+wv = zeros(P,1,'like',T.W);
+wb = zeros(8,1,'single');   % two words of 4; P <= 4
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=wb type=complete dim=0")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=xr type=complete dim=0")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=wv type=complete dim=0")
 for o = 1:nOut
     coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-    bv = w(offB+o);
+    bv = toAcc(w(offB+o),T,L);
     for b = 1:nB
         Z(o,b) = bv;
     end
 end
-for i = 1:nIn
+nGi = idivide(int32(nIn) + int32(P) - 1,int32(P));
+for gi = 1:nGi
+    i0 = (gi-1)*int32(P);
+    for p = 1:P
+        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+        for b = 1:nB
+            if i0 + p <= nIn
+                xr(p,b) = X(i0+p,b);
+            else
+                xr(p,b) = toX(0,T,L);
+            end
+        end
+    end
     for o = 1:nOut
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
         coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=Z type=inter false")
-        wv = w(offW + o + (i-1)*nOut);
+        % The P weights w(a0+1..a0+P) lie in the two words of 4 (the
+        % reshaping of w in the kernel) starting at element 4*m+1; reading
+        % both words whole (constant offsets) lets HLS use one access per
+        % word, and the P weights are then selected by the offset sh
+        a0 = offW + (int32(o)-1)*nIn + i0;
+        m4 = idivide(a0,int32(4))*int32(4);
+        sh = a0 - m4;
+        for k = 1:8
+            wb(k) = w(m4 + int32(k));
+        end
+        for p = 1:P
+            wv(p) = toW(wb(sh + int32(p)),T,L);
+        end
         for b = 1:nB
-            Z(o,b) = Z(o,b) + wv*X(i,b);
+            acc = Z(o,b);
+            for p = 1:P
+                acc = toAccWrap(acc + wv(p)*xr(p,b),T);
+            end
+            Z(o,b) = acc;
         end
     end
 end
 end
 
 function F = residualAdd(F,Z2,nF,L)
-% F(i,b) = F(i,b) + Z2(i,b), L.NLnLanes blocks per cycle
+% F(i,b) = F(i,b) + Z2(i,b) rounded to the signal format, L.NLnLanes
+% blocks per cycle
 coder.inline('never')
+T = fixedTypes(L);
 nB = size(F,2);
 nL = coder.const(gcd(nB,L.NLnLanes));
 nG = nB/nL;
@@ -515,7 +571,7 @@ for i = 1:nF
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
         for lane = 1:nL
             b = (g-1)*nL + lane;
-            F(i,b) = F(i,b) + Z2(i,b);
+            F(i,b) = toX(F(i,b) + Z2(i,b),T,L);
         end
     end
 end
@@ -523,44 +579,42 @@ end
 
 function Z = layerNorm(X,w,offGamma,offBeta,nF,lnEpsilon,L)
 % LayerNorm over the features of each block, nL = L.NLnLanes blocks at a
-% time. The sums over the features of a block are sequential (the
-% pipeline waits for the adder); the normalization multiplies by the
-% reciprocal of the standard deviation (one divider, one square root).
+% time. The sums of the values and of their squares are exact fixed-point
+% sums (one feature per cycle); the mean and the reciprocal standard
+% deviation are computed from them in single precision, and the
+% normalized values are rounded to the signal format.
 coder.inline('never')
+T = fixedTypes(L);
 nB = size(X,2);
 nL = coder.const(gcd(nB,L.NLnLanes));
 nG = nB/nL;
-Z = coder.nullcopy(zeros(size(X),'single'));   % rows 1..nF are all written
+Z = coder.nullcopy(zeros(size(X),'like',T.X));   % rows 1..nF are all written
+s1 = zeros(1,nB,'like',T.Acc);
+s2 = zeros(1,nB,'like',T.Sq);
 m = zeros(1,nB,'single');
-s = zeros(1,nB,'single');
+rs = zeros(1,nB,'single');
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=s1 type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=s2 type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=m type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=s type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=rs type=complete dim=1")
 for g = 1:nG
     for i = 1:nF
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
         for lane = 1:nL
             b = (g-1)*nL + lane;
-            m(b) = m(b) + X(i,b);
+            v = X(i,b);
+            s1(b) = toAccWrap(s1(b) + v,T);
+            s2(b) = toSqWrap(s2(b) + v*v,T);
         end
     end
 end
 for b = 1:nB
     coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-    m(b) = m(b)/single(nF);
-end
-for g = 1:nG
-    for i = 1:nF
-        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-        for lane = 1:nL
-            b = (g-1)*nL + lane;
-            d = X(i,b) - m(b);
-            s(b) = s(b) + d*d;
-        end
-    end
-end
-for b = 1:nB
-    coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-    s(b) = single(1)/sqrt(s(b)/single(nF) + single(lnEpsilon));
+    mb = single(s1(b))/single(nF);
+    vb = single(s2(b))/single(nF) - mb*mb;
+    vb = max(vb,single(0));
+    m(b) = mb;
+    rs(b) = single(1)/sqrt(vb + single(lnEpsilon));
 end
 for i = 1:nF
     for g = 1:nG
@@ -569,29 +623,104 @@ for i = 1:nF
         bet = w(offBeta+i);
         for lane = 1:nL
             b = (g-1)*nL + lane;
-            Z(i,b) = gam*((X(i,b) - m(b))*s(b)) + bet;
+            Z(i,b) = toX(gam*((single(X(i,b)) - m(b))*rs(b)) + bet,T,L);
         end
     end
 end
 end
 
 function A = gelu(Z,nH,L)
-% GELU (tanh form), nU = L.NGeluUnits blocks per cycle
+% GELU (tanh form) in single precision, rounded to the signal format,
+% nU = L.NGeluUnits blocks per cycle
 coder.inline('never')
+T = fixedTypes(L);
 nB = size(Z,2);
 nU = coder.const(gcd(nB,L.NGeluUnits));
 nG = nB/nU;
-A = coder.nullcopy(zeros(size(Z),'single'));   % rows 1..nH are all written
+A = coder.nullcopy(zeros(size(Z),'like',T.X));   % rows 1..nH are all written
 for h = 1:nH
     for g = 1:nG
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
         for u = 1:nU
             b = (g-1)*nU + u;
-            v = Z(h,b);
-            A(h,b) = single(0.5)*v*(single(1) + ...
-                tanh(single(sqrt(2/pi))*(v + single(0.044715)*v*v*v)));
+            v = single(Z(h,b));
+            A(h,b) = toX(single(0.5)*v*(single(1) + ...
+                tanh(single(sqrt(2/pi))*(v + single(0.044715)*v*v*v))),T,L);
         end
     end
+end
+end
+
+%% Fixed-point types and casts
+function T = fixedTypes(L)
+% Prototypes of the fixed-point values: double in MATLAB (emulation, the
+% casts below round), fi objects in code generation. All fi values share
+% one fimath (full-precision products and sums, truncation and wrapping on
+% assignment, which adds no logic); the casts to the signal, weight and
+% accumulator formats round to nearest (ties upward) and saturate
+% explicitly. The accumulations are exact and never wrap with these
+% accumulator lengths.
+if coder.target('MATLAB')
+    T.X = double([]);
+    T.W = double([]);
+    T.Acc = double([]);
+    T.Sq = double([]);
+else
+    Fw = fimath('RoundingMethod','Floor','OverflowAction','Wrap', ...
+        'ProductMode','FullPrecision','SumMode','FullPrecision');
+    T.X = fi([],1,L.FixSignal(1),L.FixSignal(2),Fw);
+    T.W = fi([],1,L.FixWeight(1),L.FixWeight(2),Fw);
+    T.Acc = fi([],1,L.FixAcc(1),L.FixAcc(2),Fw);
+    T.Sq = fi([],1,L.FixSq(1),L.FixSq(2),Fw);
+end
+end
+
+function y = roundTo(v,p)
+% Round to nearest and saturate into the type of the prototype p (fi)
+Fr = fimath('RoundingMethod','Nearest','OverflowAction','Saturate', ...
+    'ProductMode','FullPrecision','SumMode','FullPrecision');
+y = cast(fi(v,numerictype(p),Fr),'like',p);
+end
+
+function y = toX(v,T,L)
+if coder.target('MATLAB')
+    y = salsun2d_round_fixed(double(v),L.FixSignal(1),L.FixSignal(2));
+else
+    y = roundTo(v,T.X);
+end
+end
+
+function y = toW(v,T,L)
+if coder.target('MATLAB')
+    y = salsun2d_round_fixed(double(v),L.FixWeight(1),L.FixWeight(2));
+else
+    y = roundTo(v,T.W);
+end
+end
+
+function y = toAcc(v,T,L)
+% Rounding cast into the accumulator format (biases)
+if coder.target('MATLAB')
+    y = salsun2d_round_fixed(double(v),L.FixAcc(1),L.FixAcc(2));
+else
+    y = roundTo(v,T.Acc);
+end
+end
+
+function y = toAccWrap(v,T)
+% Exact sums into the accumulator format (no rounding needed)
+if coder.target('MATLAB')
+    y = v;
+else
+    y = cast(v,'like',T.Acc);
+end
+end
+
+function y = toSqWrap(v,T)
+if coder.target('MATLAB')
+    y = v;
+else
+    y = cast(v,'like',T.Sq);
 end
 end
 

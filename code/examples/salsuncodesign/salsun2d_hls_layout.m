@@ -52,6 +52,19 @@ L.NLanes = 15;
 L.NColGroup = 1;
 L.NLnLanes = 15;
 L.NGeluUnits = 3;
+% Fixed-point estimators of the band design, [word fraction] lengths,
+% chosen with evaluate_salsun2d_fixed_estimator(Common=true) on the
+% trained network (MSE +0.01%): one format for the inputs of the fully
+% connected layers (largest magnitude below 32, one bit of headroom), one for
+% all weight matrices (largest magnitude 0.84, range +-2), exact
+% accumulators (18 x 18-bit products, up to 270 terms), and the sums of
+% squares of the LayerNorm. 18 bits match the DSP multipliers (27 x 18)
+% and the block RAM widths. L.FcInputs products per lane and cycle.
+L.FixSignal = [18 11];
+L.FixWeight = [18 16];
+L.FixAcc = [48 27];
+L.FixSq = [48 22];
+L.FcInputs = 4;
 % Halo of the band-wise streaming design (salsun2d_hls_band): the
 % structural receptive field in block rows, 6 for the analysis (five
 % estimators with 3 x 3 neighbors and the two vertical atom extensions)

@@ -2,7 +2,8 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
     %SALSUN2DHLSBANDTESTCASE Test case for salsun2d_hls_band and salsun2d_band_frame
     %
     % The band design is compared with the reference salsun2d_infer_stream
-    % and salsun2d_infer given the same statistics. With random parameters
+    % and salsun2d_infer given the same statistics, with the fixed-point
+    % model of its estimators (salsun2d_band_fixed_model). With random parameters
     % the rounding differences between the loop implementation and the
     % vectorized reference reach about 1e-3 (see Salsun2dHlsTestCase), so
     % a tolerance of 1e-2 is used; with trained parameters (results/
@@ -65,11 +66,26 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
                 x = rand(inputSize,'single');
                 tol = single(1e-2);
             end
-            w = salsun2d_pack_params(params);
+            w = salsun2d_pack_params(params,RowMajorWeights=true);
         end
     end
 
     methods (Test)
+
+        function testFixedPointModelAccuracy(testCase)
+            % The fixed-point model stays close to the floating-point
+            % network (MSE within 1%) on a trained network
+            here = fileparts(mfilename('fullpath'));
+            trained = fullfile(here,'results','none.mat');
+            testCase.assumeTrue(isfile(trained),'No trained parameters.');
+            R = load(trained,'params');
+            u = salsun2d_wave_data();
+            x = single(u(1:64,1:64,11));
+            [pQ,q] = salsun2d_band_fixed_model(R.params);
+            mseF = mean((x - salsun2d_infer(x,R.params)).^2,'all');
+            mseQ = mean((x - salsun2d_infer(x,pQ,Quantizer=q,EstimatorTags=true)).^2,'all');
+            testCase.verifyLessThan(mseQ/mseF,1.01);
+        end
 
         function testHaloIsStructuralReceptiveField(testCase)
             L = salsun2d_hls_layout();
@@ -96,7 +112,9 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
 
             % Expected values: the reference band-wise processing of the
             % same band, with the same statistics
-            yRef = salsun2d_infer_stream(x,params,Statistics=stats,Halo=L.Halo,BandRows=2);
+            [pQ,q] = salsun2d_band_fixed_model(params);
+            yRef = salsun2d_infer_stream(x,pQ,Statistics=stats,Halo=L.Halo,BandRows=2, ...
+                Quantizer=q,EstimatorTags=true);
 
             % Actual values: x is the band (rows 8..9) with its halo (7 above, 7 below)
             bandRows = L.Halo + (1:2);
@@ -122,7 +140,8 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
             [mu,sigma] = Salsun2dHlsBandTestCase.channelStats(stats,params);
 
             % Expected values: whole-frame reference with the same statistics
-            [yExpctd,~,~,~,measured] = salsun2d_infer(x,params,Statistics=stats);
+            [pQ,q] = salsun2d_band_fixed_model(params);
+            [yExpctd,~,~,~,measured] = salsun2d_infer(x,pQ,Statistics=stats,Quantizer=q,EstimatorTags=true);
             [muExpctd,sigmaExpctd] = Salsun2dHlsBandTestCase.channelStats(measured,params);
 
             % Actual values
@@ -143,7 +162,8 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
             [params,w,x,tol] = Salsun2dHlsBandTestCase.testData([64 16]);
             [~,~,~,~,stats] = salsun2d_infer(x,params);
             [mu,sigma] = Salsun2dHlsBandTestCase.channelStats(stats,params);
-            [yExpctd,~,~,~,measured] = salsun2d_infer(x,params,Statistics=stats);
+            [pQ,q] = salsun2d_band_fixed_model(params);
+            [yExpctd,~,~,~,measured] = salsun2d_infer(x,pQ,Statistics=stats,Quantizer=q,EstimatorTags=true);
             [muExpctd,sigmaExpctd] = Salsun2dHlsBandTestCase.channelStats(measured,params);
 
             [yActual,muActual,sigmaActual,bands] = salsun2d_band_frame(x,w,mu,sigma,5);

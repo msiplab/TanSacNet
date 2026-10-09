@@ -62,6 +62,8 @@ arguments
     options.StatsRho (1,1) double {mustBeGreaterThanOrEqual(options.StatsRho,0),mustBeLessThan(options.StatsRho,1)} = 0.9
     options.Halo (1,1) double {mustBeInteger,mustBeNonnegative} = 0
     options.BandRows (1,1) double {mustBeInteger,mustBePositive} = 5
+    options.Quantizer = @(v,tag) v
+    options.EstimatorTags (1,1) logical = false
 end
 if options.Halo > 0 && strcmp(options.Statistics,'image')
     error('salsun2d_infer_sequence:imageStatistics', ...
@@ -93,9 +95,11 @@ for t = 1:nFrames
     end
     if options.Halo > 0 && ~isempty(given)
         [y(:,:,t),coefs{t},measured{t}] = salsun2d_infer_stream(uf(:,:,t),params, ...
-            Statistics=given,Halo=options.Halo,BandRows=options.BandRows);
+            Statistics=given,Halo=options.Halo,BandRows=options.BandRows, ...
+            Quantizer=options.Quantizer,EstimatorTags=options.EstimatorTags);
     else
-        [y(:,:,t),coefs{t},~,~,measured{t}] = salsun2d_infer(uf(:,:,t),params,Statistics=given);
+        [y(:,:,t),coefs{t},~,~,measured{t}] = salsun2d_infer(uf(:,:,t),params,Statistics=given, ...
+            Quantizer=options.Quantizer,EstimatorTags=options.EstimatorTags);
     end
     y(:,:,t) = y(:,:,t) + b(:,:,t);
     if strcmp(options.Statistics,'ema')

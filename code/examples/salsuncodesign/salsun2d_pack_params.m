@@ -1,10 +1,15 @@
-function w = salsun2d_pack_params(params)
+function w = salsun2d_pack_params(params,options)
 %SALSUN2D_PACK_PARAMS Pack SA-LSUN parameters into a flat vector for HLS
 %
 %   w = salsun2d_pack_params(params) packs params (from
 %   salsun2d_extract_params) into a single column vector in the layout of
 %   salsun2d_hls_layout. It checks that the network has the configuration
 %   that the HLS implementation is built for.
+%
+%   w = salsun2d_pack_params(params,RowMajorWeights=true) stores the
+%   weight matrices W1, W2, Wo of the estimators row by row (transposed)
+%   in the same places, as the fixed-point fully connected layers of the
+%   band design (salsun2d_hls_band) read them.
 %
 % Requirements: MATLAB R2026b
 %
@@ -21,6 +26,12 @@ function w = salsun2d_pack_params(params)
 %
 arguments
     params (1,1) struct
+    options.RowMajorWeights (1,1) logical = false
+end
+if options.RowMajorWeights
+    order = @(W) W.';
+else
+    order = @(W) W;
 end
 L = salsun2d_hls_layout();
 
@@ -72,12 +83,12 @@ for iEst = 1:L.NEst
         r = e.ResBlocks(iRes);
         put(L.Gamma(iEst,iRes),r.Gamma)
         put(L.Beta(iEst,iRes),r.Beta)
-        put(L.W1(iEst,iRes),r.W1)
+        put(L.W1(iEst,iRes),order(r.W1))
         put(L.B1(iEst,iRes),r.B1)
-        put(L.W2(iEst,iRes),r.W2)
+        put(L.W2(iEst,iRes),order(r.W2))
         put(L.B2(iEst,iRes),r.B2)
     end
-    put(L.Wo(iEst),e.Wo)
+    put(L.Wo(iEst),order(e.Wo))
     put(L.Bo(iEst),e.Bo)
 end
 end

@@ -17,9 +17,9 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine with direct Givens rotations validated on the U250 (262.9 MHz, 1.01 s/frame, 10 frames to 6.9e-7) |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine with direct Givens rotations validated on the U250 (262.9 MHz, 1.01 s/frame, 10 frames to 6.9e-7); fixed-point estimators building |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
-| 5 | Fixed-point conversion and accuracy evaluation | word-length study done (below); HLS conversion pending |
+| 5 | Fixed-point conversion and accuracy evaluation | word-length study done; fixed-point estimators in the band design (sw_emu verified), hardware building |
 
 ## Files
 
@@ -39,6 +39,9 @@ train on GPU ──> params (.mat) ───────────────
 | `mex/salsun2d_band_mex.cpp`, `salsun2d_band_u250.m` | Run the band kernel from MATLAB (one frame per call; statistics policy on the host) |
 | `salsun2d_band_frame.m`, `salsun2d_band_sequence.m`, `salsun2d_stats_from_sums.m` | Host logic of the band kernel in MATLAB (same band schedule), sequence driver with previous / EMA / FIR statistics |
 | `Salsun2dHlsBandTestCase.m` | Band design vs. reference stream, frame assembly, moved last band |
+| `salsun2d_band_fixed_model.m`, `salsun2d_round_fixed.m` | Reference model of the fixed-point estimators of the band design (rounded weights, quantizer), and the rounding of `ap_fixed` (nearest, saturate) |
+| `salsun2d_calibrate_formats.m`, `salsun2d_static_quantizer.m`, `evaluate_salsun2d_fixed_estimator.m` | Fixed-point formats from calibration frames, quantizer with fixed formats, and the evaluation of the estimators with fixed formats |
+| `salsun2d_check_band_mask.m` | Checks that the coefficient mask suits the band design (last stage reduced to 7 angles) |
 | `salsun2d_hls_layout.m` | Fixed configuration of the HLS version and offsets of each parameter in the packed vector |
 | `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
 | `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
@@ -222,6 +225,51 @@ library (C simulation, 32 x 32 with mask), differs from the double-precision
 reference by 7.7e-4, against 6.7e-4 for the single-precision MATLAB version.
 The generated code is not optimized yet (everything is inlined into one
 function, no pragmas); that is step 3.
+
+## Fixed-point estimators of the band design
+
+`evaluate_salsun2d_fixed_estimator` rounds the estimator signals with
+formats fixed in advance (`salsun2d_calibrate_formats` on frames 1-10,
+`salsun2d_static_quantizer`), as hardware needs, and reports the MSE on
+frames 11-15 relative to the floating-point network. With one format per
+signal and estimator, 14-bit signals and 12-bit weights cost 0.1-0.2%.
+With `Common=true`, one format for all inputs of the fully connected
+layers (features, LayerNorm and GELU outputs of every estimator) and one
+for all weight matrices, so that one fixed-point layer serves every
+call:
+
+| signals | weights | MSE / float |
+|---|---|---|
+| 14 bits | 14 bits | 1.0011 |
+| 16 bits | 16 bits | 1.0002 |
+| 16 bits | 18 bits | 1.0001 |
+| 18 bits | 18 bits | 1.0001 |
+
+The band design uses 18-bit signals (11 fraction bits, one bit of
+headroom), 18-bit weights (16 fraction bits) and 48-bit accumulators
+(`L.FixSignal`, `L.FixWeight`, `L.FixAcc`), the widths of the DSP
+multipliers and block RAMs. The fully connected layers multiply-add
+`L.FcInputs` = 4 inputs per lane and cycle (120 multipliers for 30
+lanes, one DSP each) with exact accumulation; the weights are packed
+row by row (`salsun2d_pack_params(...,RowMajorWeights=true)`) and read
+as two aligned words of four. The LayerNorm sums are exact fixed-point
+sums (II = 1); the standardization, the LayerNorm scaling and the GELU
+stay in single precision and are rounded to the signal format; the data
+path (DCT, rotations, atom extensions) stays in single precision.
+
+In MATLAB the band design emulates the fixed-point values in double
+precision with the same rounding (`salsun2d_round_fixed`), so its tests
+stay fast; code generation produces `ap_fixed` types. The reference is
+`salsun2d_infer` with `salsun2d_band_fixed_model` (rounded weights and a
+quantizer for the three signal classes, `EstimatorTags=true`). The
+code generation turns off integer saturation
+(`SaturateOnIntegerOverflow = false`): the saturating casts hid from HLS
+that the four weights lie in two words (II 2-4 instead of 1).
+
+Results (MATLAB emulation and `sw_emu`): band design vs. fixed-point
+model 2.0-2.5e-5, fixed-point model vs. float 4.6e-5 (max |y| 0.2). HLS:
+estimator call of the first stage at most 12.2 M cycles against 43.8 M
+in single precision; LUT 44%, DSP 20%, BRAM 17%, URAM 19% of one SLR.
 
 ## Fixed-point word lengths (simulated)
 

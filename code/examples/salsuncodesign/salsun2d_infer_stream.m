@@ -50,6 +50,8 @@ arguments
     options.Statistics = []
     options.Halo (1,1) double {mustBeInteger,mustBePositive} = 3
     options.BandRows (1,1) double {mustBeInteger,mustBePositive} = 5
+    options.Quantizer = @(v,tag) v
+    options.EstimatorTags (1,1) logical = false
 end
 My = params.Stride(1);
 [szy,szx] = size(x);
@@ -80,7 +82,8 @@ for r0 = 1:B:nRows
     blockRows = mod((r0-H:r1+H)-1,nRows) + 1;
     pixelRows = reshape((blockRows-1)*My + (1:My)',1,[]);
     xb = x(pixelRows,:);
-    [yb,cb,~,stageInputs] = salsun2d_infer(xb,params,Statistics=given);
+    [yb,cb,~,stageInputs] = salsun2d_infer(xb,params,Statistics=given, ...
+        Quantizer=options.Quantizer,EstimatorTags=options.EstimatorTags);
     validBlocks = H + (1:r1-r0+1);              % rows of the band inside xb
     validPixels = (validBlocks(1)-1)*My + (1:numel(validBlocks)*My);
     y((r0-1)*My+1:r1*My,:) = yb(validPixels,:);

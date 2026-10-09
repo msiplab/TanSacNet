@@ -38,6 +38,12 @@ function [y,coefs,thetas,stageInputs,stats] = salsun2d_infer(x,params,options)
 %   hidden layer before and after GELU), 'angles'. The parameters are
 %   quantized separately with salsun2d_quantize_params.
 %
+%   salsun2d_infer(...,EstimatorTags=true) appends the estimator index to
+%   the tags of the estimator signals ('features:k', 'ln:k', 'z1:k',
+%   'act:k', 'angles:k', k = 1 for the initial rotation and k = s+1 for
+%   stage s), for fixed-point formats per estimator (see
+%   salsun2d_calibrate_formats and salsun2d_static_quantizer).
+%
 %   Only plain arithmetic is used (no Deep Learning Toolbox), as a
 %   reference for the HLS implementation. The synthesizer reuses the
 %   rotation angles estimated by the analyzer. The computation follows the
@@ -62,8 +68,14 @@ arguments
     params (1,1) struct
     options.Statistics = []
     options.Quantizer = @(v,tag) v
+    options.EstimatorTags (1,1) logical = false
 end
 q = options.Quantizer;
+if options.EstimatorTags
+    qEst = @(k) @(v,tag) q(v,sprintf('%s:%d',tag,k));
+else
+    qEst = @(k) q;
+end
 nEst = 1 + numel(params.Stages);
 if ~isempty(options.Statistics) && numel(options.Statistics) ~= nEst
     error('salsun2d_infer:statistics','Statistics must have %d elements.',nEst)
@@ -80,7 +92,7 @@ nCols = szx/dec(2);
 Y = q(blockDct(x,params.Cvh,dec),'coefs');
 stageInputs = cell(nEst,1);
 stageInputs{1} = Y;
-[theta0,stats(1)] = estimateAngles(Y,params.V0.Estimator,givenStats(options.Statistics,1),q);
+[theta0,stats(1)] = estimateAngles(Y,params.V0.Estimator,givenStats(options.Statistics,1),qEst(1));
 Y = q(rotateInitial(Y,theta0,params.V0.MusW,params.V0.MusU,q),'coefs');
 
 % Analysis: intermediate stages
@@ -91,7 +103,7 @@ for iStage = 1:nStages
     Y = q(atomExtension(Y,stage.Shift,stage.Target),'coefs');
     stageInputs{iStage+1} = Y;
     [thetaStages{iStage},stats(iStage+1)] = estimateAngles(Y,stage.Estimator, ...
-        givenStats(options.Statistics,iStage+1),q);
+        givenStats(options.Statistics,iStage+1),qEst(iStage+1));
     Y = q(rotateIntermediate(Y,thetaStages{iStage},stage.Mus,false,q),'coefs');
 end
 

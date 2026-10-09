@@ -47,7 +47,7 @@ if exist('salsun2d_band_mex','file') ~= 3
     error('salsun2d_band_u250:noMex','salsun2d_band_mex not found. Build it with build_mex_salsun2d.')
 end
 L = salsun2d_hls_layout();
-w = salsun2d_pack_params(params);
+w = salsun2d_pack_params(params,RowMajorWeights=true);
 salsun2d_check_band_mask(w);
 
 % One target per MATLAB session (see salsun2d_u250)
@@ -71,6 +71,10 @@ nBlocks = single(prod(frameSize./L.Stride));
         [yf,sums] = salsun2d_band_mex(xclbinPath,x,w,cat(3,mu,sigma));
         [muMeas,sigmaMeas] = salsun2d_stats_from_sums(sums(:,:,1),sums(:,:,2),nBlocks,L.Epsilon);
     end
+% The first frame is initialized with the statistics of the fixed-point
+% model of the kernel
+[paramsQ,q] = salsun2d_band_fixed_model(params);
 [y,info] = salsun2d_band_sequence(u,params,@frameOnCard, ...
-    Statistics=options.Statistics,StatsRho=options.StatsRho);
+    Statistics=options.Statistics,StatsRho=options.StatsRho, ...
+    InitParams=paramsQ,InitQuantizer=q);
 end
