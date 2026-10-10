@@ -23,7 +23,10 @@ function results = train_salsun2d_variants(options)
 %   Seed (0), StatsRho (0.9), StatsModes (cell of statistics modes to
 %   evaluate, default {'image','previous','ema','fir2'}; the evaluation
 %   of each mode runs the reference on every frame, several minutes for
-%   300 x 300 frames).
+%   300 x 300 frames), NumResidualBlocks (3) and Width (2) of the angle
+%   estimators (hidden size round(Width x features)); the packed vector w
+%   for the FPGA kernel is saved only for the configuration of
+%   salsun2d_hls_layout (3 and 2).
 %
 %   Requires a GPU for practical training times; runs on the CPU for
 %   small settings, e.g. Crop=[32 32], NumFrames=8, MaxEpochs=2.
@@ -54,6 +57,8 @@ arguments
     options.Seed (1,1) double = 0
     options.StatsRho (1,1) double = 0.9
     options.StatsModes cell = {'image','previous','ema','fir2'}
+    options.NumResidualBlocks (1,1) double {mustBeInteger,mustBeNonnegative} = 3
+    options.Width (1,1) double {mustBePositive} = 2
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -88,9 +93,13 @@ for iVariant = 1:numel(options.Variants)
     fprintf('training time %.0f s, final loss %.4g\n',trainingTime,loss(end));
 
     %% Reconstruction network on the CPU, parameters for the reference and the FPGA
-    reconnet = reconstructionNetwork(trainnet,[szy szx],coefMask);
+    reconnet = reconstructionNetwork(trainnet,[szy szx],coefMask,options);
     params = salsun2d_extract_params(reconnet);
-    w = salsun2d_pack_params(params);
+    if options.NumResidualBlocks == 3 && options.Width == 2
+        w = salsun2d_pack_params(params);
+    else
+        w = [];   % the HLS layout is built for 3 residual blocks of width 2
+    end
 
     %% Evaluation with the reference implementation
     mse = struct();
@@ -155,7 +164,7 @@ nChsTotal = numel(coefMask);
 analysislgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',[szy szx],'Stride',[4 4],'OverlappingFactor',[3 3], ...
     'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',[3 3], ...
-    'NumberOfResidualBlocks',3,'Width',2,'Mode','Analyzer');
+    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'Mode','Analyzer');
 trainlgraph = analysislgraph.replaceLayer('Lv1_AcOut', ...
     maskLayer('Name','Lv1_AcMask','Mask',coefMask(2:end),'NumberOfChannels',nChsTotal-1));
 trainlgraph = trainlgraph.addLayers(lsunChannelConcatenation2dLayer('Name','Lv1_Cmp1_Cn'));
@@ -206,13 +215,13 @@ loss = double(gather(extractdata(loss)));
 end
 
 %% Reconstruction network (Whole, Reuse, with the mask) on the CPU
-function reconnet = reconstructionNetwork(trainnet,inputSize,coefMask)
+function reconnet = reconstructionNetwork(trainnet,inputSize,coefMask,options)
 import tansacnet.salsun.* tansacnet.lsun.*
 nChsTotal = numel(coefMask);
 wholelgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',inputSize,'Stride',[4 4],'OverlappingFactor',[3 3], ...
     'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',[3 3], ...
-    'NumberOfResidualBlocks',3,'Width',2,'Mode','Whole','ThetaMode','Reuse', ...
+    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'Mode','Whole','ThetaMode','Reuse', ...
     'Device','cpu');
 wholelgraph = wholelgraph.disconnectLayers('Lv1_AcOut','Lv1_AcIn');
 wholelgraph = wholelgraph.addLayers(maskLayer('Name','Lv1_AcMask', ...
