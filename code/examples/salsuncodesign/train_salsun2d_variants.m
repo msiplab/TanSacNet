@@ -31,6 +31,14 @@ function results = train_salsun2d_variants(options)
 %   size of a learned projection of the local state, on which the
 %   residual blocks operate).
 %
+%   Distillation: TeacherFile (a results .mat with params of a trained
+%   network, default '' for none) adds DistillWeight times the mean
+%   squared angle difference 4*sin^2((theta - thetaTeacher)/2) of the five
+%   estimators to the loss, with the teacher angles computed once by
+%   salsun2d_infer on the training frames; the weight decays to zero (half
+%   cosine) over the first DistillFraction of the iterations, so that the
+%   end of the training optimizes the original loss only.
+%
 %   Requires a GPU for practical training times; runs on the CPU for
 %   small settings, e.g. Crop=[32 32], NumFrames=8, MaxEpochs=2.
 %
@@ -64,6 +72,9 @@ arguments
     options.Width (1,1) double {mustBePositive} = 2
     options.NeighborBlocks (1,2) double {mustBeInteger,mustBePositive} = [3 3]
     options.BottleneckSize (1,1) double {mustBeInteger,mustBeNonnegative} = 0
+    options.TeacherFile {mustBeTextScalar} = ''
+    options.DistillWeight (1,1) double {mustBeNonnegative} = 20
+    options.DistillFraction (1,1) double {mustBePositive} = 0.7
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -91,9 +102,13 @@ for iVariant = 1:numel(options.Variants)
     [uf,~] = salsun2d_base_field(u,Method=variant,Rho=options.Rho,Scope=options.Scope,Stride=stride);
 
     %% Training (as in main_salsun2d.m)
+    teacher = {};
+    if ~isempty(options.TeacherFile)
+        teacher = teacherAngles(uf(:,:,frames),options.TeacherFile);
+    end
     rng(options.Seed)
     tic
-    [trainnet,loss] = trainAnalyzer(uf(:,:,frames),coefMask,options);
+    [trainnet,loss] = trainAnalyzer(uf(:,:,frames),coefMask,options,teacher);
     trainingTime = toc;
     fprintf('training time %.0f s, final loss %.4g\n',trainingTime,loss(end));
 
@@ -163,7 +178,7 @@ end
 end
 
 %% Training of the analyzer with the coefficient mask (main_salsun2d.m)
-function [trainnet,lossHistory] = trainAnalyzer(data,coefMask,options)
+function [trainnet,lossHistory] = trainAnalyzer(data,coefMask,options,teacher)
 import tansacnet.salsun.* tansacnet.lsun.*
 [szy,szx,szt] = size(data);
 nChsTotal = numel(coefMask);
@@ -178,13 +193,31 @@ trainlgraph = trainlgraph.connectLayers('Lv1_AcMask','Lv1_Cmp1_Cn/ac');
 trainlgraph = trainlgraph.connectLayers('Lv1_DcOut','Lv1_Cmp1_Cn/dc');
 
 mbsize = min(options.MiniBatchSize,szt);
-ds = arrayDatastore(data,'IterationDimension',3);
-mbq = minibatchqueue(ds,'MiniBatchSize',mbsize,'MiniBatchFcn',@(c) cat(4,c{:}), ...
-    'MiniBatchFormat','SSCB','OutputEnvironment','auto','PartialMiniBatch','discard');
+% Frames and their indices (for the teacher angles)
+ds = combine(arrayDatastore(data,'IterationDimension',3),arrayDatastore((1:szt).'));
+mbq = minibatchqueue(ds,2,'MiniBatchSize',mbsize, ...
+    'MiniBatchFcn',@(x,i) deal(cat(4,x{:}),cat(1,i{:})), ...
+    'MiniBatchFormat',{'SSCB',''},'OutputEnvironment',{'auto','cpu'},'PartialMiniBatch','discard');
 dlX0 = next(mbq);
 trainnet = dlnetwork(trainlgraph,dlX0);
 assert(trainnet.Initialized)
 reset(mbq);
+distill = ~isempty(teacher);
+if distill
+    % Angle outputs of the five estimators in the order of the stages
+    names = {trainnet.Layers.Name};
+    thetaNames = names(endsWith(names,'Theta'));
+    order = [find(contains(thetaNames,'V0_')), find(contains(thetaNames,'Vh1')), ...
+        find(contains(thetaNames,'Vh2')), find(contains(thetaNames,'Vv1')), find(contains(thetaNames,'Vv2'))];
+    thetaNames = thetaNames(order);
+    assert(numel(thetaNames) == numel(teacher))
+    outNames = [trainnet.OutputNames, thetaNames];
+    if canUseGPU
+        teacher = cellfun(@gpuArray,teacher,'UniformOutput',false);
+    end
+    fprintf('  distillation from %s: weight %g over the first %.0f%% of the iterations\n', ...
+        options.TeacherFile,options.DistillWeight,100*options.DistillFraction);
+end
 
 numIterationsPerEpoch = floor(szt/mbsize);
 numIterations = options.MaxEpochs*numIterationsPerEpoch;
@@ -198,8 +231,15 @@ for epoch = 1:options.MaxEpochs
     shuffle(mbq);
     while hasdata(mbq)
         iteration = iteration + 1;
-        dlX = next(mbq);
-        [gradients,loss] = dlfeval(@modelGradients,trainnet,dlX);
+        [dlX,idx] = next(mbq);
+        if distill
+            t = min(iteration/(options.DistillFraction*numIterations),1);
+            lambda = options.DistillWeight*(1 + cos(pi*t))/2;
+            thT = cellfun(@(T) T(:,:,idx),teacher,'UniformOutput',false);
+            [gradients,loss,angleErr] = dlfeval(@modelGradientsDistill,trainnet,dlX,outNames,thT,lambda);
+        else
+            [gradients,loss] = dlfeval(@modelGradients,trainnet,dlX);
+        end
         learnRate = finalLearnRate + (initialLearnRate - finalLearnRate) ...
             *(1 + cos(pi*iteration/numIterations))/2;
         [trainnet,avgGrad,avgSqGrad] = adamupdate(trainnet,gradients, ...
@@ -207,7 +247,48 @@ for epoch = 1:options.MaxEpochs
         lossHistory(iteration) = loss;
     end
     if epoch == 1 || mod(epoch,10) == 0 || epoch == options.MaxEpochs
-        fprintf('  epoch %3d/%d  loss %.4g  (%.1f s/epoch)\n',epoch,options.MaxEpochs,loss,toc(tEpoch)/epoch);
+        if distill
+            fprintf('  epoch %3d/%d  loss %.4g  rms angle difference to the teacher %.3f rad  (%.1f s/epoch)\n', ...
+                epoch,options.MaxEpochs,loss,angleErr,toc(tEpoch)/epoch);
+        else
+            fprintf('  epoch %3d/%d  loss %.4g  (%.1f s/epoch)\n',epoch,options.MaxEpochs,loss,toc(tEpoch)/epoch);
+        end
+    end
+end
+end
+
+function [gradients,loss,angleErr] = modelGradientsDistill(dlnet,dlX,outNames,thT,lambda)
+% Energy compaction loss plus lambda times the mean squared angle
+% difference to the teacher (periodic: 4 sin^2(d/2) ~ d^2); the returned
+% loss is the energy compaction loss alone, for comparison
+out = cell(1,numel(outNames));
+[out{:}] = forward(dlnet,dlX,'Outputs',outNames);
+dlY = out{1};
+energy = sum(dlX.^2,"all")/size(dlX,4) - sum(dlY.^2,"all")/size(dlY,4);
+d = 0;
+for k = 2:numel(out)
+    th = reshape(out{k},size(thT{k-1}));
+    d = d + mean(4*sin((th - thT{k-1})/2).^2,"all");
+end
+total = energy + lambda*d/(numel(out)-1);
+gradients = dlgradient(total,dlnet.Learnables);
+loss = double(gather(extractdata(energy)));
+angleErr = sqrt(double(gather(extractdata(d)))/(numel(out)-1));   % rms angle difference [rad]
+end
+
+function teacher = teacherAngles(frames,teacherFile)
+% Angles of the five estimators of the teacher network on every frame,
+% nAngles x nBlocks x nFrames each (salsun2d_infer, image statistics)
+R = load(teacherFile,'params');
+nT = size(frames,3);
+teacher = {};
+for t = 1:nT
+    [~,~,th] = salsun2d_infer(frames(:,:,t),R.params);
+    if t == 1
+        teacher = cellfun(@(a) zeros(size(a,1),size(a,2),nT,'single'),th.','UniformOutput',false);
+    end
+    for k = 1:numel(th)
+        teacher{k}(:,:,t) = single(th{k});
     end
 end
 end

@@ -9,6 +9,8 @@ function run_estimator_sweep(configs,seeds,options)
 %   saves the results to
 %   OutputDir/R<r>_W<w>[_N<nv>x<nh>][_P<p>]/seed<s>/none.mat. Existing results are
 %   skipped, so the sweep can be split over machines and resumed.
+%   TeacherFile and DistillWeight (see train_salsun2d_variants) train with
+%   distillation; the folder name then ends with _D<weight>.
 %   summarize_estimator_sweep collects them.
 %
 % Requirements: MATLAB R2026b, Deep Learning Toolbox, a GPU
@@ -30,6 +32,8 @@ arguments
     options.OutputDir = fullfile(fileparts(mfilename('fullpath')),'results','arch')
     options.MaxEpochs (1,1) double = 100
     options.MiniBatchSize (1,1) double = 8
+    options.TeacherFile {mustBeTextScalar} = ''
+    options.DistillWeight (1,1) double = 20
 end
 for iSeed = 1:numel(seeds)
     for iCfg = 1:size(configs,1)
@@ -52,6 +56,9 @@ for iSeed = 1:numel(seeds)
         if pb > 0
             name = sprintf('%s_P%d',name,pb);
         end
+        if ~isempty(options.TeacherFile)
+            name = sprintf('%s_D%g',name,options.DistillWeight);
+        end
         outDir = fullfile(options.OutputDir,name,sprintf('seed%d',seeds(iSeed)));
         if isfile(fullfile(outDir,'none.mat'))
             fprintf('skip %s\n',outDir);
@@ -60,7 +67,8 @@ for iSeed = 1:numel(seeds)
         fprintf('\n######## R=%d W=%g neighbors %dx%d bottleneck %d seed %d\n',r,w,nb,pb,seeds(iSeed));
         train_salsun2d_variants(Variants={'none'},StatsModes={'image'}, ...
             NumResidualBlocks=r,Width=w,NeighborBlocks=nb,BottleneckSize=pb,Seed=seeds(iSeed),OutputDir=outDir, ...
-            MaxEpochs=options.MaxEpochs,MiniBatchSize=options.MiniBatchSize);
+            MaxEpochs=options.MaxEpochs,MiniBatchSize=options.MiniBatchSize, ...
+            TeacherFile=options.TeacherFile,DistillWeight=options.DistillWeight);
     end
 end
 end
