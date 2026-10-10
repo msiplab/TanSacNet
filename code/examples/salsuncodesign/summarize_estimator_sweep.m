@@ -33,37 +33,38 @@ for s = 1:9
     f = fullfile(options.ResultsDir,sprintf('seed%d',s),'none.mat');
     if isfile(f), R = load(f,'mse'); mse(end+1) = R.mse.image; end %#ok<AGROW>
 end
-rows(end+1,:) = {3, 2, mse};
+rows(end+1,:) = {3, 2, mse, 9};
 % sweep
 d = dir(fullfile(options.ResultsDir,'arch','R*_W*'));
 for i = 1:numel(d)
     v = sscanf(d(i).name,'R%d_W%f');
+    nb = sscanf(regexp(d(i).name,'N\d+x\d+','match','once'),'N%dx%d');
+    if isempty(nb), nb = [3;3]; end
     mse = [];
     s = dir(fullfile(d(i).folder,d(i).name,'seed*','none.mat'));
     for k = 1:numel(s)
         R = load(fullfile(s(k).folder,s(k).name),'mse');
         mse(end+1) = R.mse.image; %#ok<AGROW>
     end
-    rows(end+1,:) = {v(1), v(2), mse}; %#ok<AGROW>
+    rows(end+1,:) = {v(1), v(2), mse, prod(nb)}; %#ok<AGROW>
 end
-macs = @(r,w) estimatorMacs(r,w);
-base = macs(3,2);
+base = estimatorMacs(3,2,9);
 n = size(rows,1);
-T = table('Size',[n 8],'VariableTypes',{'double','double','double','double','double','double','double','double'}, ...
-    'VariableNames',{'ResBlocks','Width','MACs','MACsRatio','Seeds','MeanMSE','StdMSE','MSERatio'});
+T = table('Size',[n 9],'VariableTypes',repmat({'double'},1,9), ...
+    'VariableNames',{'ResBlocks','Width','Neighbors','MACs','MACsRatio','Seeds','MeanMSE','StdMSE','MSERatio'});
 mBase = mean(rows{1,3});
 for i = 1:n
     m = rows{i,3};
-    T(i,:) = {rows{i,1}, rows{i,2}, macs(rows{i,1},rows{i,2}), macs(rows{i,1},rows{i,2})/base, ...
-        numel(m), mean(m), std(m), mean(m)/mBase};
+    mc = estimatorMacs(rows{i,1},rows{i,2},rows{i,4});
+    T(i,:) = {rows{i,1}, rows{i,2}, rows{i,4}, mc, mc/base, numel(m), mean(m), std(m), mean(m)/mBase};
 end
 T = sortrows(T,'MACs','descend');
 end
 
-function m = estimatorMacs(r,w)
+function m = estimatorMacs(r,w,nNeighbors)
 % Multiply-adds per block of the fully connected layers of the five
-% estimators: features 135 (15 channels x 9) and 72 (8 x 9), angles 49 and 28
-nF = [135 72 72 72 72];
+% estimators: features 15 or 8 channels x nNeighbors blocks, angles 49 and 28
+nF = [15 8 8 8 8]*nNeighbors;
 nA = [49 28 28 28 28];
 m = 0;
 for k = 1:5
