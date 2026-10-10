@@ -3,9 +3,11 @@ function run_estimator_sweep(configs,seeds,options)
 %
 %   run_estimator_sweep(configs,seeds) trains the network of
 %   train_salsun2d_variants (base field 'none', image statistics) for each
-%   row [numResidualBlocks width] or [numResidualBlocks width nv nh]
-%   (neighbor blocks, default 3 x 3) of configs and each seed, and saves
-%   the results to OutputDir/R<r>_W<w>[_N<nv>x<nh>]/seed<s>/none.mat. Existing results are
+%   row [numResidualBlocks width], [numResidualBlocks width nv nh]
+%   (neighbor blocks, default 3 x 3) or [numResidualBlocks width nv nh p]
+%   (bottleneck size p, default 0: none) of configs and each seed, and
+%   saves the results to
+%   OutputDir/R<r>_W<w>[_N<nv>x<nh>][_P<p>]/seed<s>/none.mat. Existing results are
 %   skipped, so the sweep can be split over machines and resumed.
 %   summarize_estimator_sweep collects them.
 %
@@ -38,18 +40,26 @@ for iSeed = 1:numel(seeds)
         else
             nb = [3 3];
         end
+        if size(configs,2) >= 5
+            pb = configs(iCfg,5);
+        else
+            pb = 0;
+        end
         name = sprintf('R%d_W%g',r,w);
         if ~isequal(nb,[3 3])
             name = sprintf('%s_N%dx%d',name,nb);
+        end
+        if pb > 0
+            name = sprintf('%s_P%d',name,pb);
         end
         outDir = fullfile(options.OutputDir,name,sprintf('seed%d',seeds(iSeed)));
         if isfile(fullfile(outDir,'none.mat'))
             fprintf('skip %s\n',outDir);
             continue
         end
-        fprintf('\n######## R=%d W=%g neighbors %dx%d seed %d\n',r,w,nb,seeds(iSeed));
+        fprintf('\n######## R=%d W=%g neighbors %dx%d bottleneck %d seed %d\n',r,w,nb,pb,seeds(iSeed));
         train_salsun2d_variants(Variants={'none'},StatsModes={'image'}, ...
-            NumResidualBlocks=r,Width=w,NeighborBlocks=nb,Seed=seeds(iSeed),OutputDir=outDir, ...
+            NumResidualBlocks=r,Width=w,NeighborBlocks=nb,BottleneckSize=pb,Seed=seeds(iSeed),OutputDir=outDir, ...
             MaxEpochs=options.MaxEpochs,MiniBatchSize=options.MiniBatchSize);
     end
 end

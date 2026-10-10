@@ -269,6 +269,11 @@ else
 end
 F = q(F,'features');
 
+% Optional bottleneck projection (salsunFeatureProjection2dLayer)
+if isfield(est,'Wp') && ~isempty(est.Wp)
+    F = est.Wp*F + est.Bp;
+end
+
 % Residual estimator blocks: LayerNorm, FC, GELU (tanh), FC, skip
 for iRes = 1:numel(est.ResBlocks)
     r = est.ResBlocks(iRes);

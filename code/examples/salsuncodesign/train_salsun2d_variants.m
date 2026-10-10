@@ -26,8 +26,10 @@ function results = train_salsun2d_variants(options)
 %   300 x 300 frames), NumResidualBlocks (3) and Width (2) of the angle
 %   estimators (hidden size round(Width x features)); the packed vector w
 %   for the FPGA kernel is saved only for the configuration of
-%   salsun2d_hls_layout (3 and 2), and NeighborBlocks ([3 3]) of the local
-%   state of the estimators.
+%   salsun2d_hls_layout (3 and 2), NeighborBlocks ([3 3]) of the local
+%   state of the estimators, and BottleneckSize (0: none; otherwise the
+%   size of a learned projection of the local state, on which the
+%   residual blocks operate).
 %
 %   Requires a GPU for practical training times; runs on the CPU for
 %   small settings, e.g. Crop=[32 32], NumFrames=8, MaxEpochs=2.
@@ -61,6 +63,7 @@ arguments
     options.NumResidualBlocks (1,1) double {mustBeInteger,mustBeNonnegative} = 3
     options.Width (1,1) double {mustBePositive} = 2
     options.NeighborBlocks (1,2) double {mustBeInteger,mustBePositive} = [3 3]
+    options.BottleneckSize (1,1) double {mustBeInteger,mustBeNonnegative} = 0
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -97,7 +100,8 @@ for iVariant = 1:numel(options.Variants)
     %% Reconstruction network on the CPU, parameters for the reference and the FPGA
     reconnet = reconstructionNetwork(trainnet,[szy szx],coefMask,options);
     params = salsun2d_extract_params(reconnet);
-    if options.NumResidualBlocks == 3 && options.Width == 2 && isequal(options.NeighborBlocks,[3 3])
+    if options.NumResidualBlocks == 3 && options.Width == 2 && isequal(options.NeighborBlocks,[3 3]) ...
+            && options.BottleneckSize == 0
         w = salsun2d_pack_params(params);
     else
         w = [];   % the HLS layout is built for 3 residual blocks of width 2
@@ -166,7 +170,7 @@ nChsTotal = numel(coefMask);
 analysislgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',[szy szx],'Stride',[4 4],'OverlappingFactor',[3 3], ...
     'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',options.NeighborBlocks, ...
-    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'Mode','Analyzer');
+    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize,'Mode','Analyzer');
 trainlgraph = analysislgraph.replaceLayer('Lv1_AcOut', ...
     maskLayer('Name','Lv1_AcMask','Mask',coefMask(2:end),'NumberOfChannels',nChsTotal-1));
 trainlgraph = trainlgraph.addLayers(lsunChannelConcatenation2dLayer('Name','Lv1_Cmp1_Cn'));
@@ -223,7 +227,7 @@ nChsTotal = numel(coefMask);
 wholelgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',inputSize,'Stride',[4 4],'OverlappingFactor',[3 3], ...
     'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',options.NeighborBlocks, ...
-    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'Mode','Whole','ThetaMode','Reuse', ...
+    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize,'Mode','Whole','ThetaMode','Reuse', ...
     'Device','cpu');
 wholelgraph = wholelgraph.disconnectLayers('Lv1_AcOut','Lv1_AcIn');
 wholelgraph = wholelgraph.addLayers(maskLayer('Name','Lv1_AcMask', ...

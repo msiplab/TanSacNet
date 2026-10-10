@@ -142,6 +142,15 @@ est.Channels = double(ext.Channels(:));
 est.Neighbor = double(ext.NumberOfNeighborBlocks);
 std_ = getLayer([prefix 'Std']);
 est.Epsilon = single(std_.Epsilon);
+% Optional bottleneck projection of the standardized state (empty if none)
+proj = getLayer([prefix 'Proj']);
+if isempty(proj)
+    est.Wp = zeros(0,0,'single');
+    est.Bp = zeros(0,1,'single');
+else
+    est.Wp = toSingle(proj.Wp);
+    est.Bp = toSingle(proj.Bp);
+end
 iBlk = 1;
 resBlocks = struct('Gamma',{},'Beta',{},'W1',{},'B1',{},'W2',{},'B2',{});
 while true
