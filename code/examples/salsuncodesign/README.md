@@ -42,6 +42,7 @@ train on GPU ──> params (.mat) ───────────────
 | `salsun2d_band_fixed_model.m`, `salsun2d_round_fixed.m` | Reference model of the fixed-point estimators of the band design (rounded weights, quantizer), and the rounding of `ap_fixed` (nearest, saturate) |
 | `salsun2d_calibrate_formats.m`, `salsun2d_static_quantizer.m`, `evaluate_salsun2d_fixed_estimator.m` | Fixed-point formats from calibration frames, quantizer with fixed formats, and the evaluation of the estimators with fixed formats |
 | `salsun2d_check_band_mask.m` | Checks that the coefficient mask suits the band design (last stage reduced to 7 angles) |
+| `salsun2d_infer_klt.m` | SA-LSUN with local KLT (local block PCA) rotations instead of the estimators, for the study below |
 | `salsun2d_hls_layout.m` | Fixed configuration of the HLS version and offsets of each parameter in the packed vector |
 | `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
 | `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
@@ -270,6 +271,28 @@ Results (MATLAB emulation and `sw_emu`): band design vs. fixed-point
 model 2.0-2.5e-5, fixed-point model vs. float 4.6e-5 (max |y| 0.2). HLS:
 estimator call of the first stage at most 12.2 M cycles against 43.8 M
 in single precision; LUT 44%, DSP 20%, BRAM 17%, URAM 19% of one SLR.
+
+## Parametric replacements of the estimators (study)
+
+Can a parametric angle estimator replace the learned one (and remove the
+fully connected layers)? Frames 11-15, MSE relative to the trained
+network:
+
+| estimator | MSE / learned |
+|---|---|
+| linear map of the estimator features to the angles (least squares on frames 1-10) | 28 |
+| local KLT (local block PCA) of the rotated channels, 3 x 3 blocks (`salsun2d_infer_klt`) | 49 |
+| local KLT, 3 x 3 without the block itself | 95 |
+| local KLT, 5 x 5 | 66 |
+| local KLT of the block alone | 4.1 |
+| constant angles (no adaptation) | 162 |
+
+The local KLT orders the energy greedily stage by stage; it cannot
+anticipate that only channels 1 and 9 survive the mask after the last
+atom extension, which the learned estimators exploit end to end. Even
+with the block itself as the only sample the greedy KLT is 4x worse.
+So a training-free parametric estimator is not viable here; the
+estimators can only be made cheaper by training smaller ones end to end.
 
 ## Fixed-point word lengths (simulated)
 
