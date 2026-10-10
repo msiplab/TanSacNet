@@ -17,9 +17,9 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); 30-lane engine with direct Givens rotations validated on the U250 (262.9 MHz, 1.01 s/frame, 10 frames to 6.9e-7); fixed-point estimators building |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame, 2.3x the CPU reference; 10 frames match the fixed-point model to 3e-5) |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
-| 5 | Fixed-point conversion and accuracy evaluation | word-length study done; fixed-point estimators in the band design (sw_emu verified), hardware building |
+| 5 | Fixed-point conversion and accuracy evaluation | fixed-point estimators in the band design, validated on the U250 |
 
 ## Files
 
@@ -271,6 +271,17 @@ Results (MATLAB emulation and `sw_emu`): band design vs. fixed-point
 model 2.0-2.5e-5, fixed-point model vs. float 4.6e-5 (max |y| 0.2). HLS:
 estimator call of the first stage at most 12.2 M cycles against 43.8 M
 in single precision; LUT 44%, DSP 20%, BRAM 17%, URAM 19% of one SLR.
+
+Hardware: in SLR0 the build failed routing (conflicts in the DDR
+controller of the shell) and in SLR3 it first missed a shell clock by
+7 ps; with the post-route physical optimization enabled
+(`hls/salsun2d_band_kernel_slr3.cfg`, DDR[3]) it builds in 4 h 57 m at
+234.0 MHz. Ten frames (300 x 300, FIR-2 statistics) match the
+fixed-point model to 3e-5 and the floating-point network to 2.1e-4 with
+the same MSE (3.633e-6 on frame 1 for both). The kernel call takes 0.43
+s/frame (0.55 s/frame with the host policy), 2.3x faster than the
+direct-Givens single-precision engine and 2.3x faster than the MATLAB
+reference on the CPU (0.97 s/frame); about 20 M cycles per band.
 
 ## Parametric replacements of the estimators (study)
 
