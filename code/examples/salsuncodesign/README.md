@@ -283,6 +283,45 @@ s/frame (0.55 s/frame with the host policy), 2.3x faster than the
 direct-Givens single-precision engine and 2.3x faster than the MATLAB
 reference on the CPU (0.97 s/frame); about 20 M cycles per band.
 
+## Smaller estimators by retraining (study)
+
+`run_estimator_sweep` retrains SA-LSUN with fewer residual blocks R
+and/or a narrower hidden layer (Width W, hidden = W x features), with
+optional distillation from a trained network (`TeacherFile`), on three
+GPU machines; `evaluate_heldout_sweep` evaluates every network on data
+not used in training: later frames of the same simulation (551-700) and
+two independent simulations with other sources (A: two sources; B: one
+off-center source). The training-frame MSE is misleading (held-out MSE
+4-15x the training MSE, the gap growing with the epochs), so the
+comparison uses the held-out data. MSE relative to the current
+estimators (R3 W2) trained for the same number of epochs (held-out
+frames / A / B):
+
+| epochs | estimators (with distillation) | multiply-adds | MSE ratio |
+|---|---|---|---|
+| 100 | R3 W1 (7 seeds) | 0.51 | 1.03 / 1.04 / 1.04 |
+| 100 | R3 W0.5 | 0.27 | 1.16 / 1.13 / 1.17 |
+| 200 | R6 W0.5 | 0.52 | 1.02 / 1.03 / 1.03 |
+| 200 | R3 W1 | 0.51 | 1.09 / 1.08 / 1.09 |
+| 200 | R3 W0.5 | 0.27 | 1.19 / 1.14 / 1.18 |
+| 400 | R6 W0.5 | 0.52 | 1.04 / 0.99 / 1.01 |
+| 400 | R3 W1.5 | 0.76 | 1.06 / 1.02 / 1.03 |
+| 400 | R3 W1 | 0.51 | 1.10 / 1.04 / 1.07 |
+| 400 | R3 W0.5 | 0.27 | 1.17 / 1.11 / 1.13 |
+
+Findings: halving the multiply-adds keeps the accuracy within a few
+percent (R6 W0.5) to 10% (R3 W1); a quarter costs 11-19%. Distillation
+(DistillWeight 20) removes the failed trainings of small networks (seed
+spread about 1%); a weight of 100 does not help, nor does a better
+teacher. One residual block is not enough, a 1 x 1 neighborhood (5x) and
+a bottleneck projection of the features (2.7x on training frames) are
+much worse. Longer training improves every configuration: the current
+estimators reach held-out MSE 10.6e-6 (100 epochs, median), 8.4e-6
+(200), 7.3e-6 (400) and 6.5e-6 (800), with no change of the hardware.
+For the FPGA, R3 W1 keeps the LayerNorm work and halves the fully
+connected layers and the GELU; R6 W0.5 is slightly more accurate but
+doubles the LayerNorm and residual additions.
+
 ## Parametric replacements of the estimators (study)
 
 Can a parametric angle estimator replace the learned one (and remove the
