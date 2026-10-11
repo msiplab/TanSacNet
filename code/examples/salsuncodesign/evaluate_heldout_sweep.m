@@ -10,6 +10,13 @@ function T = evaluate_heldout_sweep(options)
 %   result is saved next to each file as heldout.mat (skipped if present)
 %   and returned as a table.
 %
+%   It also computes the MSE on two independent simulations that differ
+%   from the training data in the sources (same frames 401-550, every
+%   Step-th frame): A, two sources at (0.9,2.0) and (2.1,1.1) with
+%   amplitudes 10 and 7; B, one source at (1.0,1.8) with amplitude 10
+%   (fields independentMse = [A B] in heldout.mat, added to existing
+%   files).
+%
 %   The networks fit the training frames much better than unseen frames
 %   (held-out MSE 4 to 15 times the training MSE, growing with the number
 %   of epochs), so configurations are compared on the held-out MSE.
@@ -38,6 +45,10 @@ uTr = single(salsun2d_wave_data());
 uTr = uTr(:,:,2:options.Step:end);
 uHo = single(salsun2d_wave_data(Frames=options.HeldOutFrames));
 uHo = uHo(:,:,1:options.Step:end);
+uA = single(salsun2d_wave_data(Epicenters=[0.9 2.0; 2.1 1.1],Amplitudes=[10; 7]));
+uA = uA(:,:,2:options.Step:end);
+uB = single(salsun2d_wave_data(Epicenters=[1.0 1.8]));
+uB = uB(:,:,2:options.Step:end);
 
 files = [dir(fullfile(options.ResultsDir,'arch*','**','none.mat')); ...
     dir(fullfile(options.ResultsDir,'none.mat')); ...
@@ -45,24 +56,36 @@ files = [dir(fullfile(options.ResultsDir,'arch*','**','none.mat')); ...
 names = strings(numel(files),1);
 trainMse = nan(numel(files),1);
 heldOutMse = nan(numel(files),1);
+indepMse = nan(numel(files),2);
 for i = 1:numel(files)
     f = fullfile(files(i).folder,files(i).name);
     names(i) = string(erase(f,[options.ResultsDir filesep]));
     out = fullfile(files(i).folder,'heldout.mat');
+    R = [];
+    mse = @(u,P) mean(arrayfun(@(t) mean((u(:,:,t) - salsun2d_infer(u(:,:,t),P)).^2,'all'),1:size(u,3)));
     if isfile(out)
         H = load(out);
     else
         R = load(f,'params');
-        mse = @(u) mean(arrayfun(@(t) mean((u(:,:,t) - salsun2d_infer(u(:,:,t),R.params)).^2,'all'),1:size(u,3)));
-        H.trainMse = mse(uTr);
-        H.heldOutMse = mse(uHo);
+        H.trainMse = mse(uTr,R.params);
+        H.heldOutMse = mse(uHo,R.params);
         H.heldOutFrames = options.HeldOutFrames;
         H.step = options.Step;
         save(out,'-struct','H');
     end
+    if ~isfield(H,'independentMse')
+        if isempty(R)
+            R = load(f,'params');
+        end
+        H.independentMse = [mse(uA,R.params) mse(uB,R.params)];
+        save(out,'-struct','H');
+    end
     trainMse(i) = H.trainMse;
     heldOutMse(i) = H.heldOutMse;
-    fprintf('%-55s train %.4g  held-out %.4g\n',names(i),trainMse(i),heldOutMse(i));
+    indepMse(i,:) = H.independentMse;
+    fprintf('%-55s train %.4g  held-out %.4g  independent A %.4g  B %.4g\n', ...
+        names(i),trainMse(i),heldOutMse(i),indepMse(i,1),indepMse(i,2));
 end
-T = table(names,trainMse,heldOutMse,'VariableNames',{'File','TrainMSE','HeldOutMSE'});
+T = table(names,trainMse,heldOutMse,indepMse(:,1),indepMse(:,2), ...
+    'VariableNames',{'File','TrainMSE','HeldOutMSE','IndependentA','IndependentB'});
 end

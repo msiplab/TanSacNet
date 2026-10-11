@@ -20,6 +20,12 @@ function [u,t] = salsun2d_wave_data(options)
 %   salsun2d_wave_data(Frames=[first last]) selects other frames of the
 %   simulation (default [401 550]).
 %
+%   salsun2d_wave_data(Epicenters=P,Amplitudes=A) places Gaussian initial
+%   displacements at the rows [x y] of P (in the domain [0,3] x [0,3],
+%   default [1.5 1.5]) with the amplitudes A (default 10 for each), e.g.
+%   for test data that differ from the training data in the source
+%   positions; the frames then contain the superposition of the waves.
+%
 % Requirements: MATLAB R2026b
 %
 % Copyright (c) 2026, Shogo MURAMATSU
@@ -36,6 +42,8 @@ function [u,t] = salsun2d_wave_data(options)
 arguments
     options.Frames (1,2) double = [401 550]
     options.SecondFrame {mustBeMember(options.SecondFrame,{'zero','zero-velocity'})} = 'zero'
+    options.Epicenters (:,2) double = [1.5 1.5]
+    options.Amplitudes (:,1) double = []
 end
 
 c = 0.6;                           % propagation velocity
@@ -44,8 +52,18 @@ coord = linspace(0,L,N);
 Lt = 7; dt = 0.01; Nt = floor(Lt/dt);
 [X,Y] = meshgrid(coord,coord);
 
-A = 10;  sigma = 0.005;  x0 = 1.5;  y0 = 1.5;
-u0 = A*exp(-((X-x0).^2 + (Y-y0).^2)/(2*sigma^2));
+sigma = 0.005;
+A = options.Amplitudes;
+if isempty(A)
+    A = 10*ones(size(options.Epicenters,1),1);
+end
+assert(numel(A) == size(options.Epicenters,1),'One amplitude per epicenter is required.')
+u0 = zeros(size(X));
+for k = 1:size(options.Epicenters,1)
+    x0 = options.Epicenters(k,1);
+    y0 = options.Epicenters(k,2);
+    u0 = u0 + A(k)*exp(-((X-x0).^2 + (Y-y0).^2)/(2*sigma^2));
+end
 
 u = zeros(N,N,Nt);
 u(:,:,1) = u0;
