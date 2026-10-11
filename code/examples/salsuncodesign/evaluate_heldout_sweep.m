@@ -62,6 +62,7 @@ for i = 1:numel(files)
     names(i) = string(erase(f,[options.ResultsDir filesep]));
     out = fullfile(files(i).folder,'heldout.mat');
     R = [];
+    H = struct();
     mse = @(u,P) mean(arrayfun(@(t) mean((u(:,:,t) - salsun2d_infer(u(:,:,t),P)).^2,'all'),1:size(u,3)));
     if isfile(out)
         H = load(out);
@@ -73,11 +74,14 @@ for i = 1:numel(files)
         H.step = options.Step;
         save(out,'-struct','H');
     end
-    if ~isfield(H,'independentMse')
+    % The independent errors record the network they were computed for;
+    % results without that record are recomputed
+    if ~isfield(H,'independentMse') || ~isfield(H,'independentFile') || ~strcmp(H.independentFile,f)
         if isempty(R)
             R = load(f,'params');
         end
         H.independentMse = [mse(uA,R.params) mse(uB,R.params)];
+        H.independentFile = f;
         save(out,'-struct','H');
     end
     trainMse(i) = H.trainMse;
