@@ -308,6 +308,16 @@ frames / A / B):
 | 400 | R3 W1.5 | 0.76 | 1.06 / 1.02 / 1.03 |
 | 400 | R3 W1 | 0.51 | 1.10 / 1.04 / 1.07 |
 | 400 | R3 W0.5 | 0.27 | 1.17 / 1.11 / 1.13 |
+| 400 | R4 W0.5 (2 seeds) | 0.36 | 1.11 / 1.05 / 1.09 |
+| 400 | R8 W0.25 (2 seeds) | 0.35 | 1.09 / 1.05 / 1.07 |
+| 800 | R3 W1 (3 seeds) | 0.51 | 1.07 / 1.01 / 1.02 |
+| 800 | R6 W0.5 | 0.52 | 1.00 / 1.00 / 1.00 |
+| 800 | R4 W0.5 | 0.36 | 1.07 / 1.02 / 1.04 |
+
+At 800 epochs the current estimators vary by seed as much as these
+differences (held-out 6.19-7.01e-6, A 17.1-20.7e-6 over 3 seeds). R3 W1
+trained for 1600 epochs (6.41 / 17.0 / 7.12e-6) is better than the
+current estimators trained for 800 (6.56 / 18.3 / 7.67e-6).
 
 Findings: halving the multiply-adds keeps the accuracy within a few
 percent (R6 W0.5) to 10% (R3 W1); a quarter costs 11-19%. Distillation
