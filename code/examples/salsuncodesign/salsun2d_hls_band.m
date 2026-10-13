@@ -183,19 +183,24 @@ end
 % The rotations are applied to the coefficients of a block directly as
 % the sequence of Givens rotations, without forming the matrices: for
 % U = D*G_K*...*G_1 (D the sign flips mus), the analysis computes
-% D*(G_K*(...*(G_1*y))) and the synthesis U.'*y = G_1.'*(...*(G_K.'*(D*y))),
-% K multiply-add pairs per block instead of the K x n matrix updates of
-% the generator and the n x n product. G_k rotates the pair (i,j) of
-% L.GivensTop(k), L.GivensBottom(k) as [c -s; s c] (as fcn_orthmtxgen).
-% For each column, the cosines and sines of all blocks are computed
-% first (one angle per cycle), and the blocks are then rotated in a
-% pipeline with one rotation per cycle on average.
+% D*(G_K*(...*(G_1*y))) and the synthesis U.'*y = G_1.'*(...*(G_K.'*(D*y))).
+% G_k rotates the pair (i,j) of L.GivensTop(k), L.GivensBottom(k) as
+% [c -s; s c] (as fcn_orthmtxgen).
+% For each column of blocks, the cosines and sines of all blocks are
+% computed first (one angle per cycle), then the rotations are applied
+% rotation by rotation, each to the nRows blocks of the column in turn
+% (outer loop over the rotations, inner pipelined loop over the blocks):
+% one rotation unit at one rotation per cycle, and a block is rotated
+% again only nRows cycles later, so the chain of dependent rotations does
+% not stall the pipeline. (An earlier form unrolled the 28 rotations of a
+% block in a pipeline of II = 28; its wiring was the main routing
+% congestion of the kernel.)
 
 function Z = rotateInitialOrFinal(Y,theta,w,L,isFinal,nRows,nCols)
 % Initial rotation (W on the symmetric, U on the antisymmetric channels)
-% or its transpose (isFinal). The callers pass isFinal with
-% coder.ignoreConst, so that the analysis and the synthesis share one
-% instance of the function.
+% or its transpose (isFinal). W and U are applied in the same loop (two
+% rotation units). The callers pass isFinal with coder.ignoreConst, so
+% that the analysis and the synthesis share one instance of the function.
 coder.inline('never')
 nHalf = coder.const(L.EstNAnglesTotal(1)/2);   % angles of W and of U (28)
 if isFinal
@@ -218,12 +223,12 @@ csW = zeros(nHalf,nRows,'single');
 snW = zeros(nHalf,nRows,'single');
 csU = zeros(nHalf,nRows,'single');
 snU = zeros(nHalf,nRows,'single');
-vs = zeros(L.Ps,1,'single');
-va = zeros(L.Pa,1,'single');
+vs = zeros(L.Ps,nRows,'single');
+va = zeros(L.Pa,nRows,'single');
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=musW type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=musU type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=vs type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=vs type=complete dim=2")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=2")
 for c = 1:nCols
     for r = 1:nRows
         for a = 1:nHalf
@@ -237,33 +242,48 @@ for c = 1:nCols
         end
     end
     for r = 1:nRows
-        coder.hdl.literaltext(coder.const(sprintf('#pragma HLS PIPELINE II=%d',nHalf)))
         for j = 1:L.Ps
-            vs(j) = Y(j,r,c);
-            va(j) = Y(L.Ps+j,r,c);
-        end
-        if isFinal
-            for j = 1:L.Ps
-                vs(j) = musW(j)*vs(j);
-                va(j) = musU(j)*va(j);
-            end
-            for a = nHalf:-1:1
-                [vs(tops(a)),vs(btms(a))] = givensT(vs(tops(a)),vs(btms(a)),csW(a,r),snW(a,r));
-                [va(tops(a)),va(btms(a))] = givensT(va(tops(a)),va(btms(a)),csU(a,r),snU(a,r));
-            end
-        else
-            for a = 1:nHalf
-                [vs(tops(a)),vs(btms(a))] = givens(vs(tops(a)),vs(btms(a)),csW(a,r),snW(a,r));
-                [va(tops(a)),va(btms(a))] = givens(va(tops(a)),va(btms(a)),csU(a,r),snU(a,r));
-            end
-            for j = 1:L.Ps
-                vs(j) = musW(j)*vs(j);
-                va(j) = musU(j)*va(j);
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            if isFinal
+                vs(j,r) = musW(j)*Y(j,r,c);
+                va(j,r) = musU(j)*Y(L.Ps+j,r,c);
+            else
+                vs(j,r) = Y(j,r,c);
+                va(j,r) = Y(L.Ps+j,r,c);
             end
         end
+    end
+    for k = 1:nHalf
+        for r = 1:nRows
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=vs type=inter false")
+            coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=va type=inter false")
+            if isFinal
+                a = nHalf + 1 - k;     % transposes in reverse order
+            else
+                a = k;
+            end
+            t = tops(a);
+            b = btms(a);
+            if isFinal
+                [vs(t,r),vs(b,r)] = givensT(vs(t,r),vs(b,r),csW(a,r),snW(a,r));
+                [va(t,r),va(b,r)] = givensT(va(t,r),va(b,r),csU(a,r),snU(a,r));
+            else
+                [vs(t,r),vs(b,r)] = givens(vs(t,r),vs(b,r),csW(a,r),snW(a,r));
+                [va(t,r),va(b,r)] = givens(va(t,r),va(b,r),csU(a,r),snU(a,r));
+            end
+        end
+    end
+    for r = 1:nRows
         for j = 1:L.Ps
-            Z(j,r,c) = vs(j);
-            Z(L.Ps+j,r,c) = va(j);
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            if isFinal
+                Z(j,r,c) = vs(j,r);
+                Z(L.Ps+j,r,c) = va(j,r);
+            else
+                Z(j,r,c) = musW(j)*vs(j,r);
+                Z(L.Ps+j,r,c) = musU(j)*va(j,r);
+            end
         end
     end
 end
@@ -302,49 +322,56 @@ for i = 1:L.Pa
 end
 cs = zeros(nAng,nRows,'single');
 sn = zeros(nAng,nRows,'single');
-va = zeros(L.Pa,1,'single');
+va = zeros(L.Pa,nRows,'single');
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=mus type=complete dim=1")
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=1")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=2")
 for c = 1:nCols
     for r = 1:nRows
         for a = 1:nAng
             coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            t = theta(offTheta+a,r,c);
-            cs(a,r) = cos(t);
-            sn(a,r) = sin(t);
+            th = theta(offTheta+a,r,c);
+            cs(a,r) = cos(th);
+            sn(a,r) = sin(th);
         end
     end
     for r = 1:nRows
-        coder.hdl.literaltext(coder.const(sprintf('#pragma HLS PIPELINE II=%d',nAng)))
         for j = 1:L.Pa
-            va(j) = Y(L.Ps+j,r,c);
-        end
-        if isSynthesis
-            for j = 1:L.Pa
-                va(j) = mus(j)*va(j);
-            end
-            for a = nAng:-1:1
-                if a <= nRot
-                    [va(tops(a)),va(btms(a))] = givensT(va(tops(a)),va(btms(a)),cs(a,r),sn(a,r));
-                end
-            end
-        else
-            for a = 1:nAng
-                if a <= nRot
-                    [va(tops(a)),va(btms(a))] = givens(va(tops(a)),va(btms(a)),cs(a,r),sn(a,r));
-                end
-            end
-            for j = 1:L.Pa
-                va(j) = mus(j)*va(j);
-            end
-            if isLast
-                for j = 2:L.Pa
-                    va(j) = single(0);
-                end
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            if isSynthesis
+                va(j,r) = mus(j)*Y(L.Ps+j,r,c);
+            else
+                va(j,r) = Y(L.Ps+j,r,c);
             end
         end
+    end
+    for k = int32(1):nRot
+        for r = 1:nRows
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=va type=inter false")
+            if isSynthesis
+                a = nRot + 1 - k;      % transposes in reverse order
+            else
+                a = k;
+            end
+            t = tops(a);
+            b = btms(a);
+            if isSynthesis
+                [va(t,r),va(b,r)] = givensT(va(t,r),va(b,r),cs(a,r),sn(a,r));
+            else
+                [va(t,r),va(b,r)] = givens(va(t,r),va(b,r),cs(a,r),sn(a,r));
+            end
+        end
+    end
+    for r = 1:nRows
         for j = 1:L.Pa
-            Z(L.Ps+j,r,c) = va(j);
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            if isSynthesis
+                Z(L.Ps+j,r,c) = va(j,r);
+            elseif isLast && j > 1
+                Z(L.Ps+j,r,c) = single(0);
+            else
+                Z(L.Ps+j,r,c) = mus(j)*va(j,r);
+            end
         end
     end
 end
