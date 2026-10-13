@@ -423,14 +423,15 @@ for j = 1:nCh
     invSigma(j) = single(1)/sigma(ch0+j-1,iEst);
 end
 
-% All intermediate arrays have MaxNHidden rows, so that one version of
+% All intermediate arrays have L.MaxNRows rows (features or hidden units),
+% so that one version of
 % each layer function serves every call. They are split completely over
 % the blocks (dimension 1 in the generated C++): one bank per block.
-F = zeros(L.MaxNHidden,nB,'like',T.X);
-LN = zeros(L.MaxNHidden,nB,'like',T.X);
-Z1 = zeros(L.MaxNHidden,nB,'like',T.Acc);
-A = zeros(L.MaxNHidden,nB,'like',T.X);
-Z2 = zeros(L.MaxNHidden,nB,'like',T.Acc);
+F = zeros(L.MaxNRows,nB,'like',T.X);
+LN = zeros(L.MaxNRows,nB,'like',T.X);
+Z1 = zeros(L.MaxNRows,nB,'like',T.Acc);
+A = zeros(L.MaxNRows,nB,'like',T.X);
+Z2 = zeros(L.MaxNRows,nB,'like',T.Acc);
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=F type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=LN type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Z1 type=complete dim=1")

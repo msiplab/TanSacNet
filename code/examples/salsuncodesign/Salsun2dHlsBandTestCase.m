@@ -87,6 +87,17 @@ classdef Salsun2dHlsBandTestCase < matlab.unittest.TestCase
             testCase.verifyLessThan(mseQ/mseF,1.01);
         end
 
+        function testArrayRowsCoverFeaturesAndHiddenUnits(testCase)
+            % The intermediate arrays of the band estimators hold both the
+            % features and the hidden units. MATLAB grows arrays on
+            % assignment, so a too small size shows only in the generated
+            % code (it did for width 0.5); check it on the layout.
+            for w = [0.25 0.5 1 2]
+                L = salsun2d_hls_layout(NumResidualBlocks=3,Width=w);
+                testCase.verifyGreaterThanOrEqual(L.MaxNRows,max([L.EstNFeat L.EstNHidden]));
+            end
+        end
+
         function testHaloIsStructuralReceptiveField(testCase)
             L = salsun2d_hls_layout();
             testCase.verifyEqual(L.Halo,7);

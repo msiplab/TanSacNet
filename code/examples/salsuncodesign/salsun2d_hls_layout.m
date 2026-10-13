@@ -116,6 +116,10 @@ L.EstNAnglesUsed = L.EstNAngles;
 L.EstNAnglesUsed(end) = L.LastStageNAngles;
 L.MaxNFeat = max(L.EstNFeat);
 L.MaxNHidden = max(L.EstNHidden);
+% Rows of the intermediate arrays of the band estimators: features and
+% hidden units (a hidden layer narrower than the features, width < 1,
+% still needs the feature rows)
+L.MaxNRows = max(L.MaxNFeat,L.MaxNHidden);
 
 %% Parameter layout
 off = 0;
