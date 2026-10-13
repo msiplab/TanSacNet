@@ -11,6 +11,9 @@ function w = salsun2d_pack_params(params,options)
 %   in the same places, as the fixed-point fully connected layers of the
 %   band design (salsun2d_hls_band) read them.
 %
+%   The layout follows the size of the estimators in params (number of
+%   residual blocks and width, salsun2d_estimator_size).
+%
 % Requirements: MATLAB R2026b
 %
 % Copyright (c) 2026, Shogo MURAMATSU
@@ -33,7 +36,8 @@ if options.RowMajorWeights
 else
     order = @(W) W;
 end
-L = salsun2d_hls_layout();
+[r,w] = salsun2d_estimator_size(params);
+L = salsun2d_hls_layout(NumResidualBlocks=r,Width=w);
 
 %% Check the configuration
 check(isequal(params.Stride(:).',L.Stride),'Stride must be [%d %d].',L.Stride)

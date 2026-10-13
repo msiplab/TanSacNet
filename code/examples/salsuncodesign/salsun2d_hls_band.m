@@ -52,8 +52,11 @@ function [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma,skipRows) %#codegen
 % http://msiplab.eng.niigata-u.ac.jp/
 %
 
-coder.extrinsic('salsun2d_hls_layout');
-L = coder.const(salsun2d_hls_layout());
+coder.extrinsic('salsun2d_hls_layout','salsun2d_band_config');
+% Estimator size of this design (salsun2d_band_config, read at code
+% generation time)
+C = coder.const(salsun2d_band_config());
+L = coder.const(salsun2d_hls_layout('NumResidualBlocks',C(1),'Width',C(2)));
 [szy,szx] = size(x);
 nRows = szy/L.Stride(1);          % block rows of the band with halo
 nCols = szx/L.Stride(2);

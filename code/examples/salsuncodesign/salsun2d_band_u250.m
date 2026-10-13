@@ -37,11 +37,16 @@ end
 here = fileparts(mfilename('fullpath'));
 buildDir = fullfile(here,'build',target);
 frameSize = [size(u,1) size(u,2)];
-xclbinPath = fullfile(buildDir,sprintf('salsun2d_hls_band_%dx%d_b%d.xclbin',frameSize,options.BandRows));
+[nRes,width] = salsun2d_estimator_size(params);
+estSize = '';
+if nRes ~= 3 || width ~= 2
+    estSize = sprintf('_r%dw%g',nRes,width);     % design with smaller estimators (Makefile RES, WIDTH)
+end
+xclbinPath = fullfile(buildDir,sprintf('salsun2d_hls_band_%dx%d_b%d%s.xclbin',frameSize,options.BandRows,estSize));
 if ~isfile(xclbinPath)
     error('salsun2d_band_u250:noXclbin', ...
-        '%s not found. Build it with "make xclbin TARGET=%s DESIGN=salsun2d_hls_band SZY=%d SZX=%d BAND=%d".', ...
-        xclbinPath,target,frameSize,options.BandRows)
+        '%s not found. Build it with "make xclbin TARGET=%s DESIGN=salsun2d_hls_band SZY=%d SZX=%d BAND=%d RES=%d WIDTH=%g".', ...
+        xclbinPath,target,frameSize,options.BandRows,nRes,width)
 end
 if exist('salsun2d_band_mex','file') ~= 3
     error('salsun2d_band_u250:noMex','salsun2d_band_mex not found. Build it with build_mex_salsun2d.')

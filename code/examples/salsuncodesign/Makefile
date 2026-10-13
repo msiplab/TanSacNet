@@ -25,10 +25,18 @@ DESIGN   ?= salsun2d_hls_opt
 SZY      ?= 300
 SZX      ?= 300
 BAND     ?= 31
+# Estimator size of the band design: residual blocks and width
+RES      ?= 3
+WIDTH    ?= 2
 ifeq ($(DESIGN),salsun2d_hls_band)
 KERNEL   := salsun2d_band_kernel
-NAME     := $(DESIGN)_$(SZY)x$(SZX)_b$(BAND)
-CODEGEN_ARGS := [$(SZY) $(SZX)],'$(DESIGN)',BandRows=$(BAND)
+ifeq ($(RES)_$(WIDTH),3_2)
+ESTSIZE  :=
+else
+ESTSIZE  := _r$(RES)w$(WIDTH)
+endif
+NAME     := $(DESIGN)_$(SZY)x$(SZX)_b$(BAND)$(ESTSIZE)
+CODEGEN_ARGS := [$(SZY) $(SZX)],'$(DESIGN)',BandRows=$(BAND),NumResidualBlocks=$(RES),Width=$(WIDTH)
 else
 NAME     := $(DESIGN)_$(SZY)x$(SZX)
 CODEGEN_ARGS := [$(SZY) $(SZX)],'$(DESIGN)'
@@ -45,7 +53,7 @@ export CPATH        := $(MULTIARCH)$(if $(CPATH),:$(CPATH))
 export LIBRARY_PATH := /usr/lib/x86_64-linux-gnu$(if $(LIBRARY_PATH),:$(LIBRARY_PATH))
 
 ifeq ($(DESIGN),salsun2d_hls_band)
-HLS_SRC_DIR := codegen/$(SZY)x$(SZX)_b$(BAND)/$(DESIGN)/hdlsrc
+HLS_SRC_DIR := codegen/$(SZY)x$(SZX)_b$(BAND)$(ESTSIZE)/$(DESIGN)/hdlsrc
 else
 HLS_SRC_DIR := codegen/$(SZY)x$(SZX)/$(DESIGN)/hdlsrc
 endif

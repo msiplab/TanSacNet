@@ -1,4 +1,4 @@
-function L = salsun2d_hls_layout()
+function L = salsun2d_hls_layout(options)
 %SALSUN2D_HLS_LAYOUT Configuration and parameter layout for salsun2d_hls
 %
 %   L = salsun2d_hls_layout() returns the fixed network configuration of
@@ -8,6 +8,11 @@ function L = salsun2d_hls_layout()
 %   Configuration (as in main_salsun2d.m): stride [4 4], overlapping
 %   factor [3 3] (stages h1, h2, v1, v2), no DC leakage, neighbor blocks
 %   [3 3], 3 residual blocks, width 2.
+%
+%   salsun2d_hls_layout(NumResidualBlocks=r,Width=w) is the layout of
+%   estimators with r residual blocks and hidden layers of round(w x
+%   features) (as salsunResidualEstimatorBlock2dLayer), for retrained
+%   smaller estimators (salsun2d_hls_band, salsun2d_band_config).
 %
 %   All offsets are 0-based; parameter p of length n occupies
 %   w(L.p + (1:n)). Matrices are stored column-major as in MATLAB.
@@ -26,14 +31,19 @@ function L = salsun2d_hls_layout()
 % http://msiplab.eng.niigata-u.ac.jp/
 %
 
+arguments
+    options.NumResidualBlocks (1,1) double {mustBeInteger,mustBePositive} = 3
+    options.Width (1,1) double {mustBePositive} = 2
+end
+
 %% Configuration
 L.Stride = [4 4];
 L.NDec = 16;                 % channels per block
 L.Ps = 8;                    % symmetric channels
 L.Pa = 8;                    % antisymmetric channels
 L.Neighbor = [3 3];
-L.NResBlocks = 3;
-L.Width = 2;
+L.NResBlocks = options.NumResidualBlocks;
+L.Width = options.Width;
 L.Epsilon = 1e-8;            % state standardization
 L.LnEpsilon = 1e-5;          % LayerNorm in residual blocks
 L.NStages = 4;
@@ -85,7 +95,7 @@ L.EstChannelFirst = [2 9 9 9 9];   % input channels first:last (1-based)
 L.EstChannelLast = [16 16 16 16 16];
 L.EstNCh = L.EstChannelLast - L.EstChannelFirst + 1;          % 15, 8, ...
 L.EstNFeat = L.EstNCh*prod(L.Neighbor);                       % 135, 72, ...
-L.EstNHidden = L.Width*L.EstNFeat;                            % 270, 144, ...
+L.EstNHidden = round(L.Width*L.EstNFeat);                     % 270, 144, ... for width 2
 L.EstNAngles = [49 28 28 28 28];       % predicted angles
 L.EstNZeroPad = [7 0 0 0 0];           % leading zero angles (no DC leakage)
 L.EstNAnglesTotal = L.EstNAngles + L.EstNZeroPad;             % 56, 28, ...

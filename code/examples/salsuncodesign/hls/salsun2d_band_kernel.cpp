@@ -33,6 +33,10 @@
 //
 
 #include "salsun2d_hls_bandClass.hpp"
+// NPARAMS of the generated design (estimator size), if present
+#if __has_include("salsun2d_band_config.h")
+#include "salsun2d_band_config.h"
+#endif
 
 #ifndef SZY
 #define SZY 300
