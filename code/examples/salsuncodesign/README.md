@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame, 2.3x the CPU reference; 10 frames match the fixed-point model to 3e-5) |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame, 3.3x the CPU reference |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | fixed-point estimators in the band design, validated on the U250 |
 
@@ -282,6 +282,26 @@ the same MSE (3.633e-6 on frame 1 for both). The kernel call takes 0.43
 s/frame (0.55 s/frame with the host policy), 2.3x faster than the
 direct-Givens single-precision engine and 2.3x faster than the MATLAB
 reference on the CPU (0.97 s/frame); about 20 M cycles per band.
+
+## Band design with smaller estimators
+
+`make xclbin ... RES=3 WIDTH=1` builds the band design for retrained
+estimators with 3 residual blocks of width 1 (`salsun2d_band_config`,
+`salsun2d_estimator_size`; the host picks the matching xclbin). Two
+changes were needed: the intermediate arrays of the estimators hold
+max(features, hidden) rows (with width 0.5 they were too small, which
+only the generated code showed), and the rotations are applied rotation
+by rotation over the blocks of a column (II = 1) instead of unrolling the
+28 rotations of a block (II = 28), whose wiring a congestion analysis of
+a failed build showed in 75-96% of the congested windows.
+
+Hardware (U250, SLR3, `hls/salsun2d_band_kernel_slr3.cfg`), parameters
+trained for 800 epochs with distillation: 248.5 MHz; ten frames match the
+fixed-point model to 2.7e-5 with the MSE of the floating-point network;
+0.29 s/frame for the kernel call (0.41 s/frame with the host policy),
+against 0.43 s/frame with the current estimators and 0.95 s/frame for
+the MATLAB reference on the CPU. The design with 4 residual blocks of
+width 0.5 failed routing (conflicts inside the kernel).
 
 ## Smaller estimators by retraining (study)
 
