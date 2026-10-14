@@ -332,6 +332,30 @@ best CPU figure. The FPGA is a single 300 MHz-class compute unit using a
 fraction of the device; more compute units, wider FC lanes, or
 energy per frame are where it can compete.
 
+Energy per frame (R3 W1, 60 s of frames back to back, the same frames as
+above). Board power from `xrt-smi examine -r electrical` (U250) and
+`nvidia-smi` (GPUs); CPU package plus DRAM power from RAPL (both sockets
+of temsip02, Xeon Gold 6240 x 2). The FPGA and GPU figures leave out the
+host CPU that drives them; "above idle" subtracts the power of the idle
+device (U250 with the xclbin loaded):
+
+| Device | s/frame | Idle W | Load W | J/frame | J/frame above idle |
+|---|---|---|---|---|---|
+| CPU, 36 threads | 0.109 | 57.0 | 247.1 | 26.9 | 20.7 |
+| CPU, 1 thread | 0.555 | 57.0 | 115.2 | 63.9 | 32.3 |
+| GPU A800 | 0.047 | 44.6 | 97.9 | **4.6** | 2.5 |
+| GPU RTX A6000 | 0.139 | 78.9 | 90.1 | 12.5 | 1.6 |
+| GPU Quadro RTX 6000 | 0.157 | 51.4 | 56.9 | 9.0 | 0.87 |
+| FPGA U250, one compute unit | 0.288 | 31.4 | 32.9 | 9.5 | **0.45** |
+
+The FPGA uses a third of the energy of the multithreaded CPU per frame,
+about as much as the Quadro RTX 6000 and twice as much as the A800. Its
+9.5 J are almost all the idle power of the card (31 W; the kernel adds
+1.5 W), so more frames per second from the same card lower the energy per
+frame almost in proportion. Two compute units (SLR3 + SLR2,
+`hls/salsun2d_band_kernel_2cu.cfg`) failed routing (887 nets, congestion
+in the estimator of both units).
+
 ## Smaller estimators by retraining (study)
 
 `run_estimator_sweep` retrains SA-LSUN with fewer residual blocks R
