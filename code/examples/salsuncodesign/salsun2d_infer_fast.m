@@ -14,7 +14,9 @@ function [y,sum1,sum2] = salsun2d_infer_fast(x,params,mu,sigma) %#codegen
 %   once), single precision, and the same exact shortcut of the last stage
 %   as the kernel (its first Pa-1 angles only; see salsun2d_hls_layout).
 %   It runs in MATLAB (multithreaded), on gpuArray inputs, and through
-%   MATLAB Coder (MEX, matrix products by BLAS).
+%   MATLAB Coder (MEX, matrix products by BLAS; give the stage targets as
+%   numbers, 1 for 'Difference' and 0 for 'Sum', so that the stages form
+%   a homogeneous structure array).
 %
 %   params as from salsun2d_extract_params (any estimator size), single.
 %
@@ -32,7 +34,7 @@ function [y,sum1,sum2] = salsun2d_infer_fast(x,params,mu,sigma) %#codegen
 % http://msiplab.eng.niigata-u.ac.jp/
 %
 dec = params.Stride;
-nDec = dec(1)*dec(2);
+nDec = size(params.Cvh,1);          % a constant size for code generation
 ps = nDec/2;
 [szy,szx] = size(x);
 nRows = szy/dec(1);
@@ -104,12 +106,12 @@ for i = 1:n-1
         btms(k) = j;
     end
 end
-if transposed
-    order = nRot:-1:1;
-else
-    order = 1:nRot;
-end
-for k = order
+for kk = 1:nRot
+    if transposed
+        k = nRot + 1 - kk;           % transposes in reverse order
+    else
+        k = kk;
+    end
     c = cos(theta(k,:));
     s = sin(theta(k,:));
     vt = V(tops(k),:);
@@ -129,12 +131,21 @@ nDec = size(Y,1);
 ps = nDec/2;
 Ys = Y(1:ps,:) + Y(ps+1:end,:);
 Ya = Y(1:ps,:) - Y(ps+1:end,:);
-if strcmp(target,'Difference')
-    Ya = reshape(circshift(reshape(Ya,ps,nRows,nCols),[0 shift]),ps,[]);
+% target: 'Difference' / 'Sum', or 1 / 0 (numeric, for code generation)
+if ischar(target) || isstring(target)
+    isDifference = strcmp(target,'Difference');
 else
-    Ys = reshape(circshift(reshape(Ys,ps,nRows,nCols),[0 shift]),ps,[]);
+    isDifference = target ~= 0;
 end
-Y = 0.5*[Ys+Ya; Ys-Ya];
+if isDifference
+    Ya = reshape(circshift(reshape(Ya,ps,nRows,nCols),[0 shift]),ps,nRows*nCols);
+else
+    Ys = reshape(circshift(reshape(Ys,ps,nRows,nCols),[0 shift]),ps,nRows*nCols);
+end
+Z = zeros(size(Y),'like',Y);       % same size as Y (fixed rows for code generation)
+Z(1:ps,:) = 0.5*(Ys+Ya);
+Z(ps+1:end,:) = 0.5*(Ys-Ya);
+Y = Z;
 end
 
 function [theta,s1,s2,ch] = estimateAngles(Y,est,mu,sigma,nRows,nCols,nUsed)
@@ -153,7 +164,7 @@ F = zeros(nCh*nv*nh,nRows*nCols,'like',Y);
 iF = 0;
 for vshift = fix(nv/2):-1:-fix(nv/2)
     for hshift = fix(nh/2):-1:-fix(nh/2)
-        F(iF+(1:nCh),:) = reshape(circshift(X3,[0 vshift hshift]),nCh,[]);
+        F(iF+(1:nCh),:) = reshape(circshift(X3,[0 vshift hshift]),nCh,nRows*nCols);
         iF = iF + nCh;
     end
 end
