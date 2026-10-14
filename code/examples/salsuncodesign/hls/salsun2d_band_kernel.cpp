@@ -10,8 +10,12 @@
 //               sigma (NDEC x NEST), column-major, from the previous frames
 //   dst       : reconstructed frame, same layout as src
 //   stats_out : sums (NDEC x NEST) and sums of squares (NDEC x NEST) of the
-//               estimator input channels over the blocks of this frame,
-//               for the statistics of the next frame
+//               estimator input channels over the blocks of the processed
+//               bands, for the statistics of the next frame
+//   first_band, num_bands : the bands this call processes (0-based, in the
+//               order below); several compute units can share a frame,
+//               each with its own range, and the host adds their sums.
+//               Rows of dst outside the processed bands are not written.
 //
 // Bands of BAND block rows start at 0, BAND, 2*BAND, ...; the last band is
 // moved up so that it ends at the last block row, and the rows it repeats
@@ -62,17 +66,20 @@ static const int SUBROWS = BAND + 2 * HALO;    // block rows of a band with halo
 static const int SUBPIX = SUBROWS * MY;        // pixel rows of a band with halo
 static const int BANDPIX = BAND * MY;          // pixel rows of a band
 static const int NSTATS = NDEC * NEST;
+static const int NBANDS = (NROWS + BAND - 1) / BAND;   // bands of a frame
 
 extern "C" {
 
 void salsun2d_band_kernel(const float *src, const float *params, const float *stats_in,
-                          float *dst, float *stats_out)
+                          float *dst, float *stats_out, int first_band, int num_bands)
 {
 #pragma HLS INTERFACE m_axi port = src offset = slave bundle = gmem0 depth = SZY * SZX
 #pragma HLS INTERFACE m_axi port = params offset = slave bundle = gmem1 depth = NPARAMS
 #pragma HLS INTERFACE m_axi port = stats_in offset = slave bundle = gmem1 depth = 2 * NSTATS
 #pragma HLS INTERFACE m_axi port = dst offset = slave bundle = gmem0 depth = SZY * SZX
 #pragma HLS INTERFACE m_axi port = stats_out offset = slave bundle = gmem1 depth = 2 * NSTATS
+#pragma HLS INTERFACE s_axilite port = first_band
+#pragma HLS INTERFACE s_axilite port = num_bands
 #pragma HLS INTERFACE s_axilite port = return
 
     // Static so that software emulation does not place them on the stack
@@ -108,13 +115,17 @@ load_stats:
 
     int prev_start = -BAND;
 band_loop:
-    for (int r0 = 0; r0 < NROWS; r0 += BAND) {
+    for (int k = 0; k < NBANDS; k++) {
+        int r0 = k * BAND;
         if (r0 + BAND > NROWS) {
             r0 = NROWS - BAND;           // move the last band up
         }
         // Rows of the band already produced by the previous band
         const int repeated = (prev_start + BAND > r0) ? (prev_start + BAND - r0) : 0;
         prev_start = r0;
+        if (k < first_band || k >= first_band + num_bands) {
+            continue;                    // band of another compute unit
+        }
 
     load_band:
         for (int c = 0; c < SZX; c++) {

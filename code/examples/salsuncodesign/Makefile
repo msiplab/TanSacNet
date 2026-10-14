@@ -28,6 +28,8 @@ BAND     ?= 31
 # Estimator size of the band design: residual blocks and width
 RES      ?= 3
 WIDTH    ?= 2
+# Compute units of the band kernel (one per SLR; 2: SLR3 and SLR2)
+NCU      ?= 1
 ifeq ($(DESIGN),salsun2d_hls_band)
 KERNEL   := salsun2d_band_kernel
 ifeq ($(RES)_$(WIDTH),3_2)
@@ -35,7 +37,12 @@ ESTSIZE  :=
 else
 ESTSIZE  := _r$(RES)w$(WIDTH)
 endif
-NAME     := $(DESIGN)_$(SZY)x$(SZX)_b$(BAND)$(ESTSIZE)
+ifeq ($(NCU),1)
+CUSIZE   :=
+else
+CUSIZE   := _cu$(NCU)
+endif
+NAME     := $(DESIGN)_$(SZY)x$(SZX)_b$(BAND)$(ESTSIZE)$(CUSIZE)
 CODEGEN_ARGS := [$(SZY) $(SZX)],'$(DESIGN)',BandRows=$(BAND),NumResidualBlocks=$(RES),Width=$(WIDTH)
 else
 NAME     := $(DESIGN)_$(SZY)x$(SZX)
@@ -62,7 +69,11 @@ BUILD_DIR   := build/$(TARGET)
 XO          := $(BUILD_DIR)/$(NAME).xo
 XCLBIN      := $(BUILD_DIR)/$(NAME).xclbin
 # Linker configuration (e.g. LINK_CFG=hls/salsun2d_band_kernel_slr2.cfg)
+ifeq ($(NCU),1)
 LINK_CFG    ?= hls/$(KERNEL).cfg
+else
+LINK_CFG    ?= hls/$(KERNEL)_$(NCU)cu.cfg
+endif
 
 ifeq ($(DESIGN),salsun2d_hls_opt)
 DESIGN_FLAGS := -DSALSUN2D_OPT

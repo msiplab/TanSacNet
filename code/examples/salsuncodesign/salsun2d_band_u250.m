@@ -31,6 +31,9 @@ arguments
     params (1,1) struct
     target {mustBeMember(target,{'hw','hw_emu','sw_emu'})} = 'hw'
     options.BandRows (1,1) double {mustBeInteger,mustBePositive} = 31
+    % Compute units in the xclbin (Makefile NCU): the bands of a frame are
+    % split among them
+    options.ComputeUnits (1,1) double {mustBeInteger,mustBePositive} = 1
     options.Statistics {mustBeMember(options.Statistics,{'previous','ema','fir2'})} = 'fir2'
     options.StatsRho (1,1) double = 0.9
 end
@@ -41,6 +44,9 @@ frameSize = [size(u,1) size(u,2)];
 estSize = '';
 if nRes ~= 3 || width ~= 2
     estSize = sprintf('_r%dw%g',nRes,width);     % design with smaller estimators (Makefile RES, WIDTH)
+end
+if options.ComputeUnits > 1
+    estSize = sprintf('%s_cu%d',estSize,options.ComputeUnits);
 end
 xclbinPath = fullfile(buildDir,sprintf('salsun2d_hls_band_%dx%d_b%d%s.xclbin',frameSize,options.BandRows,estSize));
 if ~isfile(xclbinPath)
@@ -73,7 +79,7 @@ end
 
 nBlocks = single(prod(frameSize./L.Stride));
     function [yf,muMeas,sigmaMeas] = frameOnCard(x,mu,sigma)
-        [yf,sums] = salsun2d_band_mex(xclbinPath,x,w,cat(3,mu,sigma));
+        [yf,sums] = salsun2d_band_mex(xclbinPath,x,w,cat(3,mu,sigma),options.BandRows);
         [muMeas,sigmaMeas] = salsun2d_stats_from_sums(sums(:,:,1),sums(:,:,2),nBlocks,L.Epsilon);
     end
 % The first frame is initialized with the statistics of the fixed-point
