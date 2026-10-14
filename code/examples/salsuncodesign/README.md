@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame, 3.3x the CPU reference |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame (slower than an optimized CPU or GPU implementation; see "Fair comparison with CPUs and GPUs") |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | fixed-point estimators in the band design, validated on the U250 |
 
@@ -300,8 +300,37 @@ trained for 800 epochs with distillation: 248.5 MHz; ten frames match the
 fixed-point model to 2.7e-5 with the MSE of the floating-point network;
 0.29 s/frame for the kernel call (0.41 s/frame with the host policy),
 against 0.43 s/frame with the current estimators and 0.95 s/frame for
-the MATLAB reference on the CPU. The design with 4 residual blocks of
-width 0.5 failed routing (conflicts inside the kernel).
+the MATLAB reference on the CPU (an unoptimized reference; see below).
+The design with 4 residual blocks of width 0.5 failed routing (conflicts
+inside the kernel).
+
+## Fair comparison with CPUs and GPUs
+
+The CPU times above are those of `salsun2d_infer`, a block-by-block
+reference that favors the FPGA. `salsun2d_infer_fast` computes the same
+frame with every step vectorized over all blocks (matrix products for the
+fully connected layers, Givens rotations on the coefficient rows of all
+blocks at once), in single precision with the same last-stage shortcut as
+the kernel. It matches the reference to 3e-7 and runs in MATLAB, on
+`gpuArray` inputs, and as generated C (MATLAB Coder MEX). Seconds per
+300x300 frame (median of repeated calls, data already on the device):
+
+| Implementation | R3 W2 | R3 W1 |
+|---|---|---|
+| CPU, MATLAB, 1 thread (temsip02) | 1.22 | 0.64 |
+| CPU, MATLAB, 36 threads (temsip02) | 0.144 | **0.113** |
+| CPU, generated C (MEX), 1 thread | 0.88 | 0.50 |
+| GPU A800 (temsip01) | 0.051 | **0.049** |
+| GPU RTX A6000 (temsip08) | 0.138 | 0.139 |
+| GPU Quadro RTX 6000 (temsip07) | 0.157 | 0.157 |
+| FPGA U250, one compute unit (kernel call) | 0.43 (current estimators) | 0.29 |
+
+The FPGA kernel is about 2.6 times slower than the multithreaded CPU and 6
+times slower than the A800. The generated C does not use more threads
+(no `parfor`, matrix products without an optimized BLAS) and is not the
+best CPU figure. The FPGA is a single 300 MHz-class compute unit using a
+fraction of the device; more compute units, wider FC lanes, or
+energy per frame are where it can compete.
 
 ## Smaller estimators by retraining (study)
 
