@@ -65,11 +65,16 @@ rowFirst = H + 1;                  % valid rows of the band
 rowLast = int32(nRows) - H;
 sumFirst = rowFirst + int32(skipRows);   % first row counted in the sums
 
-% Angles of the band with halo, on chip. URAM words are 72 bits wide, so
-% two 32-bit values are packed per word (ARRAY_RESHAPE on the innermost
-% C++ dimension), which halves the URAM count.
-theta = zeros(L.NThetaRows,nRows,nCols,'single');
-coder.hdl.literaltext("#pragma HLS ARRAY_RESHAPE variable=theta type=cyclic factor=2 dim=3")
+% Angles of the band with halo, on chip: the used angles only
+% (L.ThetaStoreOffset), as 18-bit fractions of pi (L.FixAngle). URAM
+% words are 72 bits wide, so four values are packed per word
+% (ARRAY_RESHAPE on the innermost C++ dimension). The store was the
+% largest memory of the kernel (46 URAM with single-precision angles and
+% the zero rows) and its multiplexers congested the routing.
+T = fixedTypes(L);
+% (every stored angle is written by its estimator before it is read)
+theta = coder.nullcopy(zeros(L.NThetaStoreRows,nRows,nCols,'like',T.Ang));
+coder.hdl.literaltext("#pragma HLS ARRAY_RESHAPE variable=theta type=cyclic factor=4 dim=3")
 coder.hdl.literaltext("#pragma HLS BIND_STORAGE variable=theta type=ram_2p impl=uram")
 sum1 = zeros(L.NDec,L.NEst,'single');
 sum2 = zeros(L.NDec,L.NEst,'single');
@@ -203,6 +208,7 @@ function Z = rotateInitialOrFinal(Y,theta,w,L,isFinal,nRows,nCols)
 % that the analysis and the synthesis share one instance of the function.
 coder.inline('never')
 nHalf = coder.const(L.EstNAnglesTotal(1)/2);   % angles of W and of U (28)
+nZ = coder.const(L.EstNZeroPad(1));            % leading zero angles of W (not stored)
 if isFinal
     offMusW = L.V0tMusW;
     offMusU = L.V0tMusU;
@@ -233,8 +239,12 @@ for c = 1:nCols
     for r = 1:nRows
         for a = 1:nHalf
             coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            tw = theta(a,r,c);
-            tu = theta(nHalf+a,r,c);
+            if a > nZ
+                tw = angleOf(theta(a-nZ,r,c));
+            else
+                tw = single(0);
+            end
+            tu = angleOf(theta(nHalf-nZ+a,r,c));
             csW(a,r) = cos(tw);
             snW(a,r) = sin(tw);
             csU(a,r) = cos(tu);
@@ -300,7 +310,7 @@ function Z = rotateIntermediate(Y,theta,w,L,iStage,isSynthesis,nRows,nCols)
 % which the remaining rotations act.
 coder.inline('never')
 iEst = iStage + 1;
-offTheta = int32(L.ThetaOffset(iEst));
+offTheta = int32(L.ThetaStoreOffset(iEst));
 if isSynthesis
     offMus = int32(L.StageSynMus(iStage));
 else
@@ -327,9 +337,9 @@ coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=mus type=complete di
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=va type=complete dim=2")
 for c = 1:nCols
     for r = 1:nRows
-        for a = 1:nAng
+        for a = int32(1):nRot          % the stored angles (Pa-1 in the last stage)
             coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-            th = theta(offTheta+a,r,c);
+            th = angleOf(theta(offTheta+a,r,c));
             cs(a,r) = cos(th);
             sn(a,r) = sin(th);
         end
@@ -421,8 +431,10 @@ nF = int32(L.EstNFeat(iEst));
 nH = int32(L.EstNHidden(iEst));
 nA = int32(L.EstNAngles(iEst));          % predicted angles
 nAU = int32(L.EstNAnglesUsed(iEst));     % angles computed (7 in the last stage)
-nZ = int32(L.EstNZeroPad(iEst));
-offTheta = int32(L.ThetaOffset(iEst));
+offWord = int32(L.ThetaStoreOffset(iEst)/4);   % first word of the angle store
+nWords = idivide(nAU + int32(3),int32(4));
+ang = zeros(4,1,'like',T.Ang);
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=ang type=complete dim=0")
 nv = L.Neighbor(1);
 nh = L.Neighbor(2);
 nCG = coder.const(gcd(nCols,L.NColGroup));
@@ -505,13 +517,24 @@ for c0 = 1:nCG:nCols
         c = c0 + cc - 1;
         for r = 1:nRows
             b = (cc-1)*nRows + r;
-            for a = 1:nZ
-                coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-                theta(offTheta+a,r,c) = single(0);
-            end
-            for a = 1:nAU
-                coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-                theta(offTheta+nZ+a,r,c) = single(Z1(a,b));
+            % Four angles per word: collected in registers and written
+            % as a whole word (a store of single angles would read,
+            % modify and write the word in one cycle)
+            for g = 1:nWords
+                for p = 1:4
+                    coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+                    a = 4*(g-1) + p;
+                    if a <= nAU
+                        ang(p) = toAngle(Z1(a,b),T,L);
+                    else
+                        ang(p) = cast(0,'like',T.Ang);
+                    end
+                    if p == 4
+                        for q = 1:4
+                            theta(4*(offWord+g-1)+q,r,c) = ang(q);
+                        end
+                    end
+                end
             end
         end
     end
@@ -696,6 +719,7 @@ if coder.target('MATLAB')
     T.W = double([]);
     T.Acc = double([]);
     T.Sq = double([]);
+    T.Ang = double([]);
 else
     Fw = fimath('RoundingMethod','Floor','OverflowAction','Wrap', ...
         'ProductMode','FullPrecision','SumMode','FullPrecision');
@@ -703,7 +727,30 @@ else
     T.W = fi([],1,L.FixWeight(1),L.FixWeight(2),Fw);
     T.Acc = fi([],1,L.FixAcc(1),L.FixAcc(2),Fw);
     T.Sq = fi([],1,L.FixSq(1),L.FixSq(2),Fw);
+    T.Ang = fi([],1,L.FixAngle(1),L.FixAngle(2),Fw);   % stored angles, theta/pi
+    T.AngIn = fi([],1,27,21,Fw);              % angle before the scaling (toAngle)
+    T.InvPi = fi(1/pi,0,18,18,Fw);
 end
+end
+
+function y = toAngle(v,T,L)
+% Angle (radians, accumulator format) into the angle store: theta/pi
+% rounded to nearest and wrapped into [-1,1). The angle is first rounded
+% (and saturated) to 27 bits, [27 21] (+-32 rad), and multiplied by 1/pi
+% in [18 18], one DSP multiplier (27 x 18)
+if coder.target('MATLAB')
+    y = salsun2d_round_angle(double(v),L.FixAngle(1))/pi;
+else
+    Fa = fimath('RoundingMethod','Nearest','OverflowAction','Wrap', ...
+        'ProductMode','FullPrecision','SumMode','FullPrecision');
+    a = roundTo(v,T.AngIn);
+    y = cast(fi(a*T.InvPi,numerictype(T.Ang),Fa),'like',T.Ang);
+end
+end
+
+function t = angleOf(v)
+% Angle in radians (single) of a stored value theta/pi
+t = single(pi)*single(v);
 end
 
 function y = roundTo(v,p)

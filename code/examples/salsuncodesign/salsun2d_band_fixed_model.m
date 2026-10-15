@@ -4,7 +4,9 @@ function [paramsQ,q] = salsun2d_band_fixed_model(params)
 %   [paramsQ,q] = salsun2d_band_fixed_model(params) returns the parameters
 %   with the estimator weight matrices rounded to L.FixWeight and the
 %   quantizer q that rounds the inputs of the fully connected layers of
-%   every estimator ('features', 'ln', 'act') to L.FixSignal, so that
+%   every estimator ('features', 'ln', 'act') to L.FixSignal and the
+%   angles ('angles') to the angle store (L.FixAngle,
+%   salsun2d_round_angle), so that
 %
 %     salsun2d_infer(x,paramsQ,Quantizer=q,EstimatorTags=true,...)
 %
@@ -42,7 +44,14 @@ for k = 1:L.NEst
         formats(sprintf('%s:%d',tag{1},k)) = L.FixSignal;
     end
 end
-q = salsun2d_static_quantizer(formats);
+qs = salsun2d_static_quantizer(formats);
+q = @(v,tag) roundAngles(qs(v,tag),tag,L.FixAngle(1));
+end
+
+function v = roundAngles(v,tag,wordLength)
+if startsWith(tag,'angles')
+    v = salsun2d_round_angle(v,wordLength);
+end
 end
 
 function est = roundEstimator(est,r)

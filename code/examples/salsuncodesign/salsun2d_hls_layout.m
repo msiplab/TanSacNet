@@ -74,6 +74,12 @@ L.FixSignal = [18 11];
 L.FixWeight = [18 16];
 L.FixAcc = [48 27];
 L.FixSq = [48 22];
+% Angles of the band design (salsun2d_hls_band) are stored as signed
+% fixed-point fractions of pi, [word fraction] = [18 17]: the value
+% theta/pi wraps into [-1,1) (the rotations only use cos and sin), the
+% resolution is pi/2^17 (2.4e-5 rad; the MSE of the trained network does
+% not change), and four values fill a 72-bit URAM word
+L.FixAngle = [18 17];
 L.FcInputs = 4;
 % Halo of the band-wise streaming design (salsun2d_hls_band): the
 % structural receptive field in block rows, 6 for the analysis (five
@@ -114,6 +120,13 @@ L.LastStageNAngles = L.Pa - 1;                                % 7 of 28
 [L.GivensTop,L.GivensBottom] = givensPairs(L.Pa);
 L.EstNAnglesUsed = L.EstNAngles;
 L.EstNAnglesUsed(end) = L.LastStageNAngles;
+% Angle store of the band design: the predicted angles that are used
+% only (no zero-padded angles, Pa-1 angles of the last stage), each
+% estimator from a multiple of 4 rows, so that its angles are written as
+% whole words of four (L.FixAngle)
+L.ThetaStoreRows = 4*ceil(L.EstNAnglesUsed/4);                % 52, 28, 28, 28, 8
+L.ThetaStoreOffset = [0 cumsum(L.ThetaStoreRows(1:end-1))];
+L.NThetaStoreRows = sum(L.ThetaStoreRows);                    % 144
 L.MaxNFeat = max(L.EstNFeat);
 L.MaxNHidden = max(L.EstNHidden);
 % Rows of the intermediate arrays of the band estimators: features and
