@@ -347,14 +347,24 @@ device (U250 with the xclbin loaded):
 | GPU RTX A6000 | 0.139 | 78.9 | 90.1 | 12.5 | 1.6 |
 | GPU Quadro RTX 6000 | 0.157 | 51.4 | 56.9 | 9.0 | 0.87 |
 | FPGA U250, one compute unit | 0.288 | 31.4 | 32.9 | 9.5 | **0.45** |
+| FPGA U250, two compute units (packed angles) | 0.178 | 36.3 | 38.9 | 6.9 | 0.46 |
 
 The FPGA uses a third of the energy of the multithreaded CPU per frame,
 about as much as the Quadro RTX 6000 and twice as much as the A800. Its
 9.5 J are almost all the idle power of the card (31 W; the kernel adds
 1.5 W), so more frames per second from the same card lower the energy per
-frame almost in proportion. Two compute units (SLR3 + SLR2,
-`hls/salsun2d_band_kernel_2cu.cfg`) failed routing (887 nets, congestion
-in the estimator of both units).
+frame almost in proportion.
+
+Two compute units (`hls/salsun2d_band_kernel_2cu.cfg`, SLR3 with DDR[3]
+and SLR2 with DDR[2]) failed routing with single-precision angles in
+every placement (SLR3 + SLR2, SLR3 + SLR1, SLR3 + SLR0); the angle store
+(46 URAM) and its multiplexers appeared in all congested regions. With
+the angles stored as 18-bit fractions of pi, four per URAM word (22
+URAM; `L.FixAngle`, `salsun2d_round_angle`), the SLR3 + SLR2 build
+routed at 235.4 MHz: ten frames match the fixed-point model to 2.7e-5,
+0.178 s/frame for the kernel call (0.32 s/frame with the host policy),
+6.9 J/frame. A one-unit build of the same kernel in SLR3 failed routing
+(20977 node overlaps), so routing in one SLR remains marginal.
 
 ## Smaller estimators by retraining (study)
 
