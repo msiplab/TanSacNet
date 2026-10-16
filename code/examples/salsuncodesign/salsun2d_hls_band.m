@@ -56,7 +56,7 @@ coder.extrinsic('salsun2d_hls_layout','salsun2d_band_config');
 % Estimator size of this design (salsun2d_band_config, read at code
 % generation time)
 C = coder.const(salsun2d_band_config());
-L = coder.const(salsun2d_hls_layout('NumResidualBlocks',C(1),'Width',C(2)));
+L = coder.const(salsun2d_hls_layout('NumResidualBlocks',C(1),'Width',C(2),'AlignedWeights',true));
 [szy,szx] = size(x);
 nRows = szy/L.Stride(1);          % block rows of the band with halo
 nCols = szx/L.Stride(2);
@@ -610,14 +610,15 @@ function Z = fullyConnected(X,w,offW,offB,nOut,nIn,L)
 % Z(o,b) = B(o) + sum_i W(o,i)*X(i,b) for all blocks b of the group, in
 % fixed point with exact accumulation. The weights are stored row by row
 % (salsun2d_pack_params(...,RowMajorWeights=true)), W(o,i) at
-% offW + (o-1)*nIn + i, so that the P = L.FcInputs weights W(o,i0+1..i0+P)
-% of one cycle are consecutive. For each group of P inputs, the inputs
-% of every block are held in registers, and each cycle adds P products
-% to Z(o,b) for all blocks at once (one lane per block). Z(o,b) is
-% updated again only nOut cycles later, more than the adder latency
-% (nOut >= 28), so the dependence through Z is declared false. Inputs
-% beyond nIn are zero, so the weights read past the end of a row do not
-% contribute.
+% offW + (o-1)*nInPad + i, the rows padded with zeros to nInPad, a
+% multiple of P = L.FcInputs, and offW a multiple of P
+% (salsun2d_hls_layout(...,AlignedWeights=true)): the P weights
+% W(o,i0+1..i0+P) of one cycle are one word of w (the reshaping of w in
+% the kernel). For each group of P inputs, the inputs of every block are
+% held in registers, and each cycle adds P products to Z(o,b) for all
+% blocks at once (one lane per block). Z(o,b) is updated again only nOut
+% cycles later, more than the adder latency (nOut >= 28), so the
+% dependence through Z is declared false. Inputs beyond nIn are zero.
 coder.inline('never')
 T = fixedTypes(L);
 P = coder.const(L.FcInputs);
@@ -626,8 +627,6 @@ nB = size(X,2);
 Z = coder.nullcopy(zeros(size(X),'like',T.Acc));
 xr = zeros(P,nB,'like',T.X);
 wv = zeros(P,1,'like',T.W);
-wb = zeros(8,1,'single');   % two words of 4; P <= 4
-coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=wb type=complete dim=0")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=xr type=complete dim=0")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=wv type=complete dim=0")
 for o = 1:nOut
@@ -638,6 +637,7 @@ for o = 1:nOut
     end
 end
 nGi = idivide(int32(nIn) + int32(P) - 1,int32(P));
+nWordsRow = nGi;                    % words per row of the weights
 for gi = 1:nGi
     i0 = (gi-1)*int32(P);
     for p = 1:P
@@ -653,18 +653,10 @@ for gi = 1:nGi
     for o = 1:nOut
         coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
         coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=Z type=inter false")
-        % The P weights w(a0+1..a0+P) lie in the two words of 4 (the
-        % reshaping of w in the kernel) starting at element 4*m+1; reading
-        % both words whole (constant offsets) lets HLS use one access per
-        % word, and the P weights are then selected by the offset sh
-        a0 = offW + (int32(o)-1)*nIn + i0;
-        m4 = idivide(a0,int32(4))*int32(4);
-        sh = a0 - m4;
-        for k = 1:8
-            wb(k) = w(m4 + int32(k));
-        end
+        % word m of w (P values): the index P*m + p tells HLS the lane
+        m = idivide(offW,int32(P)) + (int32(o)-1)*nWordsRow + int32(gi) - 1;
         for p = 1:P
-            wv(p) = toW(wb(sh + int32(p)),T,L);
+            wv(p) = toW(w(int32(P)*m + int32(p)),T,L);
         end
         for b = 1:nB
             acc = Z(o,b);

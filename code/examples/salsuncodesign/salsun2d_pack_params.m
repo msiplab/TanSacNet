@@ -7,9 +7,10 @@ function w = salsun2d_pack_params(params,options)
 %   that the HLS implementation is built for.
 %
 %   w = salsun2d_pack_params(params,RowMajorWeights=true) stores the
-%   weight matrices W1, W2, Wo of the estimators row by row (transposed)
-%   in the same places, as the fixed-point fully connected layers of the
-%   band design (salsun2d_hls_band) read them.
+%   weight matrices W1, W2, Wo of the estimators row by row (transposed),
+%   each row padded with zeros to a multiple of L.FcInputs, in the layout
+%   salsun2d_hls_layout(...,AlignedWeights=true), as the fixed-point fully
+%   connected layers of the band design (salsun2d_hls_band) read them.
 %
 %   The layout follows the size of the estimators in params (number of
 %   residual blocks and width, salsun2d_estimator_size).
@@ -31,13 +32,14 @@ arguments
     params (1,1) struct
     options.RowMajorWeights (1,1) logical = false
 end
-if options.RowMajorWeights
-    order = @(W) W.';
-else
-    order = @(W) W;
-end
 [r,w] = salsun2d_estimator_size(params);
-L = salsun2d_hls_layout(NumResidualBlocks=r,Width=w);
+L = salsun2d_hls_layout(NumResidualBlocks=r,Width=w,AlignedWeights=options.RowMajorWeights);
+if options.RowMajorWeights
+    % rows of W as the columns of the transpose, padded to the row stride
+    order = @(W,stride) [W.'; zeros(stride-size(W,2),size(W,1),'like',W)];
+else
+    order = @(W,stride) W;
+end
 
 %% Check the configuration
 check(isequal(params.Stride(:).',L.Stride),'Stride must be [%d %d].',L.Stride)
@@ -87,12 +89,12 @@ for iEst = 1:L.NEst
         r = e.ResBlocks(iRes);
         put(L.Gamma(iEst,iRes),r.Gamma)
         put(L.Beta(iEst,iRes),r.Beta)
-        put(L.W1(iEst,iRes),order(r.W1))
+        put(L.W1(iEst,iRes),order(r.W1,L.EstFeatStride(iEst)))
         put(L.B1(iEst,iRes),r.B1)
-        put(L.W2(iEst,iRes),order(r.W2))
+        put(L.W2(iEst,iRes),order(r.W2,L.EstHiddenStride(iEst)))
         put(L.B2(iEst,iRes),r.B2)
     end
-    put(L.Wo(iEst),order(e.Wo))
+    put(L.Wo(iEst),order(e.Wo,L.EstFeatStride(iEst)))
     put(L.Bo(iEst),e.Bo)
 end
 end

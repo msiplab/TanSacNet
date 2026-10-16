@@ -14,6 +14,13 @@ function L = salsun2d_hls_layout(options)
 %   features) (as salsunResidualEstimatorBlock2dLayer), for retrained
 %   smaller estimators (salsun2d_hls_band, salsun2d_band_config).
 %
+%   salsun2d_hls_layout(...,AlignedWeights=true) is the layout of the band
+%   design (salsun2d_hls_band, salsun2d_pack_params(...,RowMajorWeights=
+%   true)): the weight matrices of the fully connected layers start at
+%   multiples of L.FcInputs, and their rows are L.EstFeatStride or
+%   L.EstHiddenStride long (the inputs padded with zeros to a multiple of
+%   L.FcInputs), so that the weights of one cycle are one memory word.
+%
 %   All offsets are 0-based; parameter p of length n occupies
 %   w(L.p + (1:n)). Matrices are stored column-major as in MATLAB.
 %
@@ -34,6 +41,7 @@ function L = salsun2d_hls_layout(options)
 arguments
     options.NumResidualBlocks (1,1) double {mustBeInteger,mustBePositive} = 3
     options.Width (1,1) double {mustBePositive} = 2
+    options.AlignedWeights (1,1) logical = false
 end
 
 %% Configuration
@@ -69,7 +77,8 @@ L.NGeluUnits = 3;
 % all weight matrices (largest magnitude 0.84, range +-2), exact
 % accumulators (18 x 18-bit products, up to 270 terms), and the sums of
 % squares of the LayerNorm. 18 bits match the DSP multipliers (27 x 18)
-% and the block RAM widths. L.FcInputs products per lane and cycle.
+% and the block RAM widths. L.FcInputs products per lane and cycle (the
+% weights of a cycle are one word of 8 values, AlignedWeights).
 L.FixSignal = [18 11];
 L.FixWeight = [18 16];
 L.FixAcc = [48 27];
@@ -80,7 +89,7 @@ L.FixSq = [48 22];
 % resolution is pi/2^17 (2.4e-5 rad; the MSE of the trained network does
 % not change), and four values fill a 72-bit URAM word
 L.FixAngle = [18 17];
-L.FcInputs = 4;
+L.FcInputs = 8;
 % Halo of the band-wise streaming design (salsun2d_hls_band): the
 % structural receptive field in block rows, 6 for the analysis (five
 % estimators with 3 x 3 neighbors and the two vertical atom extensions)
@@ -156,18 +165,27 @@ L.W2 = zeros(nEst,L.NResBlocks);
 L.B2 = zeros(nEst,L.NResBlocks);
 L.Wo = zeros(1,nEst);
 L.Bo = zeros(1,nEst);
+if options.AlignedWeights
+    align = L.FcInputs;
+else
+    align = 1;
+end
+L.EstFeatStride = align*ceil(L.EstNFeat/align);     % row lengths of the weights
+L.EstHiddenStride = align*ceil(L.EstNHidden/align);
 for iEst = 1:nEst
     nF = L.EstNFeat(iEst);
     nH = L.EstNHidden(iEst);
+    sF = L.EstFeatStride(iEst);
+    sH = L.EstHiddenStride(iEst);
     for iRes = 1:L.NResBlocks
         [L.Gamma(iEst,iRes),off] = take(off,nF);
         [L.Beta(iEst,iRes),off] = take(off,nF);
-        [L.W1(iEst,iRes),off] = take(off,nH*nF);
+        [L.W1(iEst,iRes),off] = take(alignUp(off,align),nH*sF);
         [L.B1(iEst,iRes),off] = take(off,nH);
-        [L.W2(iEst,iRes),off] = take(off,nF*nH);
+        [L.W2(iEst,iRes),off] = take(alignUp(off,align),nF*sH);
         [L.B2(iEst,iRes),off] = take(off,nF);
     end
-    [L.Wo(iEst),off] = take(off,L.EstNAngles(iEst)*nF);
+    [L.Wo(iEst),off] = take(alignUp(off,align),L.EstNAngles(iEst)*sF);
     [L.Bo(iEst),off] = take(off,L.EstNAngles(iEst));
 end
 L.NParams = off;
@@ -175,6 +193,10 @@ end
 
 function [offset,next] = take(offset,n)
 next = offset + n;
+end
+
+function offset = alignUp(offset,align)
+offset = align*ceil(offset/align);
 end
 
 function [tops,btms] = givensPairs(n)

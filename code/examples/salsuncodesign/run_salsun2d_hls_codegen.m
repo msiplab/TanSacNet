@@ -46,7 +46,8 @@ assignin('base','hlsBandRows',options.BandRows);
 if strcmp(designName,'salsun2d_hls_band')
     salsun2d_band_config([options.NumResidualBlocks options.Width]);
     cleanup = onCleanup(@() salsun2d_band_config('reset'));
-    L = salsun2d_hls_layout(NumResidualBlocks=options.NumResidualBlocks,Width=options.Width);
+    L = salsun2d_hls_layout(NumResidualBlocks=options.NumResidualBlocks,Width=options.Width, ...
+        AlignedWeights=true);
 else
     L = salsun2d_hls_layout();
 end

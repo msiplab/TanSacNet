@@ -93,10 +93,11 @@ void salsun2d_band_kernel(const float *src, const float *params, const float *st
     static real32_T acc1[NEST][NDEC];
     static real32_T acc2[NEST][NDEC];
     static salsun2d_hls_bandClass dut;
-// Four 32-bit values per word (two URAM columns), so that the four
-// consecutive weights read per cycle by the fixed-point fully connected
-// layers lie in at most two words; the band input stays in BRAM
-#pragma HLS ARRAY_RESHAPE variable = w type = cyclic factor = 4
+// Eight 32-bit values per word (four URAM columns): the eight aligned
+// weights read per cycle by the fixed-point fully connected layers are
+// one word (salsun2d_hls_layout(...,AlignedWeights=true)); the band
+// input stays in BRAM
+#pragma HLS ARRAY_RESHAPE variable = w type = cyclic factor = 8
 #pragma HLS BIND_STORAGE variable = w type = ram_2p impl = uram
 
 load_params:
