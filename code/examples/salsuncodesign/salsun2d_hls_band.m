@@ -96,10 +96,21 @@ for iStage = int32(1):int32(L.NStages)
 end
 
 %% Coefficient mask
+% Two channels (one word of Yb) per cycle: a store of single channels
+% would read, modify and write the word of the previous one (II = 11)
+mask = zeros(L.NDec,1,'single');
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=mask type=complete dim=1")
+for k = 1:L.NDec
+    mask(k) = w(L.Mask+k);
+end
 for c = 1:nCols
     for r = 1:nRows
-        for k = 1:L.NDec
-            Yb(k,r,c) = Yb(k,r,c)*w(L.Mask+k);
+        for k2 = 1:L.NDec/2
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            for q = 1:2
+                k = 2*(k2-1) + q;
+                Yb(k,r,c) = Yb(k,r,c)*mask(k);
+            end
         end
     end
 end
@@ -115,20 +126,41 @@ end
 
 %% Block transforms
 function Y = blockDct(x,w,L,nRows,nCols)
-% n = iv + (ih-1)*My indexes the pixels of a block in column-major order
+% n = iv + (ih-1)*My indexes the pixels of a block in column-major order.
+% The DCT matrix is held in registers; for each column of blocks the
+% pixels are read first (one per cycle), then one coefficient of a block
+% is computed per cycle (16 products). Reading the 16 matrix entries of a
+% coefficient from w limited the loop to II = 8.
 coder.inline('never')
 My = L.Stride(1);
 Mx = L.Stride(2);
+nPix = My*Mx;
+cvh = zeros(L.NDec,nPix,'single');
+px = zeros(nPix,nRows,'single');               % one bank per pixel
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=cvh type=complete dim=0")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=px type=complete dim=2")
+for n = 1:nPix
+    for k = 1:L.NDec
+        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+        cvh(k,n) = w(L.Cvh + k + (n-1)*L.NDec);
+    end
+end
 Y = coder.nullcopy(zeros(L.NDec,nRows,nCols,'single'));   % all elements are written
 for c = 1:nCols
     for r = 1:nRows
+        for ih = 1:Mx
+            for iv = 1:My
+                coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+                px(iv+(ih-1)*My,r) = x((r-1)*My+iv,(c-1)*Mx+ih);
+            end
+        end
+    end
+    for r = 1:nRows
         for k = 1:L.NDec
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
             acc = single(0);
-            for ih = 1:Mx
-                for iv = 1:My
-                    n = iv + (ih-1)*My;
-                    acc = acc + w(L.Cvh + k + (n-1)*L.NDec)*x((r-1)*My+iv,(c-1)*Mx+ih);
-                end
+            for n = 1:nPix
+                acc = acc + cvh(k,n)*px(n,r);
             end
             Y(k,r,c) = acc;
         end
@@ -137,21 +169,45 @@ end
 end
 
 function x = blockIdct(Y,w,L,nCols,rowFirst,rowLast)
-% Only the block rows rowFirst..rowLast (the band) are reconstructed
+% Only the block rows rowFirst..rowLast (the band) are reconstructed. As
+% blockDct: the matrix in registers, the coefficients of a column of
+% blocks read first (two per cycle, one word of Y), then one pixel per
+% cycle (16 products)
 coder.inline('never')
 My = L.Stride(1);
 Mx = L.Stride(2);
+nPix = My*Mx;
 nOut = rowLast - rowFirst + 1;
+cvh = zeros(L.NDec,nPix,'single');
+yc = zeros(L.NDec,size(Y,2),'single');      % one bank per channel
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=cvh type=complete dim=0")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=yc type=complete dim=2")
+for n = 1:nPix
+    for k = 1:L.NDec
+        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+        cvh(k,n) = w(L.Cvh + k + (n-1)*L.NDec);
+    end
+end
 x = zeros(nOut*My,nCols*Mx,'single');
 for c = 1:nCols
+    for r = rowFirst:rowLast
+        for k2 = 1:L.NDec/2
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            for q = 1:2
+                k = 2*(k2-1) + q;
+                yc(k,r) = Y(k,r,c);
+            end
+        end
+    end
     for r = rowFirst:rowLast
         ro = r - rowFirst;
         for ih = 1:Mx
             for iv = 1:My
+                coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
                 n = iv + (ih-1)*My;
                 acc = single(0);
                 for k = 1:L.NDec
-                    acc = acc + w(L.Cvh + k + (n-1)*L.NDec)*Y(k,r,c);
+                    acc = acc + cvh(k,n)*yc(k,r);
                 end
                 x(ro*My+iv,(c-1)*Mx+ih) = acc;
             end
@@ -440,19 +496,28 @@ nh = L.Neighbor(2);
 nCG = coder.const(gcd(nCols,L.NColGroup));
 nB = coder.const(nCG*nRows);
 
-% Channel sums over the valid blocks of the band (statistics of the next frame)
-for j = 1:nCh
-    acc1 = single(0);
-    acc2 = single(0);
-    for c = 1:nCols
-        for r = sumFirst:sumLast
+% Channel sums over the valid blocks of the band (statistics of the next
+% frame), one value per cycle with the channels innermost: a sum is
+% updated again nCh >= 8 cycles later, so the additions do not stall the
+% pipeline (with one channel at a time, II = 8). The order of the terms
+% of each sum is unchanged.
+acc1 = zeros(L.NDec,1,'single');
+acc2 = zeros(L.NDec,1,'single');
+for c = 1:nCols
+    for r = sumFirst:sumLast
+        for j = 1:nCh
+            coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+            coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=acc1 type=inter direction=RAW dependent=true distance=8")
+            coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=acc2 type=inter direction=RAW dependent=true distance=8")
             v = Y(ch0+j-1,r,c);
-            acc1 = acc1 + v;
-            acc2 = acc2 + v*v;
+            acc1(j) = acc1(j) + v;
+            acc2(j) = acc2(j) + v*v;
         end
     end
-    sum1(ch0+j-1,iEst) = sum1(ch0+j-1,iEst) + acc1;
-    sum2(ch0+j-1,iEst) = sum2(ch0+j-1,iEst) + acc2;
+end
+for j = 1:nCh
+    sum1(ch0+j-1,iEst) = sum1(ch0+j-1,iEst) + acc1(j);
+    sum2(ch0+j-1,iEst) = sum2(ch0+j-1,iEst) + acc2(j);
 end
 
 % Reciprocals of the scales: the standardization is then a multiplication
