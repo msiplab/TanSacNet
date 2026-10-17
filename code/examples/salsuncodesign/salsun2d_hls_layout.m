@@ -59,15 +59,16 @@ L.NStages = 4;
 % column are processed by gcd(nRows,NLanes) lanes (15 for 300 x 300
 % frames). With 75 lanes the whole-frame build failed in routing.
 L.NLanes = 15;
-% Band design (salsun2d_hls_band): the estimators process a group of
-% gcd(nCols,NColGroup) columns at a time with one lane per block in the
-% fully connected layers (30 block rows = 30 lanes for 300 x 300 frames
-% with 16-row bands), NLnLanes blocks per cycle in the LayerNorm and
-% residual add, and NGeluUnits blocks per cycle in the GELU. With
-% NColGroup = 3 (90 lanes) the layers with fewer lanes reach blocks all
-% over the die: routing congestion level 7 in SLR0, and the DDR clocks of
-% the shell failed timing.
-L.NColGroup = 1;
+% Band design (salsun2d_hls_band): the estimators process the blocks of
+% a column in groups of d rows, d the largest divisor of the band rows
+% (with halo) up to NFcLanes, with one lane per block in the fully
+% connected layers, NLnLanes blocks per cycle in the LayerNorm and
+% residual add, and NGeluUnits blocks per cycle in the GELU (largest
+% divisors of d likewise). Earlier forms had one lane per block row of
+% a whole column (30 for 16-row bands) or of three columns (90 lanes):
+% their lanes and memory banks congested the routing (90 lanes in one
+% compute unit; 30 lanes in two units).
+L.NFcLanes = 15;
 L.NLnLanes = 15;
 L.NGeluUnits = 3;
 % Fixed-point estimators of the band design, [word fraction] lengths,

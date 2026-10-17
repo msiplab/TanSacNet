@@ -34,9 +34,10 @@ function [y,sum1,sum2] = salsun2d_hls_band(x,w,mu,sigma,skipRows) %#codegen
 %   instead of measured on the image, and the output is only the band.
 %   The computations of each block are the same, in the same order.
 %
-%   The estimators process gcd(nCols,L.NColGroup) columns at a time with
-%   one lane per block (see salsun2d_hls_layout); for 300 x 300 frames,
-%   B = 16 gives 30 block rows and 3 x 30 = 90 lanes.
+%   The estimators process the blocks of a column in groups of up to
+%   L.NFcLanes rows with one lane per block (see salsun2d_hls_layout);
+%   for 300 x 300 frames, B = 16 gives 30 block rows in two groups of 15,
+%   B = 46 gives 60 block rows in four groups.
 %
 % Requirements: MATLAB R2026b
 %
@@ -470,11 +471,14 @@ end
 % objects (ap_fixed in the generated C++).
 
 function [theta,sum1,sum2] = estimateAngles(theta,sum1,sum2,Y,w,L,iEst,mu,sigma,nRows,nCols,sumFirst,sumLast)
-% A group of nCG = gcd(nCols,L.NColGroup) columns of blocks is processed
-% at a time: nB = nCG*nRows blocks, block (r,c0+cc-1) at index
-% b = (cc-1)*nRows + r. The fully connected layers have one lane per
-% block, each with L.FcInputs multipliers; the other layers use fewer
+% The blocks of a column are processed in groups of nB consecutive rows
+% (nB = the largest divisor of nRows up to L.NFcLanes): block (r0+b-1,c)
+% at index b. The fully connected layers have one lane per block of the
+% group, each with L.FcInputs multipliers; the other layers use fewer
 % lanes (L.NLnLanes, L.NGeluUnits), as they are a small part of the work.
+% (With one lane per block row of the column, 30 lanes for 16-row bands,
+% the lanes and their memory banks were the routing congestion of two
+% compute units.)
 % The standardization uses the given statistics mu(:,iEst), sigma(:,iEst)
 % per channel; the channel sums over the rows sumFirst..sumLast (the
 % band without rows already counted) are accumulated for the statistics
@@ -493,8 +497,7 @@ ang = zeros(4,1,'like',T.Ang);
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=ang type=complete dim=0")
 nv = L.Neighbor(1);
 nh = L.Neighbor(2);
-nCG = coder.const(gcd(nCols,L.NColGroup));
-nB = coder.const(nCG*nRows);
+nB = coder.const(largestDivisor(nRows,L.NFcLanes));
 
 % Channel sums over the valid blocks of the band (statistics of the next
 % frame), one value per cycle with the channels innermost: a sum is
@@ -541,13 +544,13 @@ coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=LN type=complete dim
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Z1 type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=A type=complete dim=1")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=Z2 type=complete dim=1")
-for c0 = 1:nCG:nCols
-    % Local state of the blocks of the column group, standardized with
-    % the given statistics (one neighbor value per cycle)
-    for cc = 1:nCG
-        c = c0 + cc - 1;
-        for r = 1:nRows
-            b = (cc-1)*nRows + r;
+for gr = 1:nRows/nB
+    r0 = (gr-1)*nB;                    % rows r0+1..r0+nB of column c
+    for c = 1:nCols
+        % Local state of the blocks of the group, standardized with the
+        % given statistics (one neighbor value per cycle)
+        for b = 1:nB
+            r = r0 + b;
             for iv = 1:nv
                 for ih = 1:nh
                     for j = 1:nCh
@@ -562,26 +565,23 @@ for c0 = 1:nCG:nCols
                 end
             end
         end
-    end
 
-    % Residual blocks: LayerNorm, FC, GELU (tanh), FC, skip
-    for iRes = 1:L.NResBlocks
-        LN = layerNorm(F,w,int32(L.Gamma(iEst,iRes)),int32(L.Beta(iEst,iRes)),nF,L.LnEpsilon,L);
-        Z1 = fullyConnected(LN,w,int32(L.W1(iEst,iRes)),int32(L.B1(iEst,iRes)),nH,nF,L);
-        A = gelu(Z1,nH,L);
-        Z2 = fullyConnected(A,w,int32(L.W2(iEst,iRes)),int32(L.B2(iEst,iRes)),nF,nH,L);
-        F = residualAdd(F,Z2,nF,L);
-    end
+        % Residual blocks: LayerNorm, FC, GELU (tanh), FC, skip
+        for iRes = 1:L.NResBlocks
+            LN = layerNorm(F,w,int32(L.Gamma(iEst,iRes)),int32(L.Beta(iEst,iRes)),nF,L.LnEpsilon,L);
+            Z1 = fullyConnected(LN,w,int32(L.W1(iEst,iRes)),int32(L.B1(iEst,iRes)),nH,nF,L);
+            A = gelu(Z1,nH,L);
+            Z2 = fullyConnected(A,w,int32(L.W2(iEst,iRes)),int32(L.B2(iEst,iRes)),nF,nH,L);
+            F = residualAdd(F,Z2,nF,L);
+        end
 
-    % Output angles (leading zeros for no DC leakage). In the last stage
-    % only the first nAU angles are used; all nA rows are still computed,
-    % because the pipeline of fullyConnected needs nOut >= 28 (and the
-    % output layer is 3% of the multiply-adds)
-    Z1 = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF,L);
-    for cc = 1:nCG
-        c = c0 + cc - 1;
-        for r = 1:nRows
-            b = (cc-1)*nRows + r;
+        % Output angles (leading zeros for no DC leakage). In the last
+        % stage only the first nAU angles are used; all nA rows are still
+        % computed, because the pipeline of fullyConnected needs
+        % nOut >= 28 (and the output layer is 3% of the multiply-adds)
+        Z1 = fullyConnected(F,w,int32(L.Wo(iEst)),int32(L.Bo(iEst)),nA,nF,L);
+        for b = 1:nB
+            r = r0 + b;
             % Four angles per word: collected in registers and written
             % as a whole word (a store of single angles would read,
             % modify and write the word in one cycle)
@@ -675,7 +675,7 @@ function F = residualAdd(F,Z2,nF,L)
 coder.inline('never')
 T = fixedTypes(L);
 nB = size(F,2);
-nL = coder.const(gcd(nB,L.NLnLanes));
+nL = coder.const(largestDivisor(nB,L.NLnLanes));
 nG = nB/nL;
 for i = 1:nF
     for g = 1:nG
@@ -697,7 +697,7 @@ function Z = layerNorm(X,w,offGamma,offBeta,nF,lnEpsilon,L)
 coder.inline('never')
 T = fixedTypes(L);
 nB = size(X,2);
-nL = coder.const(gcd(nB,L.NLnLanes));
+nL = coder.const(largestDivisor(nB,L.NLnLanes));
 nG = nB/nL;
 Z = coder.nullcopy(zeros(size(X),'like',T.X));   % rows 1..nF are all written
 s1 = zeros(1,nB,'like',T.Acc);
@@ -746,7 +746,7 @@ function A = gelu(Z,nH,L)
 coder.inline('never')
 T = fixedTypes(L);
 nB = size(Z,2);
-nU = coder.const(gcd(nB,L.NGeluUnits));
+nU = coder.const(largestDivisor(nB,L.NGeluUnits));
 nG = nB/nU;
 A = coder.nullcopy(zeros(size(Z),'like',T.X));   % rows 1..nH are all written
 for h = 1:nH
@@ -856,6 +856,16 @@ if coder.target('MATLAB')
     y = v;
 else
     y = cast(v,'like',T.Sq);
+end
+end
+
+function d = largestDivisor(n,dMax)
+% Largest divisor of n not greater than dMax (lanes for n blocks)
+d = 1;
+for k = 1:dMax
+    if mod(n,k) == 0
+        d = k;
+    end
 end
 end
 
