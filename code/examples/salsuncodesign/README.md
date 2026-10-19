@@ -325,8 +325,10 @@ the kernel. It matches the reference to 3e-7 and runs in MATLAB, on
 | GPU Quadro RTX 6000 (temsip07) | 0.157 | 0.157 |
 | FPGA U250, one compute unit (kernel call) | 0.43 (current estimators) | 0.29 |
 
-The FPGA kernel is about 2.6 times slower than the multithreaded CPU and 6
-times slower than the A800. The generated C does not use more threads
+With one compute unit (0.29 s/frame) the FPGA kernel was about 2.6 times
+slower than the multithreaded CPU and 6 times slower than the A800; the
+two-unit kernel with 46-row bands (0.103 s/frame, below) is as fast as
+the multithreaded CPU and about 2 times slower than the A800. The generated C does not use more threads
 (no `parfor`, matrix products without an optimized BLAS) and is not the
 best CPU figure. The FPGA is a single 300 MHz-class compute unit using a
 fraction of the device; more compute units, wider FC lanes, or
@@ -348,6 +350,7 @@ device (U250 with the xclbin loaded):
 | GPU Quadro RTX 6000 | 0.157 | 51.4 | 56.9 | 9.0 | 0.87 |
 | FPGA U250, one compute unit | 0.288 | 31.4 | 32.9 | 9.5 | **0.45** |
 | FPGA U250, two compute units (packed angles) | 0.178 | 36.3 | 38.9 | 6.9 | 0.46 |
+| FPGA U250, two compute units, 46-row bands | **0.103** | 36.9 | 40.2 | **4.1** | **0.34** |
 
 The FPGA uses a third of the energy of the multithreaded CPU per frame,
 about as much as the Quadro RTX 6000 and twice as much as the A800. Its
@@ -365,6 +368,21 @@ routed at 235.4 MHz: ten frames match the fixed-point model to 2.7e-5,
 0.178 s/frame for the kernel call (0.32 s/frame with the host policy),
 6.9 J/frame. A one-unit build of the same kernel in SLR3 failed routing
 (20977 node overlaps), so routing in one SLR remains marginal.
+
+Further changes of the two-unit kernel: the DCT, inverse DCT, mask and
+channel-sum loops at II = 1 (they had II = 4 to 11), eight FC inputs per
+lane from weight rows aligned to words of 8
+(`salsun2d_hls_layout(...,AlignedWeights=true)`), and the estimators
+processing the blocks of a column in groups of up to 15 rows
+(`L.NFcLanes`) instead of one lane per block row. The last change is
+what made the builds route again (the FC lanes and their memory banks
+were in the congested windows of the failed builds), and it frees the
+band height from the lanes. With 46-row bands (60 rows with halo, two
+bands per frame, one per compute unit) the kernel computes 120 block
+rows per frame instead of 150 and built at 270.4 MHz: ten frames match
+the fixed-point model to 2.4e-5, 0.103 s/frame for the kernel call
+(0.24 s/frame with the host policy), 4.1 J/frame, less than the A800.
+The same kernel with 16-row bands: 237.9 MHz, 0.17 s/frame.
 
 ## Smaller estimators by retraining (study)
 
