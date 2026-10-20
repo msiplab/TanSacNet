@@ -327,8 +327,8 @@ the kernel. It matches the reference to 3e-7 and runs in MATLAB, on
 
 With one compute unit (0.29 s/frame) the FPGA kernel was about 2.6 times
 slower than the multithreaded CPU and 6 times slower than the A800; the
-two-unit kernel with 46-row bands (0.103 s/frame, below) is as fast as
-the multithreaded CPU and about 2 times slower than the A800. The generated C does not use more threads
+two-unit kernel with whole frames (0.062 s/frame, below) is 1.8 times
+faster than the multithreaded CPU and 1.3 times slower than the A800. The generated C does not use more threads
 (no `parfor`, matrix products without an optimized BLAS) and is not the
 best CPU figure. The FPGA is a single 300 MHz-class compute unit using a
 fraction of the device; more compute units, wider FC lanes, or
@@ -350,7 +350,8 @@ device (U250 with the xclbin loaded):
 | GPU Quadro RTX 6000 | 0.157 | 51.4 | 56.9 | 9.0 | 0.87 |
 | FPGA U250, one compute unit | 0.288 | 31.4 | 32.9 | 9.5 | **0.45** |
 | FPGA U250, two compute units (packed angles) | 0.178 | 36.3 | 38.9 | 6.9 | 0.46 |
-| FPGA U250, two compute units, 46-row bands | **0.103** | 36.9 | 40.2 | **4.1** | **0.34** |
+| FPGA U250, two compute units, 46-row bands | 0.103 | 36.9 | 40.2 | 4.1 | 0.34 |
+| FPGA U250, two compute units, whole frames | **0.062** | 37.8 | 41.2 | **2.6** | **0.21** |
 
 The FPGA uses a third of the energy of the multithreaded CPU per frame,
 about as much as the Quadro RTX 6000 and twice as much as the A800. Its
@@ -383,6 +384,23 @@ rows per frame instead of 150 and built at 270.4 MHz: ten frames match
 the fixed-point model to 2.4e-5, 0.103 s/frame for the kernel call
 (0.24 s/frame with the host policy), 4.1 J/frame, less than the A800.
 The same kernel with 16-row bands: 237.9 MHz, 0.17 s/frame.
+
+Whole frames: a band of the whole frame height needs no halo (the
+circular boundary of the frame is that of the band; Makefile BAND=75
+HALO=0), 75 block rows per frame. Each compute unit takes one whole
+frame, two consecutive frames at a time (`salsun2d_band_mex` with
+szy x szx x 2 inputs, `salsun2d_band_u250(...,Halo=0,FramesPerCall=2)`),
+both with the statistics of the two frames before them (the MSE grows by
+0.3-0.7% on the wave simulations for the one frame more of delay of the
+second frame). Built at 284.4 MHz: ten frames match the fixed-point
+model with the same statistics to 3.2e-5, 0.124 s per call of two
+frames, 0.062 s/frame (0.066 s/frame with the host for 100 frames,
+`InitFast=true`), 2.6 J/frame.
+
+The host adds little in the steady state: the host-inclusive times of
+ten frames were dominated by the statistics of the first frame from the
+fixed-point reference (about 1.5 s); `InitFast=true` measures them with
+`salsun2d_infer_fast` (0.15 s).
 
 ## Smaller estimators by retraining (study)
 
