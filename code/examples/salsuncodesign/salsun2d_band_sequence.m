@@ -15,7 +15,9 @@ function [y,info] = salsun2d_band_sequence(u,params,frameFcn,options)
 %   (default), StatsRho for 'ema' (default 0.9). The first frame (and
 %   the second for 'fir2') uses statistics measured by the reference
 %   salsun2d_infer on the frame itself, which is the initialization of
-%   the stream (a whole-frame pass on the host).
+%   the stream (a whole-frame pass on the host). InitFast=true measures
+%   them with the vectorized salsun2d_infer_fast instead (floating point,
+%   about ten times faster on the CPU).
 %
 %   info has the fields Mu and Sigma (cells of the statistics used per
 %   frame) and MuMeasured, SigmaMeasured.
@@ -44,12 +46,17 @@ arguments
     % (salsun2d_band_fixed_model), or the floating-point network
     options.InitParams = []
     options.InitQuantizer = @(v,tag) v
+    options.InitFast (1,1) logical = false
 end
 L = salsun2d_hls_layout();
 if isempty(options.InitParams)
     options.InitParams = params;
 end
-init = @(x) initStats(x,options.InitParams,options.InitQuantizer);
+if options.InitFast
+    init = @(x) initStatsFast(x,params);
+else
+    init = @(x) initStats(x,options.InitParams,options.InitQuantizer,L);
+end
 nFrames = size(u,3);
 y = zeros(size(u),'single');
 muUsed = cell(nFrames,1); sigmaUsed = cell(nFrames,1);
@@ -59,10 +66,10 @@ rho = single(options.StatsRho);
 for t = 1:nFrames
     switch options.Statistics
         case 'previous'
-            [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t-1,u(:,:,t),init,L);
+            [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t-1,u(:,:,t),init);
         case 'ema'
             if isempty(smoothedMu)
-                [mu,sigma] = previousOrInit(muMeas,sigmaMeas,0,u(:,:,t),init,L);
+                [mu,sigma] = previousOrInit(muMeas,sigmaMeas,0,u(:,:,t),init);
             else
                 mu = smoothedMu; sigma = smoothedSigma;
             end
@@ -71,7 +78,7 @@ for t = 1:nFrames
                 mu = 0.5*(muMeas{t-1} + muMeas{t-2});
                 sigma = 0.5*(sigmaMeas{t-1} + sigmaMeas{t-2});
             else
-                [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t-1,u(:,:,t),init,L);
+                [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t-1,u(:,:,t),init);
             end
     end
     [y(:,:,t),muMeas{t},sigmaMeas{t}] = frameFcn(u(:,:,t),mu,sigma);
@@ -89,24 +96,28 @@ info.Mu = muUsed; info.Sigma = sigmaUsed;
 info.MuMeasured = muMeas; info.SigmaMeasured = sigmaMeas;
 end
 
-function [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t,x,init,L)
+function [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t,x,init)
 % Statistics of frame t, or, for the first frame, those of the frame
 % itself measured by the reference (initialization of the stream)
 if t >= 1
     mu = muMeas{t}; sigma = sigmaMeas{t};
 else
-    [stats,ests] = init(x);
-    mu = zeros(L.NDec,L.NEst,'single');
-    sigma = ones(L.NDec,L.NEst,'single');
-    for k = 1:L.NEst
-        ch = ests(k).Channels;
-        mu(ch,k) = stats(k).Mu(1:numel(ch));
-        sigma(ch,k) = stats(k).Sigma(1:numel(ch));
-    end
+    [mu,sigma] = init(x);
 end
 end
 
-function [stats,ests] = initStats(x,params,q)
+function [mu,sigma] = initStats(x,params,q,L)
 [~,~,~,~,stats] = salsun2d_infer(x,params,Quantizer=q,EstimatorTags=true);
 ests = [params.V0.Estimator, params.Stages.Estimator];
+mu = zeros(L.NDec,L.NEst,'single');
+sigma = ones(L.NDec,L.NEst,'single');
+for k = 1:L.NEst
+    ch = ests(k).Channels;
+    mu(ch,k) = stats(k).Mu(1:numel(ch));
+    sigma(ch,k) = stats(k).Sigma(1:numel(ch));
+end
+end
+
+function [mu,sigma] = initStatsFast(x,params)
+[~,~,~,mu,sigma] = salsun2d_infer_fast(x,params,[],[]);
 end

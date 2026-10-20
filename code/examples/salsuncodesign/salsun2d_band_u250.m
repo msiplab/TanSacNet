@@ -12,6 +12,12 @@ function [y,info] = salsun2d_band_u250(u,params,target,options)
 %   selects the xclbin build/<target>/salsun2d_hls_band_<szy>x<szx>_b<BandRows>.xclbin.
 %   One MATLAB session can use only one XRT target (see salsun2d_u250).
 %
+%   The statistics of the first frame are measured with the fixed-point
+%   model of the kernel (salsun2d_band_fixed_model; about 1.3 s on the
+%   CPU), or with InitFast=true by salsun2d_infer_fast (floating point,
+%   about 0.1 s): after the first frames the stream runs at the kernel
+%   time per frame.
+%
 % Requirements: MATLAB R2026b, XRT, the xclbin and salsun2d_band_mex
 %               (see build_mex_salsun2d)
 %
@@ -36,6 +42,7 @@ arguments
     options.ComputeUnits (1,1) double {mustBeInteger,mustBePositive} = 1
     options.Statistics {mustBeMember(options.Statistics,{'previous','ema','fir2'})} = 'fir2'
     options.StatsRho (1,1) double = 0.9
+    options.InitFast (1,1) logical = false
 end
 here = fileparts(mfilename('fullpath'));
 buildDir = fullfile(here,'build',target);
@@ -83,9 +90,9 @@ nBlocks = single(prod(frameSize./L.Stride));
         [muMeas,sigmaMeas] = salsun2d_stats_from_sums(sums(:,:,1),sums(:,:,2),nBlocks,L.Epsilon);
     end
 % The first frame is initialized with the statistics of the fixed-point
-% model of the kernel
+% model of the kernel, or of the floating-point network (InitFast)
 [paramsQ,q] = salsun2d_band_fixed_model(params);
 [y,info] = salsun2d_band_sequence(u,params,@frameOnCard, ...
     Statistics=options.Statistics,StatsRho=options.StatsRho, ...
-    InitParams=paramsQ,InitQuantizer=q);
+    InitParams=paramsQ,InitQuantizer=q,InitFast=options.InitFast);
 end

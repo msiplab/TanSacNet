@@ -1,4 +1,4 @@
-function [y,sum1,sum2] = salsun2d_infer_fast(x,params,mu,sigma) %#codegen
+function [y,sum1,sum2,muUsed,sigmaUsed] = salsun2d_infer_fast(x,params,mu,sigma) %#codegen
 %SALSUN2D_INFER_FAST SA-LSUN 2-D inference written for CPUs and GPUs
 %
 %   [y,sum1,sum2] = salsun2d_infer_fast(x,params,mu,sigma) computes what
@@ -17,6 +17,12 @@ function [y,sum1,sum2] = salsun2d_infer_fast(x,params,mu,sigma) %#codegen
 %   MATLAB Coder (MEX, matrix products by BLAS; give the stage targets as
 %   numbers, 1 for 'Difference' and 0 for 'Sum', so that the stages form
 %   a homogeneous structure array).
+%
+%   With empty mu and sigma, each estimator standardizes with the
+%   statistics of its inputs over the frame itself (as salsun2d_infer
+%   without given statistics), e.g. to initialize a stream; [y,sum1,sum2,
+%   mu,sigma] = salsun2d_infer_fast(x,params,[],[]) also returns those
+%   statistics.
 %
 %   params as from salsun2d_extract_params (any estimator size), single.
 %
@@ -43,12 +49,19 @@ nB = nRows*nCols;
 nEst = 1 + numel(params.Stages);
 sum1 = zeros(nDec,nEst,'like',x);
 sum2 = zeros(nDec,nEst,'like',x);
+measure = isempty(mu);
+muUsed = zeros(nDec,nEst,'like',x);
+sigmaUsed = ones(nDec,nEst,'like',x);
+if ~measure
+    muUsed(:) = mu;
+    sigmaUsed(:) = sigma;
+end
 
 %% Analysis
 blocks = permute(reshape(x,dec(1),nRows,dec(2),nCols),[1 3 2 4]);
 Y = params.Cvh*reshape(blocks,nDec,nB);                     % nDec x nB
-[theta,s1,s2,ch] = estimateAngles(Y,params.V0.Estimator,mu(:,1),sigma(:,1),nRows,nCols,0);
-sum1(ch,1) = s1; sum2(ch,1) = s2;
+[theta,s1,s2,ch,m,sg] = estimateAngles(Y,params.V0.Estimator,muUsed(:,1),sigmaUsed(:,1),measure,nRows,nCols,0);
+sum1(ch,1) = s1; sum2(ch,1) = s2; muUsed(ch,1) = m; sigmaUsed(ch,1) = sg;
 nHalf = size(theta,1)/2;
 Y(1:ps,:) = givensRows(Y(1:ps,:),theta(1:nHalf,:),ps,nHalf,false);
 Y(ps+1:end,:) = givensRows(Y(ps+1:end,:),theta(nHalf+1:end,:),ps,nHalf,false);
@@ -64,8 +77,8 @@ for iStage = 1:nStages
     if iStage == nStages
         nUsed = ps - 1;             % last stage: only the rotations of channel ps+1 matter
     end
-    [th,s1,s2,ch] = estimateAngles(Y,st.Estimator,mu(:,iStage+1),sigma(:,iStage+1),nRows,nCols,nUsed);
-    sum1(ch,iStage+1) = s1; sum2(ch,iStage+1) = s2;
+    [th,s1,s2,ch,m,sg] = estimateAngles(Y,st.Estimator,muUsed(:,iStage+1),sigmaUsed(:,iStage+1),measure,nRows,nCols,nUsed);
+    sum1(ch,iStage+1) = s1; sum2(ch,iStage+1) = s2; muUsed(ch,iStage+1) = m; sigmaUsed(ch,iStage+1) = sg;
     thetas(1:nUsed,:,iStage) = th(1:nUsed,:);
     Ya = givensRows(Y(ps+1:end,:),thetas(:,:,iStage),ps,nUsed,false);
     Y(ps+1:end,:) = st.Mus(:,1).*Ya;
@@ -148,9 +161,11 @@ Z(ps+1:end,:) = 0.5*(Ys-Ya);
 Y = Z;
 end
 
-function [theta,s1,s2,ch] = estimateAngles(Y,est,mu,sigma,nRows,nCols,nUsed)
+function [theta,s1,s2,ch,muCh,sgCh] = estimateAngles(Y,est,mu,sigma,measure,nRows,nCols,nUsed)
 % Angles of all blocks; nUsed > 0 computes only the first nUsed predicted
-% angles (after the zero-padded ones)
+% angles (after the zero-padded ones). With measure, the channels are
+% standardized with their own mean and standard deviation over the frame
+% (those of the features, which are circular shifts of the channels).
 ch = est.Channels;
 nCh = numel(ch);
 nv = est.Neighbor(1);
@@ -158,7 +173,15 @@ nh = est.Neighbor(2);
 Xc = Y(ch,:);
 s1 = sum(Xc,2);
 s2 = sum(Xc.^2,2);
-Xs = (Xc - mu(ch))./sigma(ch);                  % standardized channels
+if measure
+    nBlks = size(Xc,2);
+    muCh = s1/nBlks;
+    sgCh = sqrt(sum((Xc - muCh).^2,2)/(nBlks-1)) + cast(est.Epsilon,'like',Xc);
+else
+    muCh = mu(ch);
+    sgCh = sigma(ch);
+end
+Xs = (Xc - muCh)./sgCh;                         % standardized channels
 X3 = reshape(Xs,nCh,nRows,nCols);
 F = zeros(nCh*nv*nh,nRows*nCols,'like',Y);
 iF = 0;
