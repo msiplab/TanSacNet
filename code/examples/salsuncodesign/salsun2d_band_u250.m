@@ -12,6 +12,12 @@ function [y,info] = salsun2d_band_u250(u,params,target,options)
 %   selects the xclbin build/<target>/salsun2d_hls_band_<szy>x<szx>_b<BandRows>.xclbin.
 %   One MATLAB session can use only one XRT target (see salsun2d_u250).
 %
+%   With Halo=0 the xclbin is that of one band of the whole frame height
+%   (Makefile BAND = szy/4, HALO = 0, ..._b<BandRows>h0...). With
+%   FramesPerCall=n (up to ComputeUnits) n consecutive frames are run at
+%   the same time, one whole frame per compute unit, all with the
+%   statistics of the frames before them (salsun2d_band_sequence).
+%
 %   The statistics of the first frame are measured with the fixed-point
 %   model of the kernel (salsun2d_band_fixed_model; about 1.3 s on the
 %   CPU), or with InitFast=true by salsun2d_infer_fast (floating point,
@@ -43,6 +49,8 @@ arguments
     options.Statistics {mustBeMember(options.Statistics,{'previous','ema','fir2'})} = 'fir2'
     options.StatsRho (1,1) double = 0.9
     options.InitFast (1,1) logical = false
+    options.Halo (1,1) double {mustBeInteger,mustBeNonnegative} = 7
+    options.FramesPerCall (1,1) double {mustBeInteger,mustBePositive} = 1
 end
 here = fileparts(mfilename('fullpath'));
 buildDir = fullfile(here,'build',target);
@@ -55,7 +63,11 @@ end
 if options.ComputeUnits > 1
     estSize = sprintf('%s_cu%d',estSize,options.ComputeUnits);
 end
-xclbinPath = fullfile(buildDir,sprintf('salsun2d_hls_band_%dx%d_b%d%s.xclbin',frameSize,options.BandRows,estSize));
+bandSize = sprintf('b%d',options.BandRows);
+if options.Halo ~= 7
+    bandSize = sprintf('%sh%d',bandSize,options.Halo);   % Makefile HALO
+end
+xclbinPath = fullfile(buildDir,sprintf('salsun2d_hls_band_%dx%d_%s%s.xclbin',frameSize,bandSize,estSize));
 if ~isfile(xclbinPath)
     error('salsun2d_band_u250:noXclbin', ...
         '%s not found. Build it with "make xclbin TARGET=%s DESIGN=salsun2d_hls_band SZY=%d SZX=%d BAND=%d RES=%d WIDTH=%g".', ...
@@ -86,13 +98,21 @@ end
 
 nBlocks = single(prod(frameSize./L.Stride));
     function [yf,muMeas,sigmaMeas] = frameOnCard(x,mu,sigma)
-        [yf,sums] = salsun2d_band_mex(xclbinPath,x,w,cat(3,mu,sigma),options.BandRows);
-        [muMeas,sigmaMeas] = salsun2d_stats_from_sums(sums(:,:,1),sums(:,:,2),nBlocks,L.Epsilon);
+        % x: one frame, or one per compute unit (mu, sigma: NDec x NEst x n)
+        n = size(x,3);
+        stats = permute(cat(4,mu,sigma),[1 2 4 3]);        % NDec x NEst x 2 x n
+        [yf,sums] = salsun2d_band_mex(xclbinPath,x,w,stats,options.BandRows);
+        sums = reshape(sums,size(stats));
+        muMeas = zeros(size(mu),'single'); sigmaMeas = zeros(size(sigma),'single');
+        for j = 1:n
+            [muMeas(:,:,j),sigmaMeas(:,:,j)] = salsun2d_stats_from_sums(sums(:,:,1,j),sums(:,:,2,j),nBlocks,L.Epsilon);
+        end
     end
 % The first frame is initialized with the statistics of the fixed-point
 % model of the kernel, or of the floating-point network (InitFast)
 [paramsQ,q] = salsun2d_band_fixed_model(params);
 [y,info] = salsun2d_band_sequence(u,params,@frameOnCard, ...
     Statistics=options.Statistics,StatsRho=options.StatsRho, ...
-    InitParams=paramsQ,InitQuantizer=q,InitFast=options.InitFast);
+    InitParams=paramsQ,InitQuantizer=q,InitFast=options.InitFast, ...
+    FramesPerCall=options.FramesPerCall);
 end

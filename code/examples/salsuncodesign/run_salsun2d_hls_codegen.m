@@ -14,7 +14,8 @@ function run_salsun2d_hls_codegen(inputSize,designName,options)
 %   is generated for one band of BandRows block rows (default 31) with
 %   L.Halo block rows of context above and below: an input of
 %   (BandRows + 2*L.Halo)*My x szx. run_salsun2d_hls_codegen(...,
-%   BandRows=n) changes the band size.
+%   BandRows=n) changes the band size, Halo=h the halo (default 7; 0 for
+%   a band of the whole frame height, codegen/<szy>x<szx>_b<n>h0/...).
 %
 % Requirements: MATLAB R2026b, HDL Coder, Deep Learning Toolbox
 %
@@ -36,6 +37,7 @@ arguments
     % Estimator size of the band design (salsun2d_band_config)
     options.NumResidualBlocks (1,1) double {mustBeInteger,mustBePositive} = 3
     options.Width (1,1) double {mustBePositive} = 2
+    options.Halo (1,1) double {mustBeInteger,mustBeNonnegative} = 7
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -44,10 +46,10 @@ assignin('base','hlsDesignName',designName);
 assignin('base','hlsBandRows',options.BandRows);
 
 if strcmp(designName,'salsun2d_hls_band')
-    salsun2d_band_config([options.NumResidualBlocks options.Width]);
+    salsun2d_band_config([options.NumResidualBlocks options.Width options.Halo]);
     cleanup = onCleanup(@() salsun2d_band_config('reset'));
     L = salsun2d_hls_layout(NumResidualBlocks=options.NumResidualBlocks,Width=options.Width, ...
-        AlignedWeights=true);
+        AlignedWeights=true,Halo=options.Halo);
 else
     L = salsun2d_hls_layout();
 end
@@ -80,6 +82,9 @@ end
 outDir = fullfile(here,'codegen',sprintf('%dx%d',inputSize));
 if strcmp(designName,'salsun2d_hls_band')
     outDir = [outDir sprintf('_b%d',options.BandRows)];   % one band size per directory
+    if options.Halo ~= 7
+        outDir = [outDir sprintf('h%d',options.Halo)];
+    end
     if options.NumResidualBlocks ~= 3 || options.Width ~= 2
         outDir = [outDir sprintf('_r%dw%g',options.NumResidualBlocks,options.Width)];
     end

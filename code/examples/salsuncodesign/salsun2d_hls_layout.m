@@ -14,6 +14,9 @@ function L = salsun2d_hls_layout(options)
 %   features) (as salsunResidualEstimatorBlock2dLayer), for retrained
 %   smaller estimators (salsun2d_hls_band, salsun2d_band_config).
 %
+%   salsun2d_hls_layout(...,Halo=h) sets the halo of the band design
+%   (default 7; 0 for bands of the whole frame height).
+%
 %   salsun2d_hls_layout(...,AlignedWeights=true) is the layout of the band
 %   design (salsun2d_hls_band, salsun2d_pack_params(...,RowMajorWeights=
 %   true)): the weight matrices of the fully connected layers start at
@@ -42,6 +45,7 @@ arguments
     options.NumResidualBlocks (1,1) double {mustBeInteger,mustBePositive} = 3
     options.Width (1,1) double {mustBePositive} = 2
     options.AlignedWeights (1,1) logical = false
+    options.Halo (1,1) double {mustBeInteger,mustBeNonnegative} = 7
 end
 
 %% Configuration
@@ -95,8 +99,10 @@ L.FcInputs = 8;
 % structural receptive field in block rows, 6 for the analysis (five
 % estimators with 3 x 3 neighbors and the two vertical atom extensions)
 % plus 1 for the synthesis. With this halo the rows of a band equal
-% whole-frame processing with the same statistics.
-L.Halo = 7;
+% whole-frame processing with the same statistics. A band of the whole
+% frame height needs no halo (Halo=0): the circular boundary of the frame
+% is that of the band.
+L.Halo = options.Halo;
 % Intermediate stages in analysis order: shift [v h] and target half
 % (1: difference, 2: sum), then the same for synthesis
 L.Shift    = [0 1; 0 -1; 1 0; -1 0];

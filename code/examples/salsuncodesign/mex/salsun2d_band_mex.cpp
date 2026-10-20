@@ -16,6 +16,12 @@
 //   bandRows : block rows per band of the xclbin (BAND of the Makefile);
 //              needed to split the bands among several compute units
 //
+//   X can also hold one frame per compute unit, szy x szx x n (n up to
+//   the number of units), with statsIn NDec x NEst x 2 x n: frame j runs
+//   whole on unit j with its statistics, at the same time as the others,
+//   and Y and statsOut have the same sizes (e.g. a kernel built for one
+//   band of the whole frame height, BAND = szy/4 and HALO = 0).
+//
 // The frame size must match the xclbin. The device, the compute units
 // and the buffers are opened on the first call and reused while the same
 // xclbin path and frame size are given; the parameters are transferred
@@ -158,6 +164,49 @@ int bandStart(int k, int band, int nRows)
 
 } // namespace
 
+// Whether W differs from the parameters on the device (and remember it)
+bool wChanged(Accelerator &a, const mxArray *w)
+{
+    const float *wp = mxGetSingles(w);
+    const size_t n = mxGetNumberOfElements(w);
+    const bool changed = a.wCache.size() != n || std::memcmp(a.wCache.data(), wp, n * sizeof(float)) != 0;
+    if (changed) {
+        a.wCache.assign(wp, wp + n);
+    }
+    return changed;
+}
+
+// One whole frame per compute unit, all units at the same time
+void runFrames(Accelerator &a, const mxArray *x, const mxArray *stats, mxArray *y, mxArray *statsOut,
+               size_t nFrames, size_t nBytesX, size_t nBytesS, size_t nStats, bool newW)
+{
+    const float *xp = mxGetSingles(x);
+    const float *sp = mxGetSingles(stats);
+    std::vector<xrt::run> runs;
+    for (size_t j = 0; j < nFrames; j++) {
+        Unit &u = a.units[j];
+        std::memcpy(u.x.map<float *>(), xp + j * (nBytesX / sizeof(float)), nBytesX);
+        std::memcpy(u.sin.map<float *>(), sp + j * nStats, nBytesS);
+        u.x.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        u.sin.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        if (newW) {
+            std::memcpy(u.w.map<float *>(), a.wCache.data(), a.wCache.size() * sizeof(float));
+            u.w.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        }
+        runs.push_back(u.kernel(u.x, u.w, u.sin, u.y, u.sout, 0, 1 << 20));   // all bands
+    }
+    float *yp = mxGetSingles(y);
+    float *so = mxGetSingles(statsOut);
+    for (size_t j = 0; j < nFrames; j++) {
+        Unit &u = a.units[j];
+        runs[j].wait();
+        u.y.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+        u.sout.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+        std::memcpy(yp + j * (nBytesX / sizeof(float)), u.y.map<float *>(), nBytesX);
+        std::memcpy(so + j * nStats, u.sout.map<float *>(), nBytesS);
+    }
+}
+
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     if (nrhs == 1 && getString(prhs[0], "Command") == "release") {
@@ -176,17 +225,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     checkSingle(x, "X");
     checkSingle(w, "W");
     checkSingle(stats, "statsIn");
-    if (mxGetNumberOfDimensions(x) != 2) {
-        mexErrMsgIdAndTxt("salsun2d_band_mex:invalidInput", "X must be one frame (szy x szx).");
+    if (mxGetNumberOfDimensions(x) > 3) {
+        mexErrMsgIdAndTxt("salsun2d_band_mex:invalidInput", "X must be szy x szx or szy x szx x n.");
     }
     const int bandRows = (nrhs == 5) ? static_cast<int>(mxGetScalar(prhs[4])) : 0;
-    const size_t szy = mxGetM(x), szx = mxGetN(x);
-    const size_t nBytesX = szy * szx * sizeof(float);
+    const size_t szy = mxGetDimensions(x)[0], szx = mxGetDimensions(x)[1];
+    const size_t nFrames = (mxGetNumberOfDimensions(x) == 3) ? mxGetDimensions(x)[2] : 1;
+    if (mxGetNumberOfElements(stats) % nFrames != 0) {
+        mexErrMsgIdAndTxt("salsun2d_band_mex:invalidInput", "statsIn must hold the statistics of every frame.");
+    }
+    const size_t nBytesX = szy * szx * sizeof(float);                  // one frame
     const size_t nBytesW = mxGetNumberOfElements(w) * sizeof(float);
-    const size_t nBytesS = mxGetNumberOfElements(stats) * sizeof(float);
-    const size_t nStats = mxGetNumberOfElements(stats);
+    const size_t nStats = mxGetNumberOfElements(stats) / nFrames;      // one frame
+    const size_t nBytesS = nStats * sizeof(float);
 
-    plhs[0] = mxCreateUninitNumericArray(2, const_cast<mwSize *>(mxGetDimensions(x)), mxSINGLE_CLASS, mxREAL);
+    plhs[0] = mxCreateUninitNumericArray(mxGetNumberOfDimensions(x), const_cast<mwSize *>(mxGetDimensions(x)),
+                                         mxSINGLE_CLASS, mxREAL);
     mxArray *statsOut = mxCreateNumericArray(mxGetNumberOfDimensions(stats),
                                              const_cast<mwSize *>(mxGetDimensions(stats)),
                                              mxSINGLE_CLASS, mxREAL);
@@ -198,6 +252,18 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         Accelerator &a = acquire(xclbinPath);
         allocate(a, nBytesX, nBytesW, nBytesS);
         const size_t nUnits = a.units.size();
+        if (nFrames > 1) {
+            if (nFrames > nUnits || !a.bandArgs) {
+                mexErrMsgIdAndTxt("salsun2d_band_mex:invalidInput",
+                                  "%d frames need as many compute units with band ranges (the xclbin has %d).",
+                                  (int)nFrames, (int)nUnits);
+            }
+            runFrames(a, x, stats, plhs[0], statsOut, nFrames, nBytesX, nBytesS, nStats, wChanged(a, w));
+            if (nlhs <= 1) {
+                mxDestroyArray(statsOut);
+            }
+            return;
+        }
         if (nUnits > 1 && bandRows <= 0) {
             mexErrMsgIdAndTxt("salsun2d_band_mex:invalidInput",
                               "bandRows is required for an xclbin with %d compute units.", (int)nUnits);
@@ -207,11 +273,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
         // Parameters: transfer only when they change
         const float *wp = mxGetSingles(w);
-        const bool newW = a.wCache.size() != mxGetNumberOfElements(w) ||
-                          std::memcmp(a.wCache.data(), wp, nBytesW) != 0;
-        if (newW) {
-            a.wCache.assign(wp, wp + mxGetNumberOfElements(w));
-        }
+        const bool newW = wChanged(a, w);
         // Band ranges: contiguous, the first units take one more band
         std::vector<int> first(nUnits, 0), count(nUnits, 0);
         if (a.bandArgs) {

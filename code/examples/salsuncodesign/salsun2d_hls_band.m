@@ -57,7 +57,7 @@ coder.extrinsic('salsun2d_hls_layout','salsun2d_band_config');
 % Estimator size of this design (salsun2d_band_config, read at code
 % generation time)
 C = coder.const(salsun2d_band_config());
-L = coder.const(salsun2d_hls_layout('NumResidualBlocks',C(1),'Width',C(2),'AlignedWeights',true));
+L = coder.const(salsun2d_hls_layout('NumResidualBlocks',C(1),'Width',C(2),'AlignedWeights',true,'Halo',C(3)));
 [szy,szx] = size(x);
 nRows = szy/L.Stride(1);          % block rows of the band with halo
 nCols = szx/L.Stride(2);
