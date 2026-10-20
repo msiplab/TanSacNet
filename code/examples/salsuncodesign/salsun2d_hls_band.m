@@ -619,15 +619,23 @@ function Z = fullyConnected(X,w,offW,offB,nOut,nIn,L)
 % blocks at once (one lane per block). Z(o,b) is updated again only nOut
 % cycles later, more than the adder latency (nOut >= 28), so the
 % dependence through Z is declared false. Inputs beyond nIn are zero.
+% The inputs of the next group are read while a group is computed
+% (nOut >= P), so that the loop over the groups and outputs is one
+% pipeline (with a load and a pipeline fill per group, the overhead was
+% 17% to 32% of the cycles of the layer).
 coder.inline('never')
 T = fixedTypes(L);
 P = coder.const(L.FcInputs);
 nB = size(X,2);
 % Only rows 1..nOut are written and read, so Z is not zero-filled
 Z = coder.nullcopy(zeros(size(X),'like',T.Acc));
-xr = zeros(P,nB,'like',T.X);
+% xr is filled before the loop and xn in the first P cycles of every
+% group but the last, so neither is zero-filled
+xr = coder.nullcopy(zeros(P,nB,'like',T.X));
+xn = coder.nullcopy(zeros(P,nB,'like',T.X));   % inputs of the next group
 wv = zeros(P,1,'like',T.W);
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=xr type=complete dim=0")
+coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=xn type=complete dim=0")
 coder.hdl.literaltext("#pragma HLS ARRAY_PARTITION variable=wv type=complete dim=0")
 for o = 1:nOut
     coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
@@ -638,32 +646,58 @@ for o = 1:nOut
 end
 nGi = idivide(int32(nIn) + int32(P) - 1,int32(P));
 nWordsRow = nGi;                    % words per row of the weights
-for gi = 1:nGi
-    i0 = (gi-1)*int32(P);
+% Inputs of the first group; those of group gi+1 are read during the
+% first P cycles of group gi (one per lane and cycle), so that the
+% groups follow each other in one pipeline without stalls
+for p = 1:P
+    coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+    for b = 1:nB
+        if p <= nIn
+            xr(p,b) = X(p,b);
+        else
+            xr(p,b) = toX(0,T,L);
+        end
+    end
+end
+% One loop over the groups and the outputs (the bounds are not constants,
+% so HLS would not flatten two nested loops), with counters for both
+gi = int32(1);
+o = int32(0);
+for t = 1:nGi*int32(nOut)
+    coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+    coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=Z type=inter false")
+    o = o + 1;
+    if o > nOut
+        o = int32(1);
+        gi = gi + 1;
+    end
+    % word m of w (P values): the index P*m + p tells HLS the lane
+    m = idivide(offW,int32(P)) + (o-1)*nWordsRow + gi - 1;
     for p = 1:P
-        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
+        wv(p) = toW(w(int32(P)*m + int32(p)),T,L);
+    end
+    if o <= P && gi < nGi
+        i = gi*int32(P) + o;
         for b = 1:nB
-            if i0 + p <= nIn
-                xr(p,b) = X(i0+p,b);
+            if i <= nIn
+                xn(o,b) = X(i,b);
             else
-                xr(p,b) = toX(0,T,L);
+                xn(o,b) = toX(0,T,L);
             end
         end
     end
-    for o = 1:nOut
-        coder.hdl.literaltext("#pragma HLS PIPELINE II=1")
-        coder.hdl.literaltext("#pragma HLS DEPENDENCE variable=Z type=inter false")
-        % word m of w (P values): the index P*m + p tells HLS the lane
-        m = idivide(offW,int32(P)) + (int32(o)-1)*nWordsRow + int32(gi) - 1;
+    for b = 1:nB
+        acc = Z(o,b);
         for p = 1:P
-            wv(p) = toW(w(int32(P)*m + int32(p)),T,L);
+            acc = toAccWrap(acc + wv(p)*xr(p,b),T);
         end
+        Z(o,b) = acc;
+    end
+    if o == nOut
         for b = 1:nB
-            acc = Z(o,b);
             for p = 1:P
-                acc = toAccWrap(acc + wv(p)*xr(p,b),T);
+                xr(p,b) = xn(p,b);
             end
-            Z(o,b) = acc;
         end
     end
 end
