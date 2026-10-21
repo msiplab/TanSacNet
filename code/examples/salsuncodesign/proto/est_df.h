@@ -72,6 +72,13 @@ struct lnpar_t {                // LayerNorm scale and shift of a feature
     float gamma, beta;
 };
 
+// Parameter memories as the host writes them: a weight word as 24 raw
+// 18-bit values in the low bits of 512 (value p at bits 18p..18p+17), a
+// bias as the raw 48-bit accumulator value in 64 bits, the LayerNorm
+// parameters as (gamma, beta) floats
+typedef ap_uint<512> wraw_t;
+typedef ap_int<64> braw_t;
+
 // Words of a square layer (W1 or W2) and of the output layer of estimator k,
 // and their offsets in the memory of one task (estimators in order)
 constexpr int sqWords(int k) { return NFK[k] * words(NFK[k]); }
@@ -111,12 +118,12 @@ constexpr int NWORDS = NRES * 2 * SQWORDS + OUTWORDS;
 constexpr int NBIAS = NRES * 2 * NVEC + NAALL;
 constexpr int NLN = NRES * NVEC;
 
-void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const wword_t *wmem,
-                const acc_t *bmem, const lnpar_t *lnmem, int k, int ngroups, bool load);
+void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const wraw_t *wmem,
+                const braw_t *bmem, const float *lnmem, int k, int ngroups, bool load);
 
 } // namespace estdf
 
-void est_df_top(const estdf::wword_t *wmem, const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,
+void est_df_top(const estdf::wraw_t *wmem, const estdf::braw_t *bmem, const float *lnmem,
                 hls::stream<estdf::row_t> &features, hls::stream<estdf::arow_t> &angles, int k,
                 int ngroups);
 

@@ -80,8 +80,8 @@ typedef ap_uint<512> qword_t;     // 28 angles of 18 bits
 
 } // namespace bdf
 
-extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf::wword_t *wmem,
-                                 const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,
+extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf::wraw_t *wmem,
+                                 const estdf::braw_t *bmem, const float *lnmem,
                                  const float *stats_in, float *dst, float *stats_out,
                                  bdf::qword_t *qmem, int first_band, int num_bands);
 

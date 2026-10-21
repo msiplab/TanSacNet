@@ -43,16 +43,23 @@ int main()
                     NWORDS * P, NBIAS, 2 * NLN);
         return 1;
     }
-    static wword_t wmem[NWORDS];
-    static acc_t bmem[NBIAS];
-    static lnpar_t lnmem[NLN];
-    for (int i = 0; i < NWORDS; i++)
-        for (int p = 0; p < P; p++) wmem[i].w[p] = w[i * P + p];
-    for (int i = 0; i < NBIAS; i++) bmem[i] = b[i];
-    for (int i = 0; i < NLN; i++) {
-        lnmem[i].gamma = (float)l[2 * i];
-        lnmem[i].beta = (float)l[2 * i + 1];
+    static wraw_t wmem[NWORDS];
+    static braw_t bmem[NBIAS];
+    static float lnmem[2 * NLN];
+    for (int i = 0; i < NWORDS; i++) {
+        wmem[i] = 0;
+        for (int p = 0; p < P; p++) {
+            const wgt_t v = w[i * P + p];
+            wmem[i].range(18 * p + 17, 18 * p) = v.range(17, 0);
+        }
     }
+    for (int i = 0; i < NBIAS; i++) {
+        const acc_t a = b[i];
+        bmem[i] = 0;
+        bmem[i].range(47, 0) = a.range(47, 0);
+        bmem[i] = (bmem[i] << 16) >> 16;           // sign-extended
+    }
+    for (int i = 0; i < 2 * NLN; i++) lnmem[i] = (float)l[i];
     int fails = 0;
     for (int k = 0; k < NEST; k++) {
         const std::vector<double> feat = readBin("feat" + std::to_string(k) + ".bin");

@@ -1,5 +1,7 @@
 function build_mex_salsun2d()
-%BUILD_MEX_SALSUN2D Build the MEX gateways salsun2d_u250_mex and salsun2d_band_mex
+%BUILD_MEX_SALSUN2D Build the MEX gateways of the U250 kernels
+%
+%   salsun2d_u250_mex, salsun2d_band_mex and salsun2d_band_df_mex.
 %
 % Requirements: MATLAB R2026b, XRT (/opt/xilinx/xrt)
 %
@@ -18,7 +20,7 @@ function build_mex_salsun2d()
 xrtRoot = '/opt/xilinx/xrt';
 here = fileparts(mfilename('fullpath'));
 
-for src = {'salsun2d_u250_mex.cpp','salsun2d_band_mex.cpp'}
+for src = {'salsun2d_u250_mex.cpp','salsun2d_band_mex.cpp','salsun2d_band_df_mex.cpp'}
     mex('-R2018a', ...
         ['-I' fullfile(xrtRoot,'include')], ...
         ['-L' fullfile(xrtRoot,'lib')], '-lxrt_coreutil', ...

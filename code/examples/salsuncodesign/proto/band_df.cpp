@@ -409,7 +409,7 @@ columns:
 
 // One analysis stage: features -> estimator -> rotations, as a dataflow
 void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float prm[NPRM],
-                   const wword_t *wmem, const acc_t *bmem, const lnpar_t *lnmem,
+                   const wraw_t *wmem, const braw_t *bmem, const float *lnmem,
                    const float stats_in[2 * NSTATS], qword_t *qmem, int s, int sumFirst, int sumLast,
                    bool load, float sums[2][NDEC])
 {
@@ -499,8 +499,8 @@ columns:
 } // namespace bdf
 
 //---------------------------------------------------------------------------
-extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf::wword_t *wmem,
-                                 const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,
+extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf::wraw_t *wmem,
+                                 const estdf::braw_t *bmem, const float *lnmem,
                                  const float *stats_in, float *dst, float *stats_out,
                                  bdf::qword_t *qmem, int first_band, int num_bands)
 {
@@ -511,7 +511,7 @@ extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf
 #pragma HLS INTERFACE m_axi port = stats_out offset = slave bundle = gmem1 depth = 2 * bdf::NSTATS
 #pragma HLS INTERFACE m_axi port = wmem offset = slave bundle = gmem2 depth = estdf::NWORDS
 #pragma HLS INTERFACE m_axi port = bmem offset = slave bundle = gmem3 depth = estdf::NBIAS
-#pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem3 depth = estdf::NLN
+#pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem3 depth = 2 * estdf::NLN
 #pragma HLS INTERFACE m_axi port = qmem offset = slave bundle = gmem4 depth = bdf::NQMEM
     using namespace bdf;
     static blk_t A[NB][DEPTH], B[NB][DEPTH];

@@ -3,6 +3,9 @@ band_300/
 band_df_csim/
 band_fhd.log
 band_fhd/
+build/
+build_hw_fhd_cu3.log
+build_swemu_df.log
 csim.log
 csim_band.log
 csim_band2.log

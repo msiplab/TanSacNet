@@ -45,19 +45,26 @@ int main()
         return 1;
     }
     static float src[SZY * SZX], dst[SZY * SZX], fprm[NPRM], sin_[2 * NSTATS], sout[2 * NSTATS];
-    static wword_t wmem[NWORDS];
-    static acc_t bmem[NBIAS];
-    static lnpar_t lnmem[NLN];
+    static wraw_t wmem[NWORDS];
+    static braw_t bmem[NBIAS];
+    static float lnmem[2 * NLN];
     static qword_t qmem[NQMEM];
     for (int i = 0; i < SZY * SZX; i++) src[i] = (float)x[i];
     for (int i = 0; i < NPRM; i++) fprm[i] = (float)prm[i];
-    for (int i = 0; i < NWORDS; i++)
-        for (int p = 0; p < P; p++) wmem[i].w[p] = w[i * P + p];
-    for (int i = 0; i < NBIAS; i++) bmem[i] = b[i];
-    for (int i = 0; i < NLN; i++) {
-        lnmem[i].gamma = (float)l[2 * i];
-        lnmem[i].beta = (float)l[2 * i + 1];
+    for (int i = 0; i < NWORDS; i++) {
+        wmem[i] = 0;
+        for (int p = 0; p < P; p++) {
+            const wgt_t v = w[i * P + p];
+            wmem[i].range(18 * p + 17, 18 * p) = v.range(17, 0);
+        }
     }
+    for (int i = 0; i < NBIAS; i++) {
+        const acc_t a = b[i];
+        bmem[i] = 0;
+        bmem[i].range(47, 0) = a.range(47, 0);
+        bmem[i] = (bmem[i] << 16) >> 16;           // sign-extended
+    }
+    for (int i = 0; i < 2 * NLN; i++) lnmem[i] = (float)l[i];
     for (int i = 0; i < 2 * NSTATS; i++) sin_[i] = (float)st[i];
     salsun2d_band_df(src, fprm, wmem, bmem, lnmem, sin_, dst, sout, qmem, 0, NBANDS);
     double ey = 0, ymax = 0;

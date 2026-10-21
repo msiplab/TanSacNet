@@ -237,7 +237,20 @@ group:
 }
 
 // Distributes the parameters from memory to the tasks that keep them
-void loader(const wword_t *wmem, const acc_t *bmem, const lnpar_t *lnmem,
+wword_t toWord(wraw_t r)
+{
+    wword_t w;
+    for (int p = 0; p < P; p++) w.w[p].range(17, 0) = r.range(18 * p + 17, 18 * p);
+    return w;
+}
+acc_t toAcc(braw_t r)
+{
+    acc_t a;
+    a.range(47, 0) = r.range(47, 0);
+    return a;
+}
+
+void loader(const wraw_t *wmem, const braw_t *bmem, const float *lnmem,
             hls::stream<wword_t> w1s[NRES], hls::stream<wword_t> w2s[NRES], hls::stream<wword_t> &wos,
             hls::stream<acc_t> b1s[NRES], hls::stream<acc_t> b2s[NRES], hls::stream<acc_t> &bos,
             hls::stream<lnpar_t> lns[NRES], bool load)
@@ -247,32 +260,33 @@ void loader(const wword_t *wmem, const acc_t *bmem, const lnpar_t *lnmem,
     for (int r = 0; r < NRES; r++) {
         for (int i = 0; i < SQWORDS; i++) {
 #pragma HLS PIPELINE II = 1
-            w1s[r].write(wmem[kw++]);
+            w1s[r].write(toWord(wmem[kw++]));
         }
         for (int i = 0; i < SQWORDS; i++) {
 #pragma HLS PIPELINE II = 1
-            w2s[r].write(wmem[kw++]);
+            w2s[r].write(toWord(wmem[kw++]));
         }
         for (int i = 0; i < NVEC; i++) {
 #pragma HLS PIPELINE II = 1
-            b1s[r].write(bmem[kb++]);
+            b1s[r].write(toAcc(bmem[kb++]));
         }
         for (int i = 0; i < NVEC; i++) {
 #pragma HLS PIPELINE II = 1
-            b2s[r].write(bmem[kb++]);
+            b2s[r].write(toAcc(bmem[kb++]));
         }
         for (int i = 0; i < NVEC; i++) {
 #pragma HLS PIPELINE II = 1
-            lns[r].write(lnmem[r * NVEC + i]);
+            const int j = r * NVEC + i;
+            lns[r].write(lnpar_t{lnmem[2 * j], lnmem[2 * j + 1]});
         }
     }
     for (int i = 0; i < OUTWORDS; i++) {
 #pragma HLS PIPELINE II = 1
-        wos.write(wmem[kw++]);
+        wos.write(toWord(wmem[kw++]));
     }
     for (int i = 0; i < NAALL; i++) {
 #pragma HLS PIPELINE II = 1
-        bos.write(bmem[kb++]);
+        bos.write(toAcc(bmem[kb++]));
     }
 }
 
@@ -310,8 +324,8 @@ est_dims_t dims(int k)
 // out (estdf::NAK[k] per group). With load, the parameters of all
 // estimators are first read from memory into the tasks, which keep them
 // for later calls.
-void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const wword_t *wmem,
-                const acc_t *bmem, const lnpar_t *lnmem, int k, int ngroups, bool load)
+void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const wraw_t *wmem,
+                const braw_t *bmem, const float *lnmem, int k, int ngroups, bool load)
 {
 #pragma HLS DATAFLOW
     const est_dims_t d = dims(k);
@@ -336,12 +350,12 @@ void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const
 // Top function for synthesis and C simulation of the estimator alone:
 // loads the parameters of all estimators, then runs ngroups groups of
 // blocks through estimator k
-void est_df_top(const estdf::wword_t *wmem, const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,
+void est_df_top(const estdf::wraw_t *wmem, const estdf::braw_t *bmem, const float *lnmem,
                 hls::stream<estdf::row_t> &features, hls::stream<estdf::arow_t> &angles, int k,
                 int ngroups)
 {
 #pragma HLS INTERFACE m_axi port = wmem offset = slave bundle = gmem0 depth = estdf::NWORDS
 #pragma HLS INTERFACE m_axi port = bmem offset = slave bundle = gmem1 depth = estdf::NBIAS
-#pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem2 depth = estdf::NLN
+#pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem2 depth = 2 * estdf::NLN
     estdf::est_engine(features, angles, wmem, bmem, lnmem, k, ngroups, true);
 }
