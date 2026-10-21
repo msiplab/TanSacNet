@@ -325,10 +325,15 @@ the kernel. It matches the reference to 3e-7 and runs in MATLAB, on
 | GPU Quadro RTX 6000 (temsip07) | 0.157 | 0.157 |
 | FPGA U250, one compute unit (kernel call) | 0.43 (current estimators) | 0.29 |
 
-With one compute unit (0.29 s/frame) the FPGA kernel was about 2.6 times
-slower than the multithreaded CPU and 6 times slower than the A800; the
-three-unit kernel with whole frames (0.040 s/frame, below) is 2.7 times
-faster than the multithreaded CPU and 1.2 times faster than the A800. The generated C does not use more threads
+The GPU times in this table (and in the energy table below) were
+measured with an earlier version of `salsun2d_infer_fast`; the current
+one (fixed sizes for code generation) is about twice as fast on the
+GPUs, see "Corrected GPU comparison" below. With one compute unit (0.29
+s/frame) the FPGA kernel was about 2.6 times slower than the
+multithreaded CPU; the three-unit kernel with whole frames (0.040
+s/frame, below) is 2.7 times faster than the multithreaded CPU and 1.8
+(3.2 with three frames per call on the GPU too) times slower than the
+A800. The generated C does not use more threads
 (no `parfor`, matrix products without an optimized BLAS) and is not the
 best CPU figure. The FPGA is a single 300 MHz-class compute unit using a
 fraction of the device; more compute units, wider FC lanes, or
@@ -413,6 +418,33 @@ fixed-point model with the same statistics to 2.7e-5, 0.121 s per call
 of three frames, 0.040 s/frame (0.047 s/frame with the host for 100
 frames), 2.1 J/frame. The same kernel without the FC change failed
 timing (hold) with three units.
+
+### Corrected GPU comparison
+
+The earlier GPU figures used an older `salsun2d_infer_fast`. With the
+current code (same method: 60 s of frames back to back, board power;
+300 x 300, R3W1), and with the GPUs also allowed several frames per
+call as the three-unit FPGA kernel is (frames side by side as one wide
+frame, the same statistics rule):
+
+| Device | Frames per call | s/frame | Load W | J/frame |
+|---|---|---|---|---|
+| GPU A800 | 3 | **0.0124** | 141.9 | **1.76** |
+| FPGA U250, three compute units | 3 | 0.040 | 51.3 | 2.07 |
+| GPU A800 | 1 | 0.0222 | 116.7 | 2.59 |
+| GPU Quadro RTX 6000 | 3 | 0.0200 | 136.3 | 2.73 |
+| GPU RTX A6000 | 3 | 0.0177 | 165.4 | 2.93 |
+| GPU Quadro RTX 6000 | 1 | 0.0586 | 63.0 | 3.69 |
+| GPU RTX A6000 | 1 | 0.0528 | 99.9 | 5.27 |
+| CPU, 36 threads | 1 | 0.108 | 248.4 | 26.8 |
+
+The A800 is 3.2 times faster than the three-unit FPGA kernel and uses
+15% less energy per frame; the FPGA uses less energy than the other
+GPUs and than the A800 frame by frame. Full HD frames (1920 x 1080, R3W1,
+six sources): A800 0.0997 s/frame at 227.6 W (22.7 J/frame), CPU 36
+threads 2.37 s/frame. The FPGA band kernel for Full HD (31-row bands)
+does not fit one SLR (HLS: 330 URAM, 1322 BRAM per unit) and would take
+about 1.4 s/frame with three units.
 
 ## Smaller estimators by retraining (study)
 
