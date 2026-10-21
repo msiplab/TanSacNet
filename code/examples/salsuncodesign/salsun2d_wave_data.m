@@ -26,6 +26,12 @@ function [u,t] = salsun2d_wave_data(options)
 %   for test data that differ from the training data in the source
 %   positions; the frames then contain the superposition of the waves.
 %
+%   salsun2d_wave_data(FrameSize=[ny nx]) simulates a larger domain with
+%   the same mesh spacing (0.01) and time step, ny x nx points ([0,
+%   ny*0.01] x [0, nx*0.01], default [300 300]), e.g. [1080 1920] for
+%   Full HD frames; the epicenters are then in that domain (default its
+%   center). Only the frames returned are kept in memory.
+%
 % Requirements: MATLAB R2026b
 %
 % Copyright (c) 2026, Shogo MURAMATSU
@@ -44,43 +50,64 @@ arguments
     options.SecondFrame {mustBeMember(options.SecondFrame,{'zero','zero-velocity'})} = 'zero'
     options.Epicenters (:,2) double = [1.5 1.5]
     options.Amplitudes (:,1) double = []
+    options.FrameSize (1,2) double {mustBeInteger,mustBePositive} = [300 300]
 end
 
 c = 0.6;                           % propagation velocity
-L = 3;  d = 0.01;  N = floor(L/d); % spatial mesh (same in x and y)
-coord = linspace(0,L,N);
+d = 0.01;                          % spatial mesh (same in x and y)
+Ny = options.FrameSize(1); Nx = options.FrameSize(2);
+if isequal(options.FrameSize,[300 300])
+    L = 3; N = floor(L/d);         % as createdata_waveEq.m: linspace(0,3,300)
+    coordY = linspace(0,L,N); coordX = coordY;
+else
+    coordY = (0:Ny-1)*d; coordX = (0:Nx-1)*d;
+end
 Lt = 7; dt = 0.01; Nt = floor(Lt/dt);
-[X,Y] = meshgrid(coord,coord);
+[X,Y] = meshgrid(coordX,coordY);
+epicenters = options.Epicenters;
+if ~isequal(options.FrameSize,[300 300]) && isequal(epicenters,[1.5 1.5])
+    epicenters = [coordX(end) coordY(end)]/2;   % center of the larger domain
+end
 
 sigma = 0.005;
 A = options.Amplitudes;
 if isempty(A)
-    A = 10*ones(size(options.Epicenters,1),1);
+    A = 10*ones(size(epicenters,1),1);
 end
-assert(numel(A) == size(options.Epicenters,1),'One amplitude per epicenter is required.')
+assert(numel(A) == size(epicenters,1),'One amplitude per epicenter is required.')
 u0 = zeros(size(X));
-for k = 1:size(options.Epicenters,1)
-    x0 = options.Epicenters(k,1);
-    y0 = options.Epicenters(k,2);
+for k = 1:size(epicenters,1)
+    x0 = epicenters(k,1);
+    y0 = epicenters(k,2);
     u0 = u0 + A(k)*exp(-((X-x0).^2 + (Y-y0).^2)/(2*sigma^2));
 end
 
-u = zeros(N,N,Nt);
-u(:,:,1) = u0;
+% Leapfrog scheme with three frames in memory; the frames asked for are kept
+frames = options.Frames(1):options.Frames(2);
+u = zeros(Ny,Nx,numel(frames));
 r = (c*dt/d)^2;
-in = 2:N-1;
+iy = 2:Ny-1; ix = 2:Nx-1;
+uPrev = u0;
+uCur = zeros(Ny,Nx);
 if strcmp(options.SecondFrame,'zero-velocity')
-    lap0 = u0(in+1,in) + u0(in-1,in) + u0(in,in+1) + u0(in,in-1) - 4*u0(in,in);
-    u(in,in,2) = u0(in,in) + (r/2)*lap0;
+    lap0 = u0(iy+1,ix) + u0(iy-1,ix) + u0(iy,ix+1) + u0(iy,ix-1) - 4*u0(iy,ix);
+    uCur(iy,ix) = u0(iy,ix) + (r/2)*lap0;
 end
+[tf,loc] = ismember(1,frames); if tf, u(:,:,loc) = uPrev; end
+[tf,loc] = ismember(2,frames); if tf, u(:,:,loc) = uCur; end
 for n = 2:Nt-1
-    un = u(:,:,n);
-    lap = un(in+1,in) + un(in-1,in) + un(in,in+1) + un(in,in-1) - 4*un(in,in);
-    u(in,in,n+1) = 2*un(in,in) - u(in,in,n-1) + r*lap;
-    % Dirichlet boundary (already zero)
+    lap = uCur(iy+1,ix) + uCur(iy-1,ix) + uCur(iy,ix+1) + uCur(iy,ix-1) - 4*uCur(iy,ix);
+    uNext = zeros(Ny,Nx);          % Dirichlet boundary (zero)
+    uNext(iy,ix) = 2*uCur(iy,ix) - uPrev(iy,ix) + r*lap;
+    [tf,loc] = ismember(n+1,frames);
+    if tf
+        u(:,:,loc) = uNext;
+    end
+    if n+1 >= frames(end)
+        break
+    end
+    uPrev = uCur; uCur = uNext;
 end
 
-frames = options.Frames(1):options.Frames(2);
-u = u(:,:,frames);
 t = frames*dt;
 end
