@@ -182,6 +182,14 @@ void runFrames(Accelerator &a, const mxArray *x, const mxArray *stats, mxArray *
 {
     const float *xp = mxGetSingles(x);
     const float *sp = mxGetSingles(stats);
+    // New parameters go to every unit, also those without a frame in this
+    // call: the cache marks them as loaded on all units
+    if (newW) {
+        for (auto &u : a.units) {
+            std::memcpy(u.w.map<float *>(), a.wCache.data(), a.wCache.size() * sizeof(float));
+            u.w.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        }
+    }
     std::vector<xrt::run> runs;
     for (size_t j = 0; j < nFrames; j++) {
         Unit &u = a.units[j];
@@ -189,10 +197,6 @@ void runFrames(Accelerator &a, const mxArray *x, const mxArray *stats, mxArray *
         std::memcpy(u.sin.map<float *>(), sp + j * nStats, nBytesS);
         u.x.sync(XCL_BO_SYNC_BO_TO_DEVICE);
         u.sin.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-        if (newW) {
-            std::memcpy(u.w.map<float *>(), a.wCache.data(), a.wCache.size() * sizeof(float));
-            u.w.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-        }
         runs.push_back(u.kernel(u.x, u.w, u.sin, u.y, u.sout, 0, 1 << 20));   // all bands
     }
     float *yp = mxGetSingles(y);

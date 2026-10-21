@@ -327,8 +327,8 @@ the kernel. It matches the reference to 3e-7 and runs in MATLAB, on
 
 With one compute unit (0.29 s/frame) the FPGA kernel was about 2.6 times
 slower than the multithreaded CPU and 6 times slower than the A800; the
-two-unit kernel with whole frames (0.062 s/frame, below) is 1.8 times
-faster than the multithreaded CPU and 1.3 times slower than the A800. The generated C does not use more threads
+three-unit kernel with whole frames (0.040 s/frame, below) is 2.7 times
+faster than the multithreaded CPU and 1.2 times faster than the A800. The generated C does not use more threads
 (no `parfor`, matrix products without an optimized BLAS) and is not the
 best CPU figure. The FPGA is a single 300 MHz-class compute unit using a
 fraction of the device; more compute units, wider FC lanes, or
@@ -351,7 +351,8 @@ device (U250 with the xclbin loaded):
 | FPGA U250, one compute unit | 0.288 | 31.4 | 32.9 | 9.5 | **0.45** |
 | FPGA U250, two compute units (packed angles) | 0.178 | 36.3 | 38.9 | 6.9 | 0.46 |
 | FPGA U250, two compute units, 46-row bands | 0.103 | 36.9 | 40.2 | 4.1 | 0.34 |
-| FPGA U250, two compute units, whole frames | **0.062** | 37.8 | 41.2 | **2.6** | **0.21** |
+| FPGA U250, two compute units, whole frames | 0.062 | 37.8 | 41.2 | 2.6 | 0.21 |
+| FPGA U250, three compute units, whole frames | **0.040** | 45.3 | 51.3 | **2.1** | 0.24 |
 
 The FPGA uses a third of the energy of the multithreaded CPU per frame,
 about as much as the Quadro RTX 6000 and twice as much as the A800. Its
@@ -401,6 +402,17 @@ The host adds little in the steady state: the host-inclusive times of
 ten frames were dominated by the statistics of the first frame from the
 fixed-point reference (about 1.5 s); `InitFast=true` measures them with
 `salsun2d_infer_fast` (0.15 s).
+
+Three compute units (`hls/salsun2d_band_kernel_3cu.cfg`: SLR3, SLR2 and
+SLR0 with their DDR banks; SLR1 holds most of the shell), each with one
+whole frame of a group of three (`FramesPerCall=3`; the MSE grows by
+0.8-1.4% on the wave simulations), with the FC layers of the estimators
+in one pipeline over their input groups (the inputs of the next group
+read during the current one): built at 261.5 MHz, ten frames match the
+fixed-point model with the same statistics to 2.7e-5, 0.121 s per call
+of three frames, 0.040 s/frame (0.047 s/frame with the host for 100
+frames), 2.1 J/frame. The same kernel without the FC change failed
+timing (hold) with three units.
 
 ## Smaller estimators by retraining (study)
 
