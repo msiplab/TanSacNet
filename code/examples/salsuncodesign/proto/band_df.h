@@ -55,9 +55,12 @@ static_assert(HALO > 0 || BAND == NROWS, "a band without halo must be the whole 
 // Angles per block: stage 0 (W and U, 28 each), stages 1..3 (28), stage 4 (7)
 constexpr int NROT = PA * (PA - 1) / 2;               // 28
 constexpr int NROT_LAST = PA - 1;                     // 7
-constexpr int NQ = 2 * NROT + 3 * NROT + NROT_LAST;   // 147
-constexpr int qOffset(int s) { return s == 0 ? 0 : 2 * NROT + (s - 1) * NROT; }
-constexpr int NQMEM = SUBROWS * NCOLS * NQ;           // angle memory words of a band
+// Angle memory: 28 angles of 18 bits per 512-bit word; per block 2 words
+// for stage 0 (W, U) and 1 for each other stage, the blocks of a stage in
+// a region of their own
+constexpr int NQW = 6;                                // words per block
+constexpr int qwOffset(int s) { return s == 0 ? 0 : s + 1; }
+constexpr int NQMEM = SUBROWS * NCOLS * NQW;          // angle memory words of a band
 
 // Small parameters (prm): Cvh (16 x 16, column-major), Mask, V0 MusW, MusU,
 // V0t MusW, MusU, stage Mus and SynMus (4 x 8 each)
@@ -73,7 +76,7 @@ struct blk_t {                    // the coefficients of a block
 typedef ap_fixed<18, 1> q_t;      // angle / pi
 typedef ap_fixed<20, 2> stab_t;   // sin(pi i/1024), i = 0..2048 (sin_table.h)
 constexpr int SIN_N = 2049;
-typedef ap_uint<32> qword_t;      // one angle per memory word
+typedef ap_uint<512> qword_t;     // 28 angles of 18 bits
 
 } // namespace bdf
 

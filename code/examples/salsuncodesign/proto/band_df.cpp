@@ -31,6 +31,38 @@ constexpr int NZ0 = 7;                         // leading zero angles of W (stag
 const int GTOP[NROT] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};
 const int GBTM[NROT] = {1, 2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 4, 5, 6, 7, 5, 6, 7, 6, 7, 7};
 
+// The sign parameters (mus) are +-1 and the mask 0 or 1: they are applied
+// as sign flips and zeros, which equal the products
+float flip(bool neg, float v)
+{
+    return neg ? -v : v;
+}
+
+// Givens rotation of channels t and bt of the PA values of a block,
+// [c -s; s c] or its transpose; all channels are read and written, so
+// that every channel memory has one read and one write per cycle
+void givens(float v[PA], int t, int bt, float c, float s, bool transposed)
+{
+    float x[PA];
+    for (int j = 0; j < PA; j++) x[j] = v[j];
+    const float vt = x[t], vb = x[bt];
+    const float nt = transposed ? c * vt + s * vb : c * vt - s * vb;
+    const float nb = transposed ? c * vb - s * vt : s * vt + c * vb;
+    for (int j = 0; j < PA; j++) v[j] = (j == t) ? nt : ((j == bt) ? nb : x[j]);
+}
+
+// 28 angles to and from a memory word (constant bit positions)
+qword_t pack(const q_t q[NROT])
+{
+    qword_t w = 0;
+    for (int k = 0; k < NROT; k++) w.range(18 * k + 17, 18 * k) = q[k].range(17, 0);
+    return w;
+}
+void unpack(qword_t w, q_t q[NROT])
+{
+    for (int k = 0; k < NROT; k++) q[k].range(17, 0) = w.range(18 * k + 17, 18 * k);
+}
+
 int wrap(int i, int n)
 {
     return i < 0 ? i + n : (i >= n ? i - n : i);
@@ -66,7 +98,7 @@ q_t toAngle(acc_t v)
 //---------------------------------------------------------------------------
 // Block DCT of the band: src (column-major frame) -> Y. Rows of the band
 // with halo wrap around the frame (circular boundary).
-void blockDct(const float *src, const float *prm, int r0, blk_t Y[NB][DEPTH])
+void blockDct(const float *src, const float prm[NPRM], int r0, blk_t Y[NB][DEPTH])
 {
     float cvh[NDEC][NDEC];
 #pragma HLS ARRAY_PARTITION variable = cvh type = complete dim = 2
@@ -105,7 +137,7 @@ columns:
 }
 
 // Inverse block DCT of the band rows (without halo) -> dst
-void blockIdct(const blk_t Y[NB][DEPTH], const float *prm, int r0, float *dst)
+void blockIdct(const blk_t Y[NB][DEPTH], const float prm[NPRM], int r0, float *dst)
 {
     float cvh[NDEC][NDEC];
 #pragma HLS ARRAY_PARTITION variable = cvh type = complete dim = 1
@@ -173,22 +205,6 @@ columns:
     }
 }
 
-// Coefficient mask (in place)
-void mask(blk_t Y[NB][DEPTH], const float *prm)
-{
-    float m[NDEC];
-#pragma HLS ARRAY_PARTITION variable = m type = complete
-    for (int k = 0; k < NDEC; k++) m[k] = prm[P_MASK + k];
-    for (int i = 0; i < DEPTH; i++) {
-        for (int b = 0; b < NB; b++) {
-#pragma HLS PIPELINE II = 1
-            blk_t y = Y[b][i];
-            for (int k = 0; k < NDEC; k++) y.v[k] = y.v[k] * m[k];
-            Y[b][i] = y;
-        }
-    }
-}
-
 //---------------------------------------------------------------------------
 // Analysis stage s (0: initial rotation, 1..4: intermediate)
 
@@ -200,7 +216,7 @@ struct group_blk_t {              // the NB blocks of a group
 // estimator of stage s (one row of NB lanes per cycle), forwards the
 // blocks themselves to the rotation, and adds the channel sums of the
 // rows sumFirst..sumLast for the statistics of the next frame
-void gather(const blk_t Y[NB][DEPTH], const float *stats_in, int s, int sumFirst, int sumLast,
+void gather(const blk_t Y[NB][DEPTH], const float stats_in[2 * NSTATS], int s, int sumFirst, int sumLast,
             hls::stream<row_t> &features, hls::stream<group_blk_t> &blocks, float sums[2][NDEC])
 {
     const int ch0 = CH0[s], nCh = NCH[s];
@@ -283,97 +299,94 @@ columns:
 // rotates the symmetric (W) and antisymmetric (U) halves, the others the
 // antisymmetric half (in the last stage only the first PA-1 rotations; the
 // outputs but channel PS are zero as the mask would make them). Then the
-// sign flips (mus). Writes the angles to qmem for the synthesis.
-void rotate(hls::stream<arow_t> &angles, hls::stream<group_blk_t> &blocks, const float *prm, int s,
+// sign flips (mus), and in the last stage the coefficient mask. Writes the
+// angles to qmem for the synthesis.
+void rotate(hls::stream<arow_t> &angles, hls::stream<group_blk_t> &blocks, const float prm[NPRM], int s,
             blk_t Y[NB][DEPTH], qword_t *qmem)
 {
     const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
     const int nA = NAK[s];
-    float musW[PS], musU[PA];
-#pragma HLS ARRAY_PARTITION variable = musW type = complete
-#pragma HLS ARRAY_PARTITION variable = musU type = complete
+    bool negW[PS], negU[PA], drop[NDEC];
+#pragma HLS ARRAY_PARTITION variable = negW type = complete
+#pragma HLS ARRAY_PARTITION variable = negU type = complete
+#pragma HLS ARRAY_PARTITION variable = drop type = complete
     for (int j = 0; j < PA; j++) {
 #pragma HLS PIPELINE II = 1
-        musW[j] = prm[P_V0W + j];
-        musU[j] = (s == 0) ? prm[P_V0U + j] : prm[P_MUS + (s - 1) * PA + j];
+        negW[j] = prm[P_V0W + j] < 0;
+        negU[j] = ((s == 0) ? prm[P_V0U + j] : prm[P_MUS + (s - 1) * PA + j]) < 0;
     }
-    q_t qw[NG][NB][NROT], qu[NG][NB][NROT];
-#pragma HLS ARRAY_PARTITION variable = qw type = complete dim = 2
-#pragma HLS ARRAY_PARTITION variable = qu type = complete dim = 2
+    for (int j = 0; j < NDEC; j++) drop[j] = (s == NSTAGES) && prm[P_MASK + j] == 0.0f;
+    q_t qw[NG][NB][NROT], qu[NG][NB][NROT];   // the angles of each block
+#pragma HLS ARRAY_PARTITION variable = qw type = complete dim = 3
+#pragma HLS ARRAY_PARTITION variable = qu type = complete dim = 3
     float vs[NG][NB][PS], va[NG][NB][PA];
-#pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 2
 #pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
-#pragma HLS ARRAY_PARTITION variable = va type = complete dim = 2
 #pragma HLS ARRAY_PARTITION variable = va type = complete dim = 3
-    group_blk_t own[NG];
+    // The blocks and angles are read one block per cycle (the estimator
+    // takes longer per group), the symmetric half kept in vs in every stage
 columns:
     for (int c = 0; c < NCOLS; c++) {
     read:
         for (int g = 0; g < NG; g++) {
-            own[g] = blocks.read();
+            group_blk_t grp;
+            arow_t z;
             for (int b = 0; b < NB; b++) {
-#pragma HLS UNROLL
+#pragma HLS PIPELINE II = 1
+                if (b == 0) grp = blocks.read();
                 for (int j = 0; j < PS; j++) {
-                    vs[g][b][j] = own[g].b[b].v[j];
-                    va[g][b][j] = own[g].b[b].v[PS + j];
+                    vs[g][b][j] = grp.b[b].v[j];
+                    va[g][b][j] = grp.b[b].v[PS + j];
                 }
+                for (int k = 0; k < NZ0; k++) qw[g][b][k] = 0;   // the leading zero angles of W
             }
         read_angles:
             for (int a = 0; a < nA; a++) {
-#pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = 49
-                const arow_t z = angles.read();
                 for (int b = 0; b < NB; b++) {
+#pragma HLS PIPELINE II = 1
+                    if (b == 0) z = angles.read();
                     const q_t q = toAngle(z.v[b]);
-                    if (s == 0) {
-                        if (a < NROT - NZ0) {
-                            qw[g][b][NZ0 + a] = q;
-                        } else {
-                            qu[g][b][a - (NROT - NZ0)] = q;
-                        }
-                    } else if (a < NROT) {
-                        qu[g][b][a] = q;
+                    if (s == 0 && a < NROT - NZ0) {
+                        qw[g][b][NZ0 + a] = q;
+                    } else {
+                        const int k = (s == 0) ? a - (NROT - NZ0) : a;
+                        if (k < NROT) qu[g][b][k] = q;
                     }
                 }
-            }
-            if (s == 0) {
-                for (int b = 0; b < NB; b++)
-                    for (int a = 0; a < NZ0; a++) qw[g][b][a] = 0;
             }
         }
     rotations:
         for (int k = 0; k < nRot; k++) {
             for (int g = 0; g < NG; g++) {
-#pragma HLS PIPELINE II = 1
-#pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG
-#pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG
                 const int t = GTOP[k], bt = GBTM[k];
-                for (int b = 0; b < NB; b++) {
-                    const float cu = cospi(qu[g][b][k]), su = sinpi(qu[g][b][k]);
-                    const float at = va[g][b][t], ab = va[g][b][bt];
-                    va[g][b][t] = cu * at - su * ab;
-                    va[g][b][bt] = su * at + cu * ab;
+                for (int b = 0; b < NB; b++) {       // one block per cycle
+#pragma HLS PIPELINE II = 1
+#pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
+#pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
+                    const q_t qk = qu[g][b][k];
+                    givens(va[g][b], t, bt, cospi(qk), sinpi(qk), false);
                     if (s == 0) {
-                        const float cw = cospi(qw[g][b][k]), sw = sinpi(qw[g][b][k]);
-                        const float wt = vs[g][b][t], wb = vs[g][b][bt];
-                        vs[g][b][t] = cw * wt - sw * wb;
-                        vs[g][b][bt] = sw * wt + cw * wb;
+                        const q_t qwk = qw[g][b][k];
+                        givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), false);
                     }
                 }
             }
         }
     write:
         for (int g = 0; g < NG; g++) {
-#pragma HLS PIPELINE II = 1
             for (int b = 0; b < NB; b++) {
-                blk_t o = own[g].b[b];
+#pragma HLS PIPELINE II = 1
+                blk_t o;
                 for (int j = 0; j < PA; j++) {
-                    if (s == 0) o.v[j] = musW[j] * vs[g][b][j];
+                    o.v[j] = (s == 0) ? flip(negW[j], vs[g][b][j]) : vs[g][b][j];
                     if (s == NSTAGES && j > 0) {
                         o.v[PS + j] = 0.0f;
                     } else {
-                        o.v[PS + j] = musU[j] * va[g][b][j];
+                        o.v[PS + j] = flip(negU[j], va[g][b][j]);
                     }
+                }
+                for (int j = 0; j < NDEC; j++) {
+                    if (drop[j]) o.v[j] = 0.0f;
                 }
                 Y[b][c * NG + g] = o;
             }
@@ -381,16 +394,13 @@ columns:
     store_angles:
         for (int g = 0; g < NG; g++) {
             for (int b = 0; b < NB; b++) {
+#pragma HLS PIPELINE II = 2
                 const int blk = c * SUBROWS + g * NB + b;
-                for (int k = 0; k < NROT; k++) {
-#pragma HLS PIPELINE II = 1
-                    if (s == 0) {
-                        qmem[blk * 2 * NROT + k] = qw[g][b][k].range(17, 0);
-                        qmem[blk * 2 * NROT + NROT + k] = qu[g][b][k].range(17, 0);
-                    } else if (k < nRot) {
-                        const int base = SUBROWS * NCOLS * (2 * NROT + (s - 1) * NROT);
-                        qmem[base + blk * nRot + k] = qu[g][b][k].range(17, 0);
-                    }
+                if (s == 0) {
+                    qmem[blk * 2] = pack(qw[g][b]);
+                    qmem[blk * 2 + 1] = pack(qu[g][b]);
+                } else {
+                    qmem[SUBROWS * NCOLS * qwOffset(s) + blk] = pack(qu[g][b]);
                 }
             }
         }
@@ -398,9 +408,9 @@ columns:
 }
 
 // One analysis stage: features -> estimator -> rotations, as a dataflow
-void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float *prm,
+void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float prm[NPRM],
                    const wword_t *wmem, const acc_t *bmem, const lnpar_t *lnmem,
-                   const float *stats_in, qword_t *qmem, int s, int sumFirst, int sumLast,
+                   const float stats_in[2 * NSTATS], qword_t *qmem, int s, int sumFirst, int sumLast,
                    bool load, float sums[2][NDEC])
 {
 #pragma HLS DATAFLOW
@@ -415,51 +425,41 @@ void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const floa
 //---------------------------------------------------------------------------
 // Synthesis: the transposed rotations of stage s (s = 0: the final
 // rotation, W and U), after the sign flips, from the angles in qmem
-void synthesisRotation(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float *prm, int s,
+void synthesisRotation(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float prm[NPRM], int s,
                        const qword_t *qmem)
 {
     const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
-    float musW[PS], musU[PA];
-#pragma HLS ARRAY_PARTITION variable = musW type = complete
-#pragma HLS ARRAY_PARTITION variable = musU type = complete
+    bool negW[PS], negU[PA];
+#pragma HLS ARRAY_PARTITION variable = negW type = complete
+#pragma HLS ARRAY_PARTITION variable = negU type = complete
     for (int j = 0; j < PA; j++) {
 #pragma HLS PIPELINE II = 1
-        musW[j] = prm[P_V0TW + j];
-        musU[j] = (s == 0) ? prm[P_V0TU + j] : prm[P_SYNMUS + (s - 1) * PA + j];
+        negW[j] = prm[P_V0TW + j] < 0;
+        negU[j] = ((s == 0) ? prm[P_V0TU + j] : prm[P_SYNMUS + (s - 1) * PA + j]) < 0;
     }
-    q_t qw[NG][NB][NROT], qu[NG][NB][NROT];
-#pragma HLS ARRAY_PARTITION variable = qw type = complete dim = 2
-#pragma HLS ARRAY_PARTITION variable = qu type = complete dim = 2
+    q_t qw[NG][NB][NROT], qu[NG][NB][NROT];   // the angles of each block
+#pragma HLS ARRAY_PARTITION variable = qw type = complete dim = 3
+#pragma HLS ARRAY_PARTITION variable = qu type = complete dim = 3
     float vs[NG][NB][PS], va[NG][NB][PA];
-#pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 2
 #pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
-#pragma HLS ARRAY_PARTITION variable = va type = complete dim = 2
 #pragma HLS ARRAY_PARTITION variable = va type = complete dim = 3
-    blk_t own[NG][NB];
-#pragma HLS ARRAY_PARTITION variable = own type = complete dim = 2
 columns:
     for (int c = 0; c < NCOLS; c++) {
     read:
         for (int g = 0; g < NG; g++) {
             for (int b = 0; b < NB; b++) {
-#pragma HLS UNROLL
-                own[g][b] = Yin[b][c * NG + g];
+#pragma HLS PIPELINE II = 2
+                const blk_t y = Yin[b][c * NG + g];
                 for (int j = 0; j < PS; j++) {
-                    vs[g][b][j] = musW[j] * own[g][b].v[j];
-                    va[g][b][j] = musU[j] * own[g][b].v[PS + j];
+                    vs[g][b][j] = (s == 0) ? flip(negW[j], y.v[j]) : y.v[j];
+                    va[g][b][j] = flip(negU[j], y.v[PS + j]);
                 }
-            }
-            for (int b = 0; b < NB; b++) {
                 const int blk = c * SUBROWS + g * NB + b;
-                for (int k = 0; k < NROT; k++) {
-#pragma HLS PIPELINE II = 1
-                    if (s == 0) {
-                        qw[g][b][k].range(17, 0) = qmem[blk * 2 * NROT + k];
-                        qu[g][b][k].range(17, 0) = qmem[blk * 2 * NROT + NROT + k];
-                    } else if (k < nRot) {
-                        const int base = SUBROWS * NCOLS * (2 * NROT + (s - 1) * NROT);
-                        qu[g][b][k].range(17, 0) = qmem[base + blk * nRot + k];
-                    }
+                if (s == 0) {
+                    unpack(qmem[blk * 2], qw[g][b]);
+                    unpack(qmem[blk * 2 + 1], qu[g][b]);
+                } else {
+                    unpack(qmem[SUBROWS * NCOLS * qwOffset(s) + blk], qu[g][b]);
                 }
             }
         }
@@ -467,31 +467,27 @@ columns:
         for (int kk = 0; kk < nRot; kk++) {
             const int k = nRot - 1 - kk;               // transposes in reverse order
             for (int g = 0; g < NG; g++) {
-#pragma HLS PIPELINE II = 1
-#pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG
-#pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG
                 const int t = GTOP[k], bt = GBTM[k];
-                for (int b = 0; b < NB; b++) {
-                    const float cu = cospi(qu[g][b][k]), su = sinpi(qu[g][b][k]);
-                    const float at = va[g][b][t], ab = va[g][b][bt];
-                    va[g][b][t] = cu * at + su * ab;
-                    va[g][b][bt] = cu * ab - su * at;
+                for (int b = 0; b < NB; b++) {       // one block per cycle
+#pragma HLS PIPELINE II = 1
+#pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
+#pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
+                    const q_t qk = qu[g][b][k];
+                    givens(va[g][b], t, bt, cospi(qk), sinpi(qk), true);
                     if (s == 0) {
-                        const float cw = cospi(qw[g][b][k]), sw = sinpi(qw[g][b][k]);
-                        const float wt = vs[g][b][t], wb = vs[g][b][bt];
-                        vs[g][b][t] = cw * wt + sw * wb;
-                        vs[g][b][bt] = cw * wb - sw * wt;
+                        const q_t qwk = qw[g][b][k];
+                        givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), true);
                     }
                 }
             }
         }
     write:
         for (int g = 0; g < NG; g++) {
-#pragma HLS PIPELINE II = 1
             for (int b = 0; b < NB; b++) {
-                blk_t o = own[g][b];
+#pragma HLS PIPELINE II = 1
+                blk_t o;
                 for (int j = 0; j < PA; j++) {
-                    if (s == 0) o.v[j] = vs[g][b][j];
+                    o.v[j] = vs[g][b][j];
                     o.v[PS + j] = va[g][b][j];
                 }
                 Yout[b][c * NG + g] = o;
@@ -526,6 +522,17 @@ extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf
 #pragma HLS BIND_STORAGE variable = A type = ram_2p impl = uram
 #pragma HLS BIND_STORAGE variable = B type = ram_2p impl = uram
 #pragma HLS ALLOCATION function instances = analysisStage limit = 1
+    // the small parameters and the statistics, read once (the tasks of a
+    // dataflow region cannot share their memory interface)
+    float prmL[NPRM], stL[2 * NSTATS];
+    for (int i = 0; i < NPRM; i++) {
+#pragma HLS PIPELINE II = 1
+        prmL[i] = prm[i];
+    }
+    for (int i = 0; i < 2 * NSTATS; i++) {
+#pragma HLS PIPELINE II = 1
+        stL[i] = stats_in[i];
+    }
     float acc[2][NEST][NDEC];
     for (int i = 0; i < 2 * NSTATS; i++) acc[i / NSTATS][(i % NSTATS) / NDEC][i % NDEC] = 0.0f;
     bool load = true;                          // the estimator parameters, once per call
@@ -539,11 +546,11 @@ bands:
         if (k < first_band || k >= first_band + num_bands) continue;
         const int sumFirst = HALO + repeated, sumLast = HALO + BAND - 1;
 
-        blockDct(src, prm, r0, A);
+        blockDct(src, prmL, r0, A);
         float sums[2][NDEC];
         for (int s = 0; s <= NSTAGES; s++) {
             if (s > 0) atomExtension(B, A, SHIFT[s - 1][0], SHIFT[s - 1][1], TARGET[s - 1]);
-            analysisStage(A, B, prm, wmem, bmem, lnmem, stats_in, qmem, s, sumFirst, sumLast, load,
+            analysisStage(A, B, prmL, wmem, bmem, lnmem, stL, qmem, s, sumFirst, sumLast, load,
                           sums);
             load = false;
             for (int j = 0; j < NDEC; j++) {
@@ -551,13 +558,12 @@ bands:
                 acc[1][s][j] += sums[1][j];
             }
         }
-        mask(B, prm);
         for (int s = NSTAGES; s >= 1; s--) {
-            synthesisRotation(B, A, prm, s, qmem);
+            synthesisRotation(B, A, prmL, s, qmem);
             atomExtension(A, B, SYNSHIFT[s - 1][0], SYNSHIFT[s - 1][1], SYNTARGET[s - 1]);
         }
-        synthesisRotation(B, A, prm, 0, qmem);
-        blockIdct(A, prm, r0, dst);
+        synthesisRotation(B, A, prmL, 0, qmem);
+        blockIdct(A, prmL, r0, dst);
     }
     for (int i = 0; i < 2 * NSTATS; i++) stats_out[i] = acc[i / NSTATS][(i % NSTATS) / NDEC][i % NDEC];
 }

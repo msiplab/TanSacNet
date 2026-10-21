@@ -112,26 +112,30 @@ group:
     }
 }
 
-// LayerNorm over the nF features of each block, as the MATLAB design: the
-// exact sums in fixed point, the scaling in single precision, rounded to
-// the signal format. The rows go on to the residual add (skip).
+// LayerNorm over the nF features of each block: the exact sums in fixed
+// point, the mean and the reciprocal standard deviation of each block in
+// single precision, the normalization in fixed point (est_df.h). The rows
+// go on to the residual add (skip).
 template <int ID>
 void layer_norm(hls::stream<row_t> &in, hls::stream<row_t> &out, hls::stream<row_t> &skip,
                 hls::stream<lnpar_t> &lnload, int nF, int poff, int ngroups, bool load)
 {
-    static lnpar_t par[NVEC];           // kept between calls
+    static lnp_t gam[NVEC], bet[NVEC];  // kept between calls
     if (load) {
     load:
         for (int i = 0; i < NVEC; i++) {
 #pragma HLS PIPELINE II = 1
-            par[i] = lnload.read();
+            const lnpar_t q = lnload.read();
+            gam[i] = q.gamma;
+            bet[i] = q.beta;
         }
     }
     row_t buf[NFMAX];
 #pragma HLS AGGREGATE variable = buf
     acc_t s1[NB];
     sq_t s2[NB];
-    float mean[NB], rs[NB];
+    lnm_t mean[NB];
+    lnr_t rs[NB];
 #pragma HLS ARRAY_PARTITION variable = s1 type = complete
 #pragma HLS ARRAY_PARTITION variable = s2 type = complete
 #pragma HLS ARRAY_PARTITION variable = mean type = complete
@@ -168,11 +172,11 @@ group:
         for (int i = 0; i < nF; i++) {
 #pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = 135
-            const lnpar_t q = par[poff + i];
+            const lnp_t g = gam[poff + i], be = bet[poff + i];
             row_t r;
             for (int b = 0; b < NB; b++) {
-                const float x = ((float)buf[i].v[b] - mean[b]) * rs[b];
-                r.v[b] = (sig_t)(q.gamma * x + q.beta);
+                const lnt_t t = (buf[i].v[b] - mean[b]) * rs[b];
+                r.v[b] = t * g + be;
             }
             out.write(r);
         }

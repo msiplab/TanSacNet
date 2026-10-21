@@ -26,3 +26,27 @@ Synthesis (`./run_hls.sh`, xcu250, 3.33 ns target): estimated clock
 810 cycles per group of 5 blocks for the FC tasks of the first estimator
 (162 cycles per block, against 1487 in the current kernel), 216 for the
 others (43, against 558).
+
+## Band kernel (`band_df.cpp`)
+
+A whole band kernel around the dataflow estimator: block DCT, five
+analysis stages (each a dataflow of the feature gather, the estimator
+engine and the rotations of a column), the coefficient mask (folded into
+the last rotation), the synthesis rotations and atom extensions, and the
+inverse DCT, as `salsun2d_hls_band.m` computes them. The coefficients of
+the band are in two buffers of five banks (row mod 5, URAM); the angles
+go to memory as 18-bit theta/pi (28 per 512-bit word) for the synthesis;
+sin and cos come from an interpolated table (`sin_table.h`); the sign
+parameters and the mask are applied as sign flips and zeros; the
+rotations take one block per cycle, rotation-major over the blocks of a
+column; the LayerNorm normalization is in fixed point.
+
+C simulation (`run_csim_band.tcl`, data from `export_band_df.m`), 40 x 40
+frames, one band without halo or two 6-row bands with halo 7: max error
+against the MATLAB fixed-point model 1.3e-5 (max |y| 0.155).
+
+Synthesis for Full HD (1080 x 1920, 31-row bands, halo 7): estimated
+clock 3.77 ns; LUT 267k (62% of an SLR), FF 361k, DSP 1250, BRAM 353,
+URAM 222 (69%). About 11.4 M cycles per band (estimators 7.2 M,
+synthesis rotations 2.9 M), 34 M per frame for each of three compute
+units (three bands each): about 0.11-0.13 s/frame at 260-300 MHz.

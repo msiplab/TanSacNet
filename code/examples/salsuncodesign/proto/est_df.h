@@ -44,6 +44,15 @@ typedef ap_fixed<18, 2> wgt_t;  // weights    [18 16]
 typedef ap_fixed<48, 21> acc_t; // sums       [48 27]
 typedef ap_fixed<48, 26> sq_t;  // sums of squares [48 22]
 
+// LayerNorm in fixed point: gamma and beta [18 15]; the mean [24 16] and
+// the reciprocal standard deviation [26 16] (unsigned) per block from the
+// exact sums in single precision; (x - mean) * rs rounded to [24 16]; then
+// times gamma plus beta, rounded to the signal format
+typedef ap_fixed<18, 3, AP_RND, AP_SAT> lnp_t;
+typedef ap_fixed<24, 8, AP_RND, AP_SAT> lnm_t;
+typedef ap_ufixed<26, 10, AP_RND, AP_SAT> lnr_t;
+typedef ap_fixed<24, 8, AP_RND, AP_SAT> lnt_t;
+
 // GELU by a table of GELU(x) at x = -8 + i/64, i = 0..1024, in [24 19],
 // interpolated linearly with a 16-bit fraction (gelu_table.h, written by
 // export_est_df.m, which also models it); 0 below -8, x above 8

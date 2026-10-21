@@ -69,7 +69,13 @@ for r = 1:numel(est.ResBlocks)
         s1 = sum(F,1); s2 = sum(F.^2,1); n = size(F,1);
         m = single(s1)/single(n); v = max(single(s2)/single(n) - m.*m,0);
         rs = single(1)./sqrt(v + single(1e-5));
-        ln = rX(single(rb.Gamma(:)).*((single(F) - m).*rs) + single(rb.Beta(:)));
+        % fixed-point normalization of est_df.cpp (est_df.h formats)
+        mF = salsun2d_round_fixed(double(m),24,16);
+        rsF = salsun2d_round_fixed(double(rs),27,16);
+        t = salsun2d_round_fixed((F - mF).*rsF,24,16);
+        g = salsun2d_round_fixed(double(rb.Gamma(:)),18,15);
+        be = salsun2d_round_fixed(double(rb.Beta(:)),18,15);
+        ln = rX(t.*g + be);
         z1 = double(rb.W1)*ln + rAcc(rb.B1(:));
         a = gel(z1);
         F = rX(F + double(rb.W2)*a + rAcc(rb.B2(:)));
