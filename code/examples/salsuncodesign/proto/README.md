@@ -9,8 +9,20 @@ weights are loaded once into the memory of each FC task. The first
 estimator only (135 features, 135 hidden units, 49 angles); the
 LayerNorm is in fixed point.
 
+Current form: one instance for the five estimators of a network with 3
+residual blocks of width 1 (sizes and parameter offsets of estimator k at
+run time, the parameters of all five in the memory of each task), NB = 5
+lanes of P = 24 inputs (120 multiply-adds per cycle per FC task), the
+weights in URAM, the inputs of the next group read during the current
+one, the outputs sent during the last pass, and GELU by a table of 1025
+points interpolated linearly (`gelu_table.h`).
+
+C simulation (`vitis_hls -f run_csim.tcl`, test data from
+`export_est_df.m`): the angles of all five estimators equal those of the
+MATLAB fixed-point model (with the same GELU table) exactly.
+
 Synthesis (`./run_hls.sh`, xcu250, 3.33 ns target): estimated clock
-2.433 ns; DSP 1689, LUT 195k, FF 295k, BRAM 636, URAM 24; 2877 cycles per
-group of 15 blocks for each FC task (192 cycles per block, against 1487
-for the first estimator of the current kernel), GELU 800, LayerNorm 360.
-Not yet simulated against the MATLAB model.
+3.66 ns (FIFO accesses); DSP 1032, LUT 176k, FF 235k, BRAM 241, URAM 62;
+810 cycles per group of 5 blocks for the FC tasks of the first estimator
+(162 cycles per block, against 1487 in the current kernel), 216 for the
+others (43, against 558).

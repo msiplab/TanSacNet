@@ -1,3 +1,6 @@
+csim.log
+est_df_csim/
 est_df_prj/
 hls.log
+testdata/
 vitis_hls.log
