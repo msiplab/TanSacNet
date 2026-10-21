@@ -102,6 +102,9 @@ constexpr int NWORDS = NRES * 2 * SQWORDS + OUTWORDS;
 constexpr int NBIAS = NRES * 2 * NVEC + NAALL;
 constexpr int NLN = NRES * NVEC;
 
+void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const wword_t *wmem,
+                const acc_t *bmem, const lnpar_t *lnmem, int k, int ngroups, bool load);
+
 } // namespace estdf
 
 void est_df_top(const estdf::wword_t *wmem, const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,

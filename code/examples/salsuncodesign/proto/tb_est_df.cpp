@@ -68,7 +68,7 @@ int main()
                 for (int bb = 0; bb < NB; bb++) r.v[bb] = feat[bb + NB * (i + nF * g)];
                 in.write(r);
             }
-        est_df_top(wmem, bmem, lnmem, in, out, k, ngroups);
+        est_engine(in, out, wmem, bmem, lnmem, k, ngroups, k == 0);   // parameters loaded once
         double eRef = 0, eFlt = 0, eQ = 0;
         for (int g = 0; g < ngroups; g++)
             for (int a = 0; a < nA; a++) {

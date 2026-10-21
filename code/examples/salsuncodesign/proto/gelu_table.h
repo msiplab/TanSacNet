@@ -1,5 +1,5 @@
 // gelu_table.h: GELU(x) at x = -8 + i/64, i = 0..1024, in [24 19]
-// (written by export_est_df.m)
+// (written by pack_est_df.m)
 #pragma once
 static const estdf::gtab_t GELU_TABLE[estdf::GELU_N] = {
     0,

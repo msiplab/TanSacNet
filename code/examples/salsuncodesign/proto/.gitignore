@@ -1,6 +1,14 @@
+band_300.log
+band_300/
+band_df_csim/
+band_fhd.log
+band_fhd/
 csim.log
+csim_band.log
+csim_band2.log
 est_df_csim/
 est_df_prj/
 hls.log
 testdata/
+testdata_band/
 vitis_hls.log

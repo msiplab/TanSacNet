@@ -38,36 +38,10 @@ estsQ = [pQ.V0.Estimator, pQ.Stages.Estimator];
 nEst = numel(ests); nRes = numel(ests(1).ResBlocks); NB = 5; Pw = 24;   % est_df.h NB, P
 rX = @(v) salsun2d_round_fixed(double(v),L.FixSignal(1),L.FixSignal(2));
 rAcc = @(v) salsun2d_round_fixed(double(v),L.FixAcc(1),L.FixAcc(2));
-rowsOf = @(W) padRows(double(W),Pw);           % rows of W padded to words of Pw
 
-% GELU table: GELU(x) at x = -8 + i/64, rounded to [24 19]
-xs = -8 + (0:1024)/64;
-T = floor(geluTanh(xs)*2^19 + 0.5)/2^19;
-fid = fopen(fullfile(fileparts(mfilename('fullpath')),'gelu_table.h'),'w');
-fprintf(fid,'// gelu_table.h: GELU(x) at x = -8 + i/64, i = 0..1024, in [24 19]\n');
-fprintf(fid,'// (written by export_est_df.m)\n#pragma once\n');
-fprintf(fid,'static const estdf::gtab_t GELU_TABLE[estdf::GELU_N] = {\n');
-fprintf(fid,'    %.17g,\n',T);
-fprintf(fid,'};\n');
-fclose(fid);
+[w,b,ln,T] = pack_est_df(P);
 gel = @(z) geluTable(z,T,rX);
-
-% Parameter memories
-w = []; b = []; ln = [];
-for r = 1:nRes
-    for k = 1:nEst, w = [w; rowsOf(estsQ(k).ResBlocks(r).W1)]; end %#ok<AGROW>
-    for k = 1:nEst, w = [w; rowsOf(estsQ(k).ResBlocks(r).W2)]; end %#ok<AGROW>
-    for k = 1:nEst, b = [b; rAcc(ests(k).ResBlocks(r).B1(:))]; end %#ok<AGROW>
-    for k = 1:nEst, b = [b; rAcc(ests(k).ResBlocks(r).B2(:))]; end %#ok<AGROW>
-end
-for k = 1:nEst, w = [w; rowsOf(estsQ(k).Wo)]; end
-for k = 1:nEst, b = [b; rAcc(ests(k).Bo(:))]; end
-for r = 1:nRes
-    for k = 1:nEst
-        ln = [ln; double([ests(k).ResBlocks(r).Gamma(:) ests(k).ResBlocks(r).Beta(:)])]; %#ok<AGROW>
-    end
-end
-writeBin(fullfile(outDir,'wmem.bin'),w.');      % word by word, Pw values each
+writeBin(fullfile(outDir,'wmem.bin'),w.');      % word by word, P values each
 writeBin(fullfile(outDir,'bmem.bin'),b);
 writeBin(fullfile(outDir,'ln.bin'),ln.');       % (gamma, beta) per feature
 fprintf('wmem %d words, bmem %d, ln %d\n',size(w,1),numel(b),size(ln,1));
@@ -128,13 +102,6 @@ a = T(i+1) + (T(i+2) - T(i+1)).*fr;
 a(z <= -8) = 0;
 a(z >= 8) = z(z >= 8);
 a = rX(a);
-end
-
-function W = padRows(W,Pw)
-% rows of W, each padded with zeros to a multiple of Pw, as words of Pw
-n = size(W,2); np = Pw*ceil(n/Pw);
-W = [W zeros(size(W,1),np-n)];
-W = reshape(W.',Pw,[]).';                       % word per row of the result
 end
 
 function writeBin(file,v)

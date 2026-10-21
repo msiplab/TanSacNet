@@ -24,27 +24,31 @@ namespace estdf {
 // output of all NB blocks. The inputs of the next group of P are read
 // during the first P cycles of a group, so the groups and outputs are one
 // pipeline; the outputs of a group of blocks are sent once all inputs are
-// summed. NWMEM words of weights for all estimators (offsets woff, rows of
+// summed. ID makes each call site its own function, with its own static
+// parameter memory (kept between calls). NWMEM words of weights for all estimators (offsets woff, rows of
 // words(nIn) words, in URAM), biases boff. An output row is sent as soon as
 // it is complete, during the pass over the last group of inputs (the
 // output stream holds the rows of a group).
-template <int NOUTMAX, int NWMEM, int NBMEM>
+template <int ID, int NOUTMAX, int NWMEM, int NBMEM>
 void fc(hls::stream<row_t> &in, hls::stream<arow_t> &out, hls::stream<wword_t> &wload,
-        hls::stream<acc_t> &bload, int nIn, int ngi, int nOut, int woff, int boff, int ngroups)
+        hls::stream<acc_t> &bload, int nIn, int ngi, int nOut, int woff, int boff, int ngroups,
+        bool load)
 {
-    wword_t W[NWMEM];                   // weights of this layer, on chip
-    acc_t B[NBMEM];
+    static wword_t W[NWMEM];            // weights of this layer, on chip (kept between calls)
+    static acc_t B[NBMEM];
 #pragma HLS AGGREGATE variable = W
 #pragma HLS BIND_STORAGE variable = W type = ram_2p impl = uram
-load_w:
-    for (int i = 0; i < NWMEM; i++) {
+    if (load) {
+    load_w:
+        for (int i = 0; i < NWMEM; i++) {
 #pragma HLS PIPELINE II = 1
-        W[i] = wload.read();
-    }
-load_b:
-    for (int i = 0; i < NBMEM; i++) {
+            W[i] = wload.read();
+        }
+    load_b:
+        for (int i = 0; i < NBMEM; i++) {
 #pragma HLS PIPELINE II = 1
-        B[i] = bload.read();
+            B[i] = bload.read();
+        }
     }
     arow_t Z[NOUTMAX];                  // partial sums, one row of NB lanes per word
 #pragma HLS AGGREGATE variable = Z
@@ -111,14 +115,17 @@ group:
 // LayerNorm over the nF features of each block, as the MATLAB design: the
 // exact sums in fixed point, the scaling in single precision, rounded to
 // the signal format. The rows go on to the residual add (skip).
+template <int ID>
 void layer_norm(hls::stream<row_t> &in, hls::stream<row_t> &out, hls::stream<row_t> &skip,
-                hls::stream<lnpar_t> &lnload, int nF, int poff, int ngroups)
+                hls::stream<lnpar_t> &lnload, int nF, int poff, int ngroups, bool load)
 {
-    lnpar_t par[NVEC];
-load:
-    for (int i = 0; i < NVEC; i++) {
+    static lnpar_t par[NVEC];           // kept between calls
+    if (load) {
+    load:
+        for (int i = 0; i < NVEC; i++) {
 #pragma HLS PIPELINE II = 1
-        par[i] = lnload.read();
+            par[i] = lnload.read();
+        }
     }
     row_t buf[NFMAX];
 #pragma HLS AGGREGATE variable = buf
@@ -229,8 +236,9 @@ group:
 void loader(const wword_t *wmem, const acc_t *bmem, const lnpar_t *lnmem,
             hls::stream<wword_t> w1s[NRES], hls::stream<wword_t> w2s[NRES], hls::stream<wword_t> &wos,
             hls::stream<acc_t> b1s[NRES], hls::stream<acc_t> b2s[NRES], hls::stream<acc_t> &bos,
-            hls::stream<lnpar_t> lns[NRES])
+            hls::stream<lnpar_t> lns[NRES], bool load)
 {
+    if (!load) return;
     int kw = 0, kb = 0;
     for (int r = 0; r < NRES; r++) {
         for (int i = 0; i < SQWORDS; i++) {
@@ -288,24 +296,19 @@ est_dims_t dims(int k)
 
 // One residual block: LayerNorm, FC, GELU, FC, skip
 #define RESBLOCK(R, FIN, FOUT)                                                                  \
-    layer_norm(FIN, ln##R, skip##R, lns[R], d.nF, d.vec, ngroups);                            \
-    fc<NFMAX, SQWORDS, NVEC>(ln##R, z1##R, w1s[R], b1s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups); \
+    layer_norm<R>(FIN, ln##R, skip##R, lns[R], d.nF, d.vec, ngroups, load);                   \
+    fc<2 * R, NFMAX, SQWORDS, NVEC>(ln##R, z1##R, w1s[R], b1s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups, load); \
     gelu(z1##R, a##R, d.nF, ngroups);                                                         \
-    fc<NFMAX, SQWORDS, NVEC>(a##R, z2##R, w2s[R], b2s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups);  \
+    fc<2 * R + 1, NFMAX, SQWORDS, NVEC>(a##R, z2##R, w2s[R], b2s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups, load); \
     residual_add(z2##R, skip##R, FOUT, d.nF, ngroups);
 
-} // namespace estdf
-
-// Top function for synthesis and C simulation: loads the parameters of all
-// estimators, then runs ngroups groups of blocks through estimator k
-void est_df_top(const estdf::wword_t *wmem, const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,
-                hls::stream<estdf::row_t> &features, hls::stream<estdf::arow_t> &angles, int k,
-                int ngroups)
+// Estimator k on ngroups groups of NB blocks: feature rows in, angle rows
+// out (estdf::NAK[k] per group). With load, the parameters of all
+// estimators are first read from memory into the tasks, which keep them
+// for later calls.
+void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const wword_t *wmem,
+                const acc_t *bmem, const lnpar_t *lnmem, int k, int ngroups, bool load)
 {
-#pragma HLS INTERFACE m_axi port = wmem offset = slave bundle = gmem0 depth = estdf::NWORDS
-#pragma HLS INTERFACE m_axi port = bmem offset = slave bundle = gmem1 depth = estdf::NBIAS
-#pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem2 depth = estdf::NLN
-    using namespace estdf;
 #pragma HLS DATAFLOW
     const est_dims_t d = dims(k);
     hls::stream<wword_t, 4> w1s[NRES], w2s[NRES], wos;
@@ -317,9 +320,24 @@ void est_df_top(const estdf::wword_t *wmem, const estdf::acc_t *bmem, const estd
 #pragma HLS BIND_STORAGE variable = skip1 type = fifo impl = uram
 #pragma HLS BIND_STORAGE variable = skip2 type = fifo impl = uram
     hls::stream<arow_t, FIFO> z10, z11, z12, z20, z21, z22;
-    loader(wmem, bmem, lnmem, w1s, w2s, wos, b1s, b2s, bos, lns);
+    loader(wmem, bmem, lnmem, w1s, w2s, wos, b1s, b2s, bos, lns, load);
     RESBLOCK(0, features, f1)
     RESBLOCK(1, f1, f2)
     RESBLOCK(2, f2, f3)
-    fc<NAMAX, OUTWORDS, NAALL>(f3, angles, wos, bos, d.nF, d.ngi, d.nA, d.out, d.a, ngroups);
+    fc<2 * NRES, NAMAX, OUTWORDS, NAALL>(f3, angles, wos, bos, d.nF, d.ngi, d.nA, d.out, d.a, ngroups, load);
+}
+
+} // namespace estdf
+
+// Top function for synthesis and C simulation of the estimator alone:
+// loads the parameters of all estimators, then runs ngroups groups of
+// blocks through estimator k
+void est_df_top(const estdf::wword_t *wmem, const estdf::acc_t *bmem, const estdf::lnpar_t *lnmem,
+                hls::stream<estdf::row_t> &features, hls::stream<estdf::arow_t> &angles, int k,
+                int ngroups)
+{
+#pragma HLS INTERFACE m_axi port = wmem offset = slave bundle = gmem0 depth = estdf::NWORDS
+#pragma HLS INTERFACE m_axi port = bmem offset = slave bundle = gmem1 depth = estdf::NBIAS
+#pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem2 depth = estdf::NLN
+    estdf::est_engine(features, angles, wmem, bmem, lnmem, k, ngroups, true);
 }
