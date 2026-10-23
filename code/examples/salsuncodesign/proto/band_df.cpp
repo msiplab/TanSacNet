@@ -98,7 +98,7 @@ q_t toAngle(acc_t v)
 //---------------------------------------------------------------------------
 // Block DCT of the band: src (column-major frame) -> Y. Rows of the band
 // with halo wrap around the frame (circular boundary).
-void blockDct(const float *src, const float prm[NPRM], int r0, blk_t Y[NB][DEPTH])
+void blockDct(const float *src, const float prm[NPRM], int r0, blk_t Y[NBLK])
 {
     float cvh[NDEC][NDEC];
 #pragma HLS ARRAY_PARTITION variable = cvh type = complete dim = 2
@@ -131,13 +131,13 @@ columns:
                 }
                 y.v[k] = acc;
             }
-            Y[r % NB][c * NG + r / NB] = y;
+            Y[c * SUBROWS + r] = y;
         }
     }
 }
 
 // Inverse block DCT of the band rows (without halo) -> dst
-void blockIdct(const blk_t Y[NB][DEPTH], const float prm[NPRM], int r0, float *dst)
+void blockIdct(const blk_t Y[NBLK], const float prm[NPRM], int r0, float *dst)
 {
     float cvh[NDEC][NDEC];
 #pragma HLS ARRAY_PARTITION variable = cvh type = complete dim = 1
@@ -152,7 +152,7 @@ columns:
     blocks:
         for (int rr = 0; rr < BAND; rr++) {
             const int r = HALO + rr;
-            const blk_t y = Y[r % NB][c * NG + r / NB];
+            const blk_t y = Y[c * SUBROWS + r];
             for (int n = 0; n < NDEC; n++) {
 #pragma HLS PIPELINE II = 1
                 float acc = 0.0f;
@@ -176,7 +176,7 @@ columns:
 // Atom extension: the difference (target 1) or sum (target 2) half of each
 // block taken from the block shifted by [sv sh] (circular in the band rows
 // and the frame columns)
-void atomExtension(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], int sv, int sh, int target)
+void atomExtension(const blk_t Yin[NBLK], blk_t Yout[NBLK], int sv, int sh, int target)
 {
 columns:
     for (int c = 0; c < NCOLS; c++) {
@@ -185,8 +185,8 @@ columns:
         for (int r = 0; r < SUBROWS; r++) {
 #pragma HLS PIPELINE II = 1
             const int rs = wrap(r - sv, SUBROWS);
-            const blk_t y = Yin[r % NB][c * NG + r / NB];
-            const blk_t z = Yin[rs % NB][cs * NG + rs / NB];
+            const blk_t y = Yin[c * SUBROWS + r];
+            const blk_t z = Yin[cs * SUBROWS + rs];
             blk_t o;
             for (int j = 0; j < PS; j++) {
                 float ys, yd;
@@ -200,7 +200,7 @@ columns:
                 o.v[j] = 0.5f * (ys + yd);
                 o.v[PS + j] = 0.5f * (ys - yd);
             }
-            Yout[r % NB][c * NG + r / NB] = o;
+            Yout[c * SUBROWS + r] = o;
         }
     }
 }
@@ -216,8 +216,8 @@ struct group_blk_t {              // the NB blocks of a group
 // estimator of stage s (one row of NB lanes per cycle), forwards the
 // blocks themselves to the rotation, and adds the channel sums of the
 // rows sumFirst..sumLast for the statistics of the next frame
-void gather(const blk_t Y[NB][DEPTH], const float stats_in[2 * NSTATS], int s, int sumFirst, int sumLast,
-            hls::stream<row_t> &features, hls::stream<group_blk_t> &blocks, float sums[2][NDEC])
+void gather(const blk_t Y[NBLK], const float stats_in[2 * NSTATS], int s, int sumFirst, int sumLast,
+            hls::stream<row_t> &features, hls::stream<blk_t> &blocks, float sums[2][NDEC])
 {
     const int ch0 = CH0[s], nCh = NCH[s];
     float mu[NDEC], invSigma[NDEC];
@@ -245,10 +245,9 @@ columns:
             group_blk_t own;
         own_blocks:
             for (int b = 0; b < NB; b++) {
-#pragma HLS UNROLL
-                own.b[b] = Y[b][c * NG + g];
+                own.b[b] = Y[c * SUBROWS + g * NB + b];
+                blocks.write(own.b[b]);
             }
-            blocks.write(own);
         sums_loop:
             for (int j = 0; j < NDEC; j++) {
 #pragma HLS PIPELINE II = 1
@@ -265,11 +264,9 @@ columns:
             for (int n = 0; n < 9; n++) {               // (iv, ih) with ih fastest
                 const int vshift = 1 - n / 3, hshift = 1 - n % 3;
                 const int cs = wrap(c - hshift, NCOLS);
-                for (int kb = 0; kb < NB; kb++) {         // bank kb holds the row of lane b
-#pragma HLS UNROLL
-                    const int b = (kb + vshift + NB) % NB;
+                for (int b = 0; b < NB; b++) {            // read over three cycles (two ports)
                     const int rs = wrap(g * NB + b - vshift, SUBROWS);
-                    nb[b] = Y[kb][cs * NG + rs / NB];
+                    nb[b] = Y[cs * SUBROWS + rs];
                 }
             channels:
                 for (int j = 0; j < nCh; j++) {
@@ -301,8 +298,8 @@ columns:
 // outputs but channel PS are zero as the mask would make them). Then the
 // sign flips (mus), and in the last stage the coefficient mask. Writes the
 // angles to qmem for the synthesis.
-void rotate(hls::stream<arow_t> &angles, hls::stream<group_blk_t> &blocks, const float prm[NPRM], int s,
-            blk_t Y[NB][DEPTH], qword_t *qmem)
+void rotate(hls::stream<arow_t> &angles, hls::stream<blk_t> &blocks, const float prm[NPRM], int s,
+            blk_t Y[NBLK], qword_t *qmem)
 {
     const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
     const int nA = NAK[s];
@@ -328,14 +325,13 @@ columns:
     for (int c = 0; c < NCOLS; c++) {
     read:
         for (int g = 0; g < NG; g++) {
-            group_blk_t grp;
             arow_t z;
             for (int b = 0; b < NB; b++) {
 #pragma HLS PIPELINE II = 1
-                if (b == 0) grp = blocks.read();
+                const blk_t y = blocks.read();
                 for (int j = 0; j < PS; j++) {
-                    vs[g][b][j] = grp.b[b].v[j];
-                    va[g][b][j] = grp.b[b].v[PS + j];
+                    vs[g][b][j] = y.v[j];
+                    va[g][b][j] = y.v[PS + j];
                 }
                 for (int k = 0; k < NZ0; k++) qw[g][b][k] = 0;   // the leading zero angles of W
             }
@@ -388,7 +384,7 @@ columns:
                 for (int j = 0; j < NDEC; j++) {
                     if (drop[j]) o.v[j] = 0.0f;
                 }
-                Y[b][c * NG + g] = o;
+                Y[c * SUBROWS + g * NB + b] = o;
             }
         }
     store_angles:
@@ -408,7 +404,7 @@ columns:
 }
 
 // One analysis stage: features -> estimator -> rotations, as a dataflow
-void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float prm[NPRM],
+void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM],
                    const wraw_t *wmem, const braw_t *bmem, const float *lnmem,
                    const float stats_in[2 * NSTATS], qword_t *qmem, int s, int sumFirst, int sumLast,
                    bool load, float sums[2][NDEC])
@@ -416,7 +412,7 @@ void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const floa
 #pragma HLS DATAFLOW
     hls::stream<row_t, FIFO> features;
     hls::stream<arow_t, FIFO> angles;
-    hls::stream<group_blk_t, NG + 24> blocks;   // the groups the estimator holds, and a column
+    hls::stream<blk_t, (NG + 24) * NB> blocks;  // the groups the estimator holds, and a column
     gather(Yin, stats_in, s, sumFirst, sumLast, features, blocks, sums);
     est_engine(features, angles, wmem, bmem, lnmem, s, NCOLS * NG, load);
     rotate(angles, blocks, prm, s, Yout, qmem);
@@ -425,7 +421,7 @@ void analysisStage(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const floa
 //---------------------------------------------------------------------------
 // Synthesis: the transposed rotations of stage s (s = 0: the final
 // rotation, W and U), after the sign flips, from the angles in qmem
-void synthesisRotation(const blk_t Yin[NB][DEPTH], blk_t Yout[NB][DEPTH], const float prm[NPRM], int s,
+void synthesisRotation(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM], int s,
                        const qword_t *qmem)
 {
     const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
@@ -449,7 +445,7 @@ columns:
         for (int g = 0; g < NG; g++) {
             for (int b = 0; b < NB; b++) {
 #pragma HLS PIPELINE II = 2
-                const blk_t y = Yin[b][c * NG + g];
+                const blk_t y = Yin[c * SUBROWS + g * NB + b];
                 for (int j = 0; j < PS; j++) {
                     vs[g][b][j] = (s == 0) ? flip(negW[j], y.v[j]) : y.v[j];
                     va[g][b][j] = flip(negU[j], y.v[PS + j]);
@@ -490,7 +486,7 @@ columns:
                     o.v[j] = vs[g][b][j];
                     o.v[PS + j] = va[g][b][j];
                 }
-                Yout[b][c * NG + g] = o;
+                Yout[c * SUBROWS + g * NB + b] = o;
             }
         }
     }
@@ -514,13 +510,14 @@ extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf
 #pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem3 depth = 2 * estdf::NLN
 #pragma HLS INTERFACE m_axi port = qmem offset = slave bundle = gmem4 depth = bdf::NQMEM
     using namespace bdf;
-    static blk_t A[NB][DEPTH], B[NB][DEPTH];
-#pragma HLS ARRAY_PARTITION variable = A type = complete dim = 1
-#pragma HLS ARRAY_PARTITION variable = B type = complete dim = 1
+    // The coefficients of the band, one block (16 floats) per word, column
+    // by column, in two buffers of two ports (URAM). (Five banks by row with
+    // block-wide multiplexers on every access congested the routing.)
+    static blk_t A[NBLK], B[NBLK];
 #pragma HLS AGGREGATE variable = A
 #pragma HLS AGGREGATE variable = B
-#pragma HLS BIND_STORAGE variable = A type = ram_2p impl = uram
-#pragma HLS BIND_STORAGE variable = B type = ram_2p impl = uram
+#pragma HLS BIND_STORAGE variable = A type = ram_t2p impl = uram
+#pragma HLS BIND_STORAGE variable = B type = ram_t2p impl = uram
 #pragma HLS ALLOCATION function instances = analysisStage limit = 1
     // the small parameters and the statistics, read once (the tasks of a
     // dataflow region cannot share their memory interface)

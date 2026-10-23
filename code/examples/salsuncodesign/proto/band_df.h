@@ -48,7 +48,7 @@ constexpr int NROWS = SZY / MY, NCOLS = SZX / MX;      // block rows and columns
 constexpr int SUBROWS = BAND + 2 * HALO;              // block rows of a band with halo
 constexpr int NG = SUBROWS / NB;                      // groups of NB rows in a column
 constexpr int NBANDS = (NROWS + BAND - 1) / BAND;
-constexpr int DEPTH = NCOLS * NG;                     // blocks per bank
+constexpr int NBLK = NCOLS * SUBROWS;                // blocks of a band (column by column)
 static_assert(SUBROWS % NB == 0, "the band rows with halo must be a multiple of NB");
 static_assert(HALO > 0 || BAND == NROWS, "a band without halo must be the whole frame height");
 
