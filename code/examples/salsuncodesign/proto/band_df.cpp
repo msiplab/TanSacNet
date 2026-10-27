@@ -90,7 +90,9 @@ float cospi(q_t q)
 q_t toAngle(acc_t v)
 {
     const ap_fixed<27, 6, AP_RND, AP_SAT> a = v;
-    const ap_ufixed<18, 0> c = 0.31830988618379067;   // 1/pi, rounded to 18 bits
+    // 1/pi rounded to 18 bits; below 1/2, so 17 bits hold it and the
+    // product fits one DSP (as two DSPs, wide products were wrong on the card)
+    const ap_ufixed<17, -1> c = 0.31830988618379067;
     const ap_fixed<18, 1, AP_RND, AP_WRAP> q = a * c;
     return q;
 }

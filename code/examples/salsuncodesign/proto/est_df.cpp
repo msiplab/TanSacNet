@@ -175,7 +175,13 @@ group:
             const lnp_t g = gam[poff + i], be = bet[poff + i];
             row_t r;
             for (int b = 0; b < NB; b++) {
-                const lnt_t t = (buf[i].v[b] - mean[b]) * rs[b];
+                // in LUTs: this product is wider than a DSP (27 x 18), and as
+                // two DSPs Vivado gave wrong products on the card (bits from
+                // 2^17 LSBs up counted twice), though not in simulation
+                const ap_fixed<25, 9> d = buf[i].v[b] - mean[b];
+                const ap_fixed<51, 19> pr = d * rs[b];
+#pragma HLS BIND_OP variable = pr op = mul impl = fabric
+                const lnt_t t = pr;
                 r.v[b] = t * g + be;
             }
             out.write(r);

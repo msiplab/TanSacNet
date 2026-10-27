@@ -19,6 +19,10 @@
 //   sums     : NDec x NEst x 2 single: sums and sums of squares of the
 //              estimator input channels over the blocks of each frame
 //
+//   [Y, sums, q] = salsun2d_band_df_mex(...) also returns the angle memory
+//   of the first unit after the call (uint8, the angles of the last band
+//   it processed; for debugging)
+//
 // With one frame, the bands are split into contiguous ranges, one per
 // compute unit, run at the same time; with n frames, frame j runs whole on
 // unit j. The device, the units and the buffers are opened on the first
@@ -180,7 +184,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         release();
         return;
     }
-    if (nrhs != 9 || nlhs > 2) {
+    if (nrhs != 9 || nlhs > 3) {
         mexErrMsgIdAndTxt("salsun2d_band_df_mex:invalidUsage",
                           "Usage: [Y, sums] = salsun2d_band_df_mex(xclbinPath, X, prm, W, B, LN, statsIn, "
                           "bandRows, halo) or salsun2d_band_df_mex('release')");
@@ -301,6 +305,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 const float *sd = u.sout.map<float *>();
                 for (int i = 0; i < 160; i++) so[i] += sd[i];
             }
+        }
+        if (nlhs > 2) {
+            Unit &u = a.units[0];
+            u.q.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+            plhs[2] = mxCreateNumericMatrix(nBytesQ, 1, mxUINT8_CLASS, mxREAL);
+            std::memcpy(mxGetUint8s(plhs[2]), u.q.map<uint8_t *>(), nBytesQ);
         }
     } catch (const std::exception &e) {
         release();

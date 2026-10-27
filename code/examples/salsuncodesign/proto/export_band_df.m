@@ -34,9 +34,15 @@ if ~isfolder(outDir), mkdir(outDir); end
 R = load(fullfile(here,'results','r3w1_800ep_seed0.mat'),'params'); P = R.params;
 L = salsun2d_hls_layout();
 
-% Frame: a corner of a wave frame
-u = single(salsun2d_wave_data());
-x = u(91:90+options.FrameSize(1),91:90+options.FrameSize(2),12);
+% Frame: a corner of a wave frame, or a frame of a larger simulation
+if all(options.FrameSize <= 210)
+    u = single(salsun2d_wave_data());
+    x = u(91:90+options.FrameSize(1),91:90+options.FrameSize(2),12);
+else
+    u = single(salsun2d_wave_data(FrameSize=options.FrameSize,Frames=[401 402], ...
+        Epicenters=[4 3; 10 6; 16 4; 7 8; 13 9; 2 9]*min(options.FrameSize)/1080));
+    x = u(:,:,2);
+end
 writeBin(fullfile(outDir,'x.bin'),x);
 
 % Small parameters
