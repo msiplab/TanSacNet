@@ -126,6 +126,14 @@ void allocate(Accelerator &a, size_t nBytesX, size_t nBytesQ, size_t nWords, siz
         u.y = xrt::bo(a.device, nBytesX, u.kernel.group_id(6));
         u.sout = xrt::bo(a.device, 160 * sizeof(float), u.kernel.group_id(7));
         u.q = xrt::bo(a.device, nBytesQ, u.kernel.group_id(8));
+        // The outputs written once from the host: in memory the host had not
+        // written since the card was programmed, the writes of the kernel
+        // were lost on the card (uninitialized ECC, it seems), and a unit
+        // working on some bands only returned what was there before
+        for (xrt::bo *bo : {&u.y, &u.sout, &u.q}) {
+            std::memset(bo->map(), 0, bo->size());
+            bo->sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        }
     }
     a.nBytesX = nBytesX;
     a.nBytesQ = nBytesQ;

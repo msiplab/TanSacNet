@@ -38,3 +38,6 @@ testdata_fhd/
 vitis_hls.log
 est_cosim/
 parts_csim/
+band_split_csim/
+run_csim_split.tcl
+tb_band_split.cpp
