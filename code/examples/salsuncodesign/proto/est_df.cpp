@@ -175,12 +175,20 @@ group:
             const lnp_t g = gam[poff + i], be = bet[poff + i];
             row_t r;
             for (int b = 0; b < NB; b++) {
-                // in LUTs: this product is wider than a DSP (27 x 18), and as
-                // two DSPs Vivado gave wrong products on the card (bits from
-                // 2^17 LSBs up counted twice), though not in simulation
+                // d * rs is wider than a DSP (27 x 18), and built by Vivado
+                // from two cascaded DSPs it was wrong on the card (bits from
+                // 2^17 LSBs up counted twice), though not in simulation; in
+                // LUTs it was right but left the 3-unit design unroutable.
+                // So take the integer and fraction parts of rs apart: each
+                // product fits one DSP, and as the split is at 16 bits, not
+                // the cascade's 17, they cannot be merged into that again.
                 const ap_fixed<25, 9> d = buf[i].v[b] - mean[b];
-                const ap_fixed<51, 19> pr = d * rs[b];
-#pragma HLS BIND_OP variable = pr op = mul impl = fabric
+                const ap_uint<10> rh = rs[b].range(25, 16);
+                ap_ufixed<16, 0> rl;
+                rl.range(15, 0) = rs[b].range(15, 0);
+                const ap_fixed<35, 19> ph = d * rh;
+                const ap_fixed<41, 9> pl = d * rl;
+                const ap_fixed<51, 19> pr = ph + pl;
                 const lnt_t t = pr;
                 r.v[b] = t * g + be;
             }
