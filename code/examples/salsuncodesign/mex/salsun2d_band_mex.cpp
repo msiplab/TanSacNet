@@ -130,6 +130,13 @@ void allocate(Accelerator &a, size_t nBytesX, size_t nBytesW, size_t nBytesS)
         u.sin = xrt::bo(a.device, nBytesS, u.kernel.group_id(2));
         u.y = xrt::bo(a.device, nBytesX, u.kernel.group_id(3));
         u.sout = xrt::bo(a.device, nBytesS, u.kernel.group_id(4));
+        // The outputs written once from the host: the kernel's writes to
+        // memory the host had not written since the card was programmed
+        // were lost on the card (as found with salsun2d_band_df_mex)
+        for (xrt::bo *bo : {&u.y, &u.sout}) {
+            std::memset(bo->map(), 0, bo->size());
+            bo->sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        }
     }
     a.nBytesX = nBytesX;
     a.nBytesW = nBytesW;
