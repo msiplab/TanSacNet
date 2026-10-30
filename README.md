@@ -38,7 +38,7 @@ parts of your network.
         │   │   └── +utility
         │   │       ├── OrthonormalMatrixGenerationSystem.m
         │   │       ...
-        │   ├── appendix
+        │   ├── python
         │   │   ├── setup.py
         │   │   └── torch_tansacnet
         │   │       ├── lsunAnalysis2dNetwork.py
