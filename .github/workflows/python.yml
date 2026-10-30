@@ -5,10 +5,12 @@ on:
     paths: ["code/python/**", ".github/workflows/python.yml"]
   pull_request:
     paths: ["code/python/**", ".github/workflows/python.yml"]
+  schedule:
+    - cron: "0 18 * * 0" # every Monday 03:00 JST, all tests
   workflow_dispatch:
     inputs:
       full:
-        description: "Also run the network tests (test_lsun*2dNetwork.py, long-running)"
+        description: "Also run the long-running network and rotation layer tests"
         type: boolean
         default: false
 
@@ -38,10 +40,12 @@ jobs:
         run: pip install ".[test]" pytest-xdist
       - name: Run tests
         run: |
-          if [ "${{ inputs.full }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.full }}" = "true" ]; then
             pytest -q -n auto
           else
-            pytest -q -n auto --ignore-glob="torch_tansacnet/test_lsun*2dNetwork.py"
+            pytest -q -n auto \
+              --ignore-glob="torch_tansacnet/test_lsun*2dNetwork.py" \
+              --ignore-glob="torch_tansacnet/test_lsun*Rotation2dLayer.py"
           fi
 
   build:
