@@ -1,0 +1,66 @@
+name: Python (torch_tansacnet)
+
+on:
+  push:
+    paths: ["code/python/**", ".github/workflows/python.yml"]
+  pull_request:
+    paths: ["code/python/**", ".github/workflows/python.yml"]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Also run the network tests (test_lsun*2dNetwork.py, long-running)"
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: code/python
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.10"
+            torch: "\"torch==2.3.1\" \"numpy<2\""
+          - python: "3.12"
+            torch: "torch"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install PyTorch (CPU)
+        run: pip install ${{ matrix.torch }} --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Install torch-tansacnet with the test dependencies
+        run: pip install ".[test]" pytest-xdist
+      - name: Run tests
+        run: |
+          if [ "${{ inputs.full }}" = "true" ]; then
+            pytest -q -n auto
+          else
+            pytest -q -n auto --ignore-glob="torch_tansacnet/test_lsun*2dNetwork.py"
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - name: Check the wheel contents
+        run: |
+          python -m zipfile -l dist/*.whl | tee wheel.txt
+          ! grep -q "torch_tansacnet/test_" wheel.txt
+          grep -q torch_tansacnet/lsunAnalysis2dNetwork.py wheel.txt
+      - name: Install the wheel and import
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+          /tmp/venv/bin/pip install dist/*.whl
+          cd /tmp && /tmp/venv/bin/python -c "import torch, torch_tansacnet as t; print(t.LsunAnalysis2dNetwork(input_size=[8, 8])(torch.zeros(1, 1, 8, 8)).shape)"
