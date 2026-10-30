@@ -48,7 +48,7 @@ int main(int argc, char **argv)
         return 1;
     }
     const int SZY = 1080, SZX = 1920, BAND = 31, NROWS = SZY / 4, P = 24;
-    const int NBANDS = (NROWS + BAND - 1) / BAND, NQMEM = (BAND + 14) * (SZX / 4) * 6;
+    const int NBANDS = (NROWS + BAND - 1) / BAND, NQMEM = (BAND + 14) / 5 * (SZX / 4) * 36;
     const auto x = readBin("x.bin"), prm = readBin("prm.bin"), w = readBin("wmem.bin"),
                b = readBin("bmem.bin"), l = readBin("ln.bin"), st = readBin("stats.bin"),
                yref = readBin("yref.bin");

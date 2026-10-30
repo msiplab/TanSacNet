@@ -35,18 +35,29 @@ engine and the rotations of a column), the coefficient mask (folded into
 the last rotation), the synthesis rotations and atom extensions, and the
 inverse DCT, as `salsun2d_hls_band.m` computes them. The coefficients of
 the band are in two buffers of five banks (row mod 5, URAM); the angles
-go to memory as 18-bit theta/pi (28 per 512-bit word) for the synthesis;
+go to memory as 18-bit theta/pi for the synthesis, an angle of the five
+blocks of a group as a row, five rows to a 512-bit word (no transpose);
 sin and cos come from an interpolated table (`sin_table.h`); the sign
 parameters and the mask are applied as sign flips and zeros; the
 rotations take one block per cycle, rotation-major over the blocks of a
-column; the LayerNorm normalization is in fixed point.
+column; the LayerNorm normalization is in fixed point. The feature
+gather gives one row of the five lanes per cycle over the nine
+neighbors (the blocks of the next neighbor read meanwhile), and the
+rotation takes the angles one row per cycle.
 
 C simulation (`run_csim_band.tcl`, data from `export_band_df.m`), 40 x 40
 frames, one band without halo or two 6-row bands with halo 7: max error
 against the MATLAB fixed-point model 1.3e-5 (max |y| 0.155).
 
 Synthesis for Full HD (1080 x 1920, 31-row bands, halo 7): estimated
-clock 3.77 ns; LUT 267k (62% of an SLR), FF 361k, DSP 1250, BRAM 353,
-URAM 222 (69%). About 11.4 M cycles per band (estimators 7.2 M,
-synthesis rotations 2.9 M), 34 M per frame for each of three compute
-units (three bands each): about 0.11-0.13 s/frame at 260-300 MHz.
+clock 3.66 ns; LUT 257k, FF 272k, DSP 1258, BRAM 373, URAM 190. Per
+column of a band, the gather takes 1299-1866 cycles and the rotation
+879-2067 (4538-5105 and 5038-6928 before), below the estimator from
+stage 1 on (about 2300); stage 0 is bound by its first FC (about 7650).
+
+On the card (Alveo U250, three compute units at 300 MHz, LUT 152k per
+unit): 0.160 s/frame with a frame per unit (0.199 before), 0.173 with a
+frame split over the units; the output equals the fixed-point model
+(max error 4.4e-5). 15.4 M cycles per band for a unit, against about
+12.7 M from the synthesis estimates. Board power 60.1 W under load,
+50.5 W idle: 9.6 J/frame (11.3 before).

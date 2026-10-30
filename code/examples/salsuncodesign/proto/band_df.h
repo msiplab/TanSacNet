@@ -55,12 +55,20 @@ static_assert(HALO > 0 || BAND == NROWS, "a band without halo must be the whole 
 // Angles per block: stage 0 (W and U, 28 each), stages 1..3 (28), stage 4 (7)
 constexpr int NROT = PA * (PA - 1) / 2;               // 28
 constexpr int NROT_LAST = PA - 1;                     // 7
-// Angle memory: 28 angles of 18 bits per 512-bit word; per block 2 words
-// for stage 0 (W, U) and 1 for each other stage, the blocks of a stage in
-// a region of their own
-constexpr int NQW = 6;                                // words per block
-constexpr int qwOffset(int s) { return s == 0 ? 0 : s + 1; }
-constexpr int NQMEM = SUBROWS * NCOLS * NQW;          // angle memory words of a band
+// Angle memory: per group, the angles k of its NB blocks, NQR angles to
+// a 512-bit word, from place NQPAD of the first word on, so that the last
+// word is full (angle k in word (k + NQPAD) / NQR at bits 18 (NB i + b),
+// i = (k + NQPAD) % NQR, block b), NQ5 words for the 28 angles; per group
+// 2 NQ5 words for stage 0 (W, then U) and NQ5 for each other stage, the
+// groups of a stage in a region of their own
+constexpr int NQR = 5;                                // angles per word
+constexpr int NQ5 = (NROT + NQR - 1) / NQR;           // words of 28 angles (6)
+constexpr int NQPAD = NQ5 * NQR - NROT;               // unused places of the first word (2)
+constexpr int NQG = (NSTAGES + 2) * NQ5;              // words per group (36)
+constexpr int NQMEM = NCOLS * NG * NQG;               // angle memory words of a band
+constexpr int qgWords(int s) { return s == 0 ? 2 * NQ5 : NQ5; }
+constexpr int qgAddr(int s, int grp) { return s == 0 ? grp * 2 * NQ5 : NCOLS * NG * (s + 1) * NQ5 + grp * NQ5; }
+static_assert(18 * NB * NQR <= 512, "NQR angles of the NB blocks fit a word");
 
 // Small parameters (prm): Cvh (16 x 16, column-major), Mask, V0 MusW, MusU,
 // V0t MusW, MusU, stage Mus and SynMus (4 x 8 each)

@@ -59,7 +59,8 @@ namespace {
 const char *KERNEL_NAME = "salsun2d_band_df";
 constexpr int P = 24;            // weights per word
 constexpr int WORD = 64;         // bytes per weight or angle word
-constexpr int NQW = 6;           // angle words per block
+constexpr int NB = 5;            // blocks per group (rows of a column)
+constexpr int NQG = 36;          // angle words per group
 
 struct Unit {
     xrt::kernel kernel;
@@ -217,7 +218,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     const size_t nBytesX = szy * szx * sizeof(float);
     const int nRows = static_cast<int>(szy / 4), nCols = static_cast<int>(szx / 4);
-    const size_t nBytesQ = static_cast<size_t>(bandRows + 2 * halo) * nCols * NQW * WORD;
+    const size_t nBytesQ = static_cast<size_t>((bandRows + 2 * halo) / NB) * nCols * NQG * WORD;
     const size_t nWords = mxGetN(w), nBias = mxGetNumberOfElements(b), nLn = mxGetNumberOfElements(ln);
     const int nBands = (nRows + bandRows - 1) / bandRows;
 

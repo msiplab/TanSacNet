@@ -25,7 +25,9 @@ constexpr int SYNSHIFT[NSTAGES][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
 constexpr int SYNTARGET[NSTAGES] = {1, 2, 1, 2};
 constexpr int CH0[NEST] = {1, 8, 8, 8, 8};    // first input channel of each estimator (0-based)
 constexpr int NCH[NEST] = {15, 8, 8, 8, 8};
+static_assert(NB <= 8, "gather reads the NB blocks of the next neighbor within a neighbor (8 channels or more)");
 constexpr int NZ0 = 7;                         // leading zero angles of W (stage 0)
+static_assert((NZ0 + NQPAD) / NQR == 1, "rotate zeros the first word of W and starts within the second");
 
 // Pairs of the Givens rotations: (0,1), (0,2), ..., (0,7), (1,2), ..., (6,7)
 const int GTOP[NROT] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};
@@ -49,18 +51,6 @@ void givens(float v[PA], int t, int bt, float c, float s, bool transposed)
     const float nt = transposed ? c * vt + s * vb : c * vt - s * vb;
     const float nb = transposed ? c * vb - s * vt : s * vt + c * vb;
     for (int j = 0; j < PA; j++) v[j] = (j == t) ? nt : ((j == bt) ? nb : x[j]);
-}
-
-// 28 angles to and from a memory word (constant bit positions)
-qword_t pack(const q_t q[NROT])
-{
-    qword_t w = 0;
-    for (int k = 0; k < NROT; k++) w.range(18 * k + 17, 18 * k) = q[k].range(17, 0);
-    return w;
-}
-void unpack(qword_t w, q_t q[NROT])
-{
-    for (int k = 0; k < NROT; k++) q[k].range(17, 0) = w.range(18 * k + 17, 18 * k);
 }
 
 int wrap(int i, int n)
@@ -238,8 +228,9 @@ void gather(const blk_t Y[NBLK], const float stats_in[2 * NSTATS], int s, int su
             s1[b][j] = 0.0f;
             s2[b][j] = 0.0f;
         }
-    blk_t nb[NB];
+    blk_t nb[NB], nx[NB];   // the blocks of a neighbor, and of the next
 #pragma HLS ARRAY_PARTITION variable = nb type = complete
+#pragma HLS ARRAY_PARTITION variable = nx type = complete
 columns:
     for (int c = 0; c < NCOLS; c++) {
     groups:
@@ -262,23 +253,37 @@ columns:
                     }
                 }
             }
+            // The neighbors (iv, ih) with ih fastest, one feature row per
+            // cycle over all of them: the blocks of the next neighbor are
+            // read one per cycle in the first NB cycles of a neighbor
+            for (int b = 0; b < NB; b++) {
+                nb[b] = Y[wrap(c - 1, NCOLS) * SUBROWS + wrap(g * NB + b - 1, SUBROWS)];
+            }
         neighbors:
-            for (int n = 0; n < 9; n++) {               // (iv, ih) with ih fastest
-                const int vshift = 1 - n / 3, hshift = 1 - n % 3;
-                const int cs = wrap(c - hshift, NCOLS);
-                for (int b = 0; b < NB; b++) {            // read over three cycles (two ports)
-                    const int rs = wrap(g * NB + b - vshift, SUBROWS);
-                    nb[b] = Y[cs * SUBROWS + rs];
-                }
-            channels:
-                for (int j = 0; j < nCh; j++) {
+            // (iv, ih) of the next neighbor, from (0, 1)
+            for (int t = 0, n = 0, j = 0, iv = 0, ih = 1; t < 9 * nCh; t++) {
 #pragma HLS PIPELINE II = 1
-#pragma HLS LOOP_TRIPCOUNT max = 15
-                    row_t f;
-                    for (int b = 0; b < NB; b++) {
-                        f.v[b] = (nb[b].v[ch0 + j] - mu[ch0 + j]) * invSigma[ch0 + j];
+#pragma HLS LOOP_TRIPCOUNT max = 135
+                if (n < 8 && j < NB) {
+                    nx[j] = Y[wrap(c - 1 + ih, NCOLS) * SUBROWS + wrap(g * NB + j - 1 + iv, SUBROWS)];
+                }
+                row_t f;
+                for (int b = 0; b < NB; b++) {
+                    f.v[b] = (nb[b].v[ch0 + j] - mu[ch0 + j]) * invSigma[ch0 + j];
+                }
+                features.write(f);
+                if (j == nCh - 1) {
+                    for (int b = 0; b < NB; b++) nb[b] = nx[b];
+                    j = 0;
+                    n++;
+                    if (ih == 2) {
+                        ih = 0;
+                        iv++;
+                    } else {
+                        ih++;
                     }
-                    features.write(f);
+                } else {
+                    j++;
                 }
             }
         }
@@ -292,6 +297,15 @@ columns:
         sums[0][j] = a1;
         sums[1][j] = a2;
     }
+}
+
+// Angle k of block b of a group in its word of qmem (band_df.h)
+q_t angleOf(const qword_t &w, int k, int b)
+{
+    const int bit = 18 * (NB * ((k + NQPAD) % NQR) + b);
+    q_t q;
+    q.range(17, 0) = w.range(bit + 17, bit);
+    return q;
 }
 
 // Rotations of the blocks of a column by the angles of stage s: stage 0
@@ -315,19 +329,17 @@ void rotate(hls::stream<arow_t> &angles, hls::stream<blk_t> &blocks, const float
         negU[j] = ((s == 0) ? prm[P_V0U + j] : prm[P_MUS + (s - 1) * PA + j]) < 0;
     }
     for (int j = 0; j < NDEC; j++) drop[j] = (s == NSTAGES) && prm[P_MASK + j] == 0.0f;
-    q_t qw[NG][NB][NROT], qu[NG][NB][NROT];   // the angles of each block
-#pragma HLS ARRAY_PARTITION variable = qw type = complete dim = 3
-#pragma HLS ARRAY_PARTITION variable = qu type = complete dim = 3
+    qword_t qw[NQ5 * NG], qu[NQ5 * NG];   // the angles of the groups, as in qmem
     float vs[NG][NB][PS], va[NG][NB][PA];
 #pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
 #pragma HLS ARRAY_PARTITION variable = va type = complete dim = 3
-    // The blocks and angles are read one block per cycle (the estimator
-    // takes longer per group), the symmetric half kept in vs in every stage
+    // The blocks are read one per cycle, the angles one row of the NB
+    // blocks per cycle, put together NQR rows to a word; the symmetric
+    // half kept in vs in every stage
 columns:
     for (int c = 0; c < NCOLS; c++) {
     read:
         for (int g = 0; g < NG; g++) {
-            arow_t z;
             for (int b = 0; b < NB; b++) {
 #pragma HLS PIPELINE II = 1
                 const blk_t y = blocks.read();
@@ -335,21 +347,40 @@ columns:
                     vs[g][b][j] = y.v[j];
                     va[g][b][j] = y.v[PS + j];
                 }
-                for (int k = 0; k < NZ0; k++) qw[g][b][k] = 0;   // the leading zero angles of W
             }
+            // The rows go in at the top of a word and down one place per
+            // row, so that a word is complete after its last place (the
+            // leading zero angles of W: the first word, the first places
+            // of the second, as acc starts from zero)
+            qw[g] = 0;
+            ap_uint<18 * NB * NQR> acc = 0;
+            bool toW = (s == 0);
+            int i = toW ? (NZ0 + NQPAD) % NQR : NQPAD, w = toW ? (NZ0 + NQPAD) / NQR : 0;
         read_angles:
             for (int a = 0; a < nA; a++) {
-#pragma HLS LOOP_TRIPCOUNT max = 49
-                for (int b = 0; b < NB; b++) {
 #pragma HLS PIPELINE II = 1
-                    if (b == 0) z = angles.read();
-                    const q_t q = toAngle(z.v[b]);
-                    if (s == 0 && a < NROT - NZ0) {
-                        qw[g][b][NZ0 + a] = q;
+#pragma HLS LOOP_TRIPCOUNT max = 49
+                const arow_t z = angles.read();
+                ap_uint<18 * NB> row;
+                for (int b = 0; b < NB; b++) row.range(18 * b + 17, 18 * b) = toAngle(z.v[b]).range(17, 0);
+                acc = (acc >> (18 * NB)) | (ap_uint<18 * NB * NQR>(row) << (18 * NB * (NQR - 1)));
+                if (i == NQR - 1) {
+                    if (toW) {
+                        qw[w * NG + g] = acc;
                     } else {
-                        const int k = (s == 0) ? a - (NROT - NZ0) : a;
-                        if (k < NROT) qu[g][b][k] = q;
+                        qu[w * NG + g] = acc;
                     }
+                    acc = 0;
+                }
+                if (i == NQR - 1 && w == NQ5 - 1) {   // W done: U from its first angle
+                    toW = false;
+                    i = NQPAD;
+                    w = 0;
+                } else if (i == NQR - 1) {
+                    i = 0;
+                    w++;
+                } else {
+                    i++;
                 }
             }
         }
@@ -361,10 +392,10 @@ columns:
 #pragma HLS PIPELINE II = 1
 #pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
 #pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
-                    const q_t qk = qu[g][b][k];
+                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b);
                     givens(va[g][b], t, bt, cospi(qk), sinpi(qk), false);
                     if (s == 0) {
-                        const q_t qwk = qw[g][b][k];
+                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b);
                         givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), false);
                     }
                 }
@@ -391,15 +422,13 @@ columns:
         }
     store_angles:
         for (int g = 0; g < NG; g++) {
-            for (int b = 0; b < NB; b++) {
-#pragma HLS PIPELINE II = 2
-                const int blk = c * SUBROWS + g * NB + b;
-                if (s == 0) {
-                    qmem[blk * 2] = pack(qw[g][b]);
-                    qmem[blk * 2 + 1] = pack(qu[g][b]);
-                } else {
-                    qmem[SUBROWS * NCOLS * qwOffset(s) + blk] = pack(qu[g][b]);
-                }
+            const int nw = qgWords(s);
+            for (int w = 0; w < nw; w++) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT max = 2 * NQ5
+                const bool isW = (s == 0 && w < NQ5);
+                const int wu = (s == 0) ? w - NQ5 : w;
+                qmem[qgAddr(s, c * NG + g) + w] = isW ? qw[w * NG + g] : qu[wu * NG + g];
             }
         }
     }
@@ -413,8 +442,10 @@ void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM
 {
 #pragma HLS DATAFLOW
     hls::stream<row_t, FIFO> features;
-    hls::stream<arow_t, FIFO> angles;
-    hls::stream<blk_t, (NG + 24) * NB> blocks;  // the groups the estimator holds, and a column
+    // a column of angles, so that the estimator goes on while the
+    // rotation works on the previous column; the blocks one column more
+    hls::stream<arow_t, NG * NAMAX> angles;
+    hls::stream<blk_t, (2 * NG + 24) * NB> blocks;  // the groups the estimator holds, and two columns
     gather(Yin, stats_in, s, sumFirst, sumLast, features, blocks, sums);
     est_engine(features, angles, wmem, bmem, lnmem, s, NCOLS * NG, load);
     rotate(angles, blocks, prm, s, Yout, qmem);
@@ -435,9 +466,7 @@ void synthesisRotation(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[
         negW[j] = prm[P_V0TW + j] < 0;
         negU[j] = ((s == 0) ? prm[P_V0TU + j] : prm[P_SYNMUS + (s - 1) * PA + j]) < 0;
     }
-    q_t qw[NG][NB][NROT], qu[NG][NB][NROT];   // the angles of each block
-#pragma HLS ARRAY_PARTITION variable = qw type = complete dim = 3
-#pragma HLS ARRAY_PARTITION variable = qu type = complete dim = 3
+    qword_t qw[NQ5 * NG], qu[NQ5 * NG];   // the angles of the groups, as in qmem
     float vs[NG][NB][PS], va[NG][NB][PA];
 #pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
 #pragma HLS ARRAY_PARTITION variable = va type = complete dim = 3
@@ -446,18 +475,25 @@ columns:
     read:
         for (int g = 0; g < NG; g++) {
             for (int b = 0; b < NB; b++) {
-#pragma HLS PIPELINE II = 2
+#pragma HLS PIPELINE II = 1
                 const blk_t y = Yin[c * SUBROWS + g * NB + b];
                 for (int j = 0; j < PS; j++) {
                     vs[g][b][j] = (s == 0) ? flip(negW[j], y.v[j]) : y.v[j];
                     va[g][b][j] = flip(negU[j], y.v[PS + j]);
                 }
-                const int blk = c * SUBROWS + g * NB + b;
-                if (s == 0) {
-                    unpack(qmem[blk * 2], qw[g][b]);
-                    unpack(qmem[blk * 2 + 1], qu[g][b]);
+            }
+        }
+    read_angles:
+        for (int g = 0; g < NG; g++) {
+            const int nw = qgWords(s);
+            for (int w = 0; w < nw; w++) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT max = 2 * NQ5
+                const qword_t q = qmem[qgAddr(s, c * NG + g) + w];
+                if (s == 0 && w < NQ5) {
+                    qw[w * NG + g] = q;
                 } else {
-                    unpack(qmem[SUBROWS * NCOLS * qwOffset(s) + blk], qu[g][b]);
+                    qu[((s == 0) ? w - NQ5 : w) * NG + g] = q;
                 }
             }
         }
@@ -470,10 +506,10 @@ columns:
 #pragma HLS PIPELINE II = 1
 #pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
 #pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
-                    const q_t qk = qu[g][b][k];
+                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b);
                     givens(va[g][b], t, bt, cospi(qk), sinpi(qk), true);
                     if (s == 0) {
-                        const q_t qwk = qw[g][b][k];
+                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b);
                         givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), true);
                     }
                 }

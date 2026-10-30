@@ -41,3 +41,6 @@ parts_csim/
 band_split_csim/
 run_csim_split.tcl
 tb_band_split.cpp
+band_fhd_fast*/
+fhd_csim_run/
+build_fhd3_fast.sh
