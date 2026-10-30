@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "torch-tansacnet"
+dynamic = ["version"]
+description = "LSUN layers and networks for PyTorch, ported from the TanSacNet MATLAB package"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Shogo Muramatsu", email = "shogo@eng.niigata-u.ac.jp" }]
+requires-python = ">=3.10"
+dependencies = ["torch>=2.3"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4", "parameterized>=0.9", "scipy>=1.10", "torch-dct>=0.1.6"]
+examples = ["torchvision>=0.18", "matplotlib>=3.6", "requests", "torchinfo", "ipykernel"]
+dev = ["torch-tansacnet[test,examples]", "build"]
+
+[project.urls]
+Repository = "https://github.com/msiplab/TanSacNet"
+
+[tool.hatch.version]
+path = "torch_tansacnet/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["torch_tansacnet"]
+exclude = ["torch_tansacnet/test_*.py", "torch_tansacnet/mytest.py", "torch_tansacnet/.gitignore"]
+
+[tool.hatch.build.targets.sdist]
+include = ["torch_tansacnet", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["torch_tansacnet"]
+python_files = ["test_*.py"]
+# code/__init__.py would otherwise make pytest import the tests as
+# code.python.torch_tansacnet.*, which clashes with the standard module "code"
+addopts = "--import-mode=importlib"
+pythonpath = ["."]
