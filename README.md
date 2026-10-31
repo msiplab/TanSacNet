@@ -111,6 +111,12 @@ parts of your network.
    and then execute an M-file of which name begins with 'disp,' such as
  
         >> disp_xxxx
+
+For a quick tour of the package, run the live script 'quickstart' in the directory 'code'
+
+        >> quickstart
+
+Its Python (PyTorch) counterpart is the notebook 'code/quickstart.ipynb'.
  
 ## Contact address
  
