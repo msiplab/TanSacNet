@@ -74,7 +74,7 @@ y = synthesisnet.predict(s{:});
 display("MSE: " + num2str(mse(x,y)))
 %%
 %[text] ## Show the atomic images
-%[text] The atomic images (basis images) of LSUN are the columns of $\\mathbf{D}$. They are obtained by synthesizing a unit impulse placed at the center of each channel of the coefficients.
+%[text] The atomic images (basis images) of LSUN are the columns of $\\mathbf{D}$. They are obtained by synthesizing a unit impulse placed at the center block of each channel of the coefficients. The following shows the atomic images at the center block.
 cy = szy/stride(1)/2+1; % Center of the coefficients
 cx = szx/stride(2)/2+1;
 atoms = zeros(szy,szx,nChs);
@@ -97,7 +97,36 @@ for iCh = 1:nChs
     nexttile
     imshow(atoms(:,:,iCh),[-vmax vmax],'InitialMagnification','fit')
 end
-title(tl,'Atomic images of LSUN')
+title(tl,'Atomic images of LSUN at the center block')
+%%
+%[text] ## Confirm that the atomic images depend on the location
+%[text] LSUN is not a convolutional dictionary. Since the angles of the rotation layers are given block by block, the atomic images change from location to location, while those of a convolutional dictionary are shifted copies of each other. Let us show the atomic images of one channel at the $3\\times 3$ blocks around the center. Each image is cropped relative to its own block.
+iCh = 2;        % Channel to show (the first AC channel)
+offsets = -1:1; % Block offsets from the center
+rowOfs = rows - (cy-1)*stride(1); % Support relative to the block position
+colOfs = cols - (cx-1)*stride(2);
+atomsLoc = zeros(numel(rowOfs),numel(colOfs),numel(offsets)^2);
+iAtom = 0;
+for dy = offsets
+    for dx = offsets
+        iAtom = iAtom + 1;
+        by = cy + dy; % Block position
+        bx = cx + dx;
+        coefs = cellfun(@(c) zeros(size(c),'like',c),s,'UniformOutput',false);
+        coefs{1}(by,bx,iCh-1) = 1;
+        atom = gather(extractdata(synthesisnet.predict(coefs{:})));
+        atomsLoc(:,:,iAtom) = atom((by-1)*stride(1)+rowOfs,(bx-1)*stride(2)+colOfs);
+    end
+end
+vmax = max(abs(atomsLoc(:)));
+tl = tiledlayout(numel(offsets),numel(offsets),'TileSpacing','compact');
+for iAtom = 1:numel(offsets)^2
+    nexttile
+    imshow(atomsLoc(:,:,iAtom),[-vmax vmax],'InitialMagnification','fit')
+end
+title(tl,"Atomic images of channel " + iCh + " at 3x3 blocks")
+%[text] For a convolutional dictionary, all of the images above would be identical. The maximum absolute difference from the atomic image at the center block is
+maxDiff = max(abs(atomsLoc - atomsLoc(:,:,(end+1)/2)),[],'all')
 %%
 %[text] ## Next steps
 %[text] Several example codes are found under the directory 'examples'. For the training of LSUN as an image approximation like PCA, see examples/lsun/main\_lsun.m.
