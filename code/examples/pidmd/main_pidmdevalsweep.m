@@ -117,8 +117,6 @@ for iTrial = 1:nTrials
         if islsun
             options.ovlpFactor = config.ovlpFactor*[1 1];
             options.nCoefs = config.nCoefs4LSUNtrunc;
-            options.useGPU = true;
-            options.outputEnvironment = 'gpu';
         end
         %disp(options)
 

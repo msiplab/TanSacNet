@@ -104,9 +104,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testPredictGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             import matlab.unittest.constraints.IsEqualTo
@@ -169,9 +169,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testPredictGrayscaleWithDeviceAndDType(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             
             import matlab.unittest.constraints.IsEqualTo
@@ -242,10 +242,10 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testPredictGrayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end  
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
+            end
             if usegpu
                 device_ = "cuda";
             else
@@ -318,9 +318,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testPredictGrayscaleWithRandomAnglesNoDcLeackage(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, mus, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -401,9 +401,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testBackwardGrayscale(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -536,9 +536,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testBackwardGrayscaleWithDeviceAndDType(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             device_ = ["cpu", "cuda"];      
@@ -674,9 +674,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testBackwardGayscaleWithRandomAngles(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -810,9 +810,9 @@ classdef lsunFinalRotation3dLayerTestCase < matlab.unittest.TestCase
         function testBackwardWithRandomAnglesNoDcLeackage(testCase, ...
                 usegpu, stride, nrows, ncols, nlays, mus, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";

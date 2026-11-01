@@ -3,7 +3,7 @@
 %[text] 
 %[text] Please do not forget to run **setpath** in the top directory of this package, and then return to this directory.
 %[text] 
-%[text] Requirements: MATLAB R2022a
+%[text] Requirements: MATLAB R2025a or later
 %[text] 【Reference】
 %[text] 1. Yasas Godage, Eisuke Kobayashi and Shogo Muramatsu (2024), "Locally-Structured Unitary Network", APSIPA Transactions on Signal and Information Processing: Vol. 13: No. 1, e9. [http://dx.doi.org/10.1561/116.00000308](http://dx.doi.org/10.1561/116.00000308) \
 %[text]  Contact address: Shogo MURAMATSU,
