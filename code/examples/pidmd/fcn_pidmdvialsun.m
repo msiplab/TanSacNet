@@ -26,8 +26,18 @@ if islsun
         options.sgddecay = 0.01;
         options.initialLearnRate = 1e-4;
         options.lineLossTrain = [];
-        options.useGPU = true;
-        options.outputEnvironment = 'auto';
+        options.useGPU = canUseGPU;
+        if options.useGPU
+            options.outputEnvironment = 'gpu';
+        else
+            options.outputEnvironment = 'cpu';
+        end
+        % Use single precision on a GPU without full-rate FP64
+        if options.useGPU && ~tansacnet.utility.isFp64GpuAvailable
+            options.datatype = 'single';
+        else
+            options.datatype = 'double';
+        end
     end
 else
     options = [];
@@ -60,9 +70,20 @@ if islsun
     miniBatchSize = options.miniBatchSize;
     maxEpochs = options.maxEpochs;
     outputEnvironment = options.outputEnvironment;
+    if isfield(options,'datatype')
+        datatype = options.datatype;
+    else
+        datatype = 'double';
+    end
+    if options.useGPU
+        device = 'cuda';
+    else
+        device = 'cpu';
+    end
 
     %% Pad zeros to make the size multiples of nDecs.
     obsData = padarray(obsData,[szy szx]-[nrows ncols],0,'post');
+    obsData = cast(obsData,datatype);
 
     %% Construction of analysis network.
     analysislgraph = fcn_createlsunlgraph2d([],...
@@ -70,7 +91,9 @@ if islsun
         'Stride',stride,...
         'OverlappingFactor',ovlpFactor,...
         'NumberOfVanishingMoments',noDcLeakage,...
-        'Mode','Analyzer');
+        'Mode','Analyzer',...
+        'Device',device,...
+        'DType',datatype);
     analysisnet = dlnetwork(analysislgraph);
 
     %% Initialize
@@ -120,7 +143,7 @@ if islsun
         'OutputAsDlarray',1,...
         'MiniBatchFcn',@preprocessMiniBatch,...
         'MiniBatchFormat','SSCB',...
-        'OutputCast','double',...
+        'OutputCast',datatype,...
         'OutputEnvironment',outputEnvironment);
     shuffle(mbq)
     dlX = next(mbq);
@@ -186,13 +209,17 @@ if islsun
         'Stride',stride,...
         'OverlappingFactor',ovlpFactor,...
         'NumberOfVanishingMoments',noDcLeakage,...
-        'Mode','Analyzer');
+        'Mode','Analyzer',...
+        'Device',device,...
+        'DType',datatype);
     lsunsyn4predict = fcn_createlsunlgraph2d([],...
         'InputSize',szExt,...
         'Stride',stride,...
         'OverlappingFactor',ovlpFactor,...
         'NumberOfVanishingMoments',noDcLeakage,...
-        'Mode','Synthesizer');
+        'Mode','Synthesizer',...
+        'Device',device,...
+        'DType',datatype);
     trainlgraph = layerGraph(trainnet);
     lsunsyn4predict = fcn_cpparamsana2syn(lsunsyn4predict,trainlgraph);
     lsunana4predict = fcn_cpparamssyn2ana(lsunana4predict,lsunsyn4predict);
@@ -376,4 +403,4 @@ for iLayer = 1:nLayers
         stride = layer.Stride;
     end
 end
-end
+end

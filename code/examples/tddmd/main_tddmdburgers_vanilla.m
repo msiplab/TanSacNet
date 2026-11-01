@@ -1,6 +1,6 @@
 %[text] # **Analysis of the Burgers equation by vanilla DMD**
 %[text] First run TanSacNet/code/setpath
-%[text] Requirements: MATLAB R2022b 
+%[text] Requirements: MATLAB R2025a or later
 %[text] Contact address: Shogo MURAMATSU, Faculty of Engineering, Niigata University, 8050 2-no-cho Ikarashi, Nishi-ku, Niigata, 950-2181, JAPAN http://msiplab.eng.niigata-u.ac.jp  
 %[text] Copyright (c) 2023, Hayato Obara and Shogo MURAMATSU, All rights reserved.
 clc, clear

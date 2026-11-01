@@ -79,10 +79,8 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             end
 
             % Use gpu
-            if gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+            testCase.assumeTrue(tansacnet.utility.isGpuAvailable('double'), ...
+                'No GPU device supporting double was detected.')
 
             try
                 step(testCase.omgs,gpuArray(0),1);
@@ -142,10 +140,8 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
             end
 
             % Use gpu
-            if gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
-            end
+            testCase.assumeTrue(tansacnet.utility.isGpuAvailable('double'), ...
+                'No GPU device supporting double was detected.')
 
             % Exception test for device
             try
@@ -166,9 +162,9 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
 
         % Test for default construction
         function testConstructorWithDeviceAndDType(testCase, usegpu, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             
             device_ = [ "cpu", "cuda" ];
@@ -240,9 +236,9 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
 
         % Test for default construction
         function testConstructorWithAnglesDeviceAndDType(testCase, usegpu, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             if strcmp(datatype,'single')
@@ -320,9 +316,9 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end
         
         function testConstructorWithAnglesMultipleWithDeviceAndDType(testCase, usegpu, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if strcmp(datatype,'single')
                 reltol = single(1e-6);
@@ -401,9 +397,9 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end
 
         function testConstructorWithAnglesAndMusWithDeviceAndDType(testCase, usegpu, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             if strcmp(datatype,'single')
@@ -544,9 +540,9 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
 
         function testConstructorWithAnglesAndMusMultipleWithDeviceAndDType(testCase, usegpu, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             if strcmp(datatype,'single')
@@ -1142,9 +1138,9 @@ classdef OrthonormalMatrixGenerationSystemTestCase < matlab.unittest.TestCase
         end
 
         function testPartialDifferenceWithAnglesAndMusWithDeviceAndDType(testCase,usegpu,datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if strcmp(datatype,'single')
                 reltol = single(1e-6);

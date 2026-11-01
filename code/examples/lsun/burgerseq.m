@@ -1,7 +1,7 @@
 %[text] # LSUN によるBurgers方程式の解析
 %[text] 最初にTanSacNet/code/**setpath** を実行してください。
 %[text] 
-%[text] Requirements: MATLAB R2022b
+%[text] Requirements: MATLAB R2025a or later
 %[text] 
 %[text]  Contact address: Shogo MURAMATSU,
 %[text]         Faculty of Engineering, Niigata University,

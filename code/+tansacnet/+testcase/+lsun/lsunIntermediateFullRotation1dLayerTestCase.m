@@ -104,9 +104,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         function testPredict(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             import matlab.unittest.constraints.IsEqualTo
@@ -169,9 +169,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         function testPredictWithDeviceAndDType(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             
             import matlab.unittest.constraints.IsEqualTo
@@ -244,9 +244,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         function testPredictWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -328,9 +328,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         function testPredictAnalysisMode(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
 
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -418,9 +418,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         function testBackward(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -539,9 +539,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
         function testBackwardWithDeviceAndDType(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
             
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
 
             device_ = ["cpu", "cuda"];      
@@ -663,9 +663,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardWithRandomAngles(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
@@ -783,9 +783,9 @@ classdef lsunIntermediateFullRotation1dLayerTestCase < matlab.unittest.TestCase
 
         function testBackwardAnalysisMode(testCase, ...
                 usegpu, stride, nblks, mus, datatype)
-            if usegpu && gpuDeviceCount == 0
-                warning('No GPU device was detected.')
-                return;
+            if usegpu
+                testCase.assumeTrue(tansacnet.utility.isGpuAvailable(datatype), ...
+                    'No GPU device supporting '+string(datatype)+' was detected.')
             end
             if usegpu
                 device_ = "cuda";
