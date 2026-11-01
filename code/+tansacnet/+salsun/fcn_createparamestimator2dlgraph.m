@@ -1,16 +1,23 @@
 function lgraph = fcn_createparamestimator2dlgraph(lgraph,varargin)
 %FCN_CREATEPARAMESTIMATOR2DLGRAPH
 %
-%   Input (unconnected):
-%     [Prefix 'Extract'] : p x nRows x nCols x nSamples -- the block
-%                          state to be watched by the estimator (e.g.
-%                          the output of the input-layer orthonormal
-%                          transform).
-%   Output (unconnected):
-%     [Prefix 'Theta']   : nAngles x (nRows*nCols) x nSamples, to be
-%                          connected to the 'theta' input of the
-%                          corresponding rotation layer.
+%   The default angle estimator of tansacnet.salsun.fcn_createsalsunlgraph2d
+%   (see there for the estimator interface): local state extraction,
+%   standardization, an optional bottleneck projection, residual blocks
+%   and an output layer.
 %
+%   Input (unconnected):
+%     [Prefix 'Ext']   : p x nRows x nCols x nSamples -- the block
+%                        state to be watched by the estimator (e.g.
+%                        the output of the input-layer orthonormal
+%                        transform).
+%   Output (unconnected):
+%     [Prefix 'Theta'] : nAngles x (nRows*nCols) x nSamples, to be
+%                        connected to the 'theta' input of the
+%                        corresponding rotation layer.
+%
+%   NumberOfBlocks, Stride, Side and StageName, which the builder passes
+%   to every estimator, are accepted and not used.
 %
 % Requirements: MATLAB R2022a
 %
@@ -39,6 +46,11 @@ addParameter(p,'NumberOfResidualBlocks',3)
 addParameter(p,'Width',2)
 addParameter(p,'BottleneckSize',0)
 addParameter(p,'NoDcLeakage',false)
+% Context passed by fcn_createsalsunlgraph2d to every estimator (unused)
+addParameter(p,'NumberOfBlocks',[])
+addParameter(p,'Stride',[])
+addParameter(p,'Side','Analysis')
+addParameter(p,'StageName','')
 parse(p,varargin{:})
 
 prefix = p.Results.Prefix;
@@ -50,28 +62,16 @@ width = p.Results.Width;
 bottleneck = p.Results.BottleneckSize;
 noDcLeakage = p.Results.NoDcLeakage;
 
-if mod(nChs,2)~=0
-    throw(MException('SaLsunLayer:InvalidNumberOfChannels',...
-        '%d : NumberOfChannels must be even.',nChs))
-end
-ps = nChs/2;
+[nAnglesFull,nZeroPad] = fcn_salsunanglecounts(targetType,nChs,noDcLeakage);
 pa = nChs/2;
-
 if strcmp(targetType,'Initial')
-    nAnglesFull = (nChs-2)*nChs/4; % combined [anglesW; anglesU]
     if noDcLeakage
         channels = 2:nChs;
-        nZeroPad = ps-1;
     else
         channels = 1:nChs;
-        nZeroPad = 0;
     end
-elseif strcmp(targetType,'Intermediate')
-    channels = pa+1:nChs; % antisymmetric half only
-    nAnglesFull = (nChs-2)*nChs/8;
-    nZeroPad = 0; % no-DC-leakage does not apply to intermediate rotations
 else
-    error('TargetType should be either of ''Initial'' or ''Intermediate''')
+    channels = pa+1:nChs; % antisymmetric half only
 end
 nAnglesPredicted = nAnglesFull-nZeroPad;
 nFeat = numel(channels)*prod(nNeighbor);

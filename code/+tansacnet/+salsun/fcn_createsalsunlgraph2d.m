@@ -2,6 +2,33 @@ function salsunLgraph = ...
     fcn_createsalsunlgraph2d(salsunLgraph,varargin)
 %FCN_CREATESALSUNLGRAPH2D
 %
+%   Angle estimator interface:
+%     The angles of every rotation layer are given by an estimator
+%     sub-graph, which 'EstimatorFunction' (default
+%     @tansacnet.salsun.fcn_createparamestimator2dlgraph) adds as
+%
+%       lgraph = estimatorFunction(lgraph,<EstimatorOptions>,...
+%           'Prefix',prefix,'TargetType',targetType,...
+%           'NumberOfChannels',nChs,'NoDcLeakage',noDcLeakage,...
+%           'NumberOfBlocks',nBlocks,'Stride',stride,...
+%           'Side',side,'StageName',stageName)
+%
+%     with TargetType 'Initial' or 'Intermediate', Side 'Analysis' or
+%     'Synthesis' and StageName 'V0', 'h1', 'h2', ..., 'v1', ... The
+%     estimator must add a layer named [prefix 'Ext'], which receives the
+%     block state before the rotation (nChs x nRows x nCols x nSamples),
+%     and a layer named [prefix 'Theta'], which outputs the angles
+%     (nAnglesFull x prod(nBlocks) x nSamples, blocks in column-major
+%     order, the first nZeroPad angles zero; see fcn_salsunanglecounts).
+%     The builder connects them to the rotation layer. With ThetaMode
+%     'Reuse', the synthesis side has no estimators and reuses the
+%     angles of the analysis side.
+%
+%     'EstimatorOptions' is a cell array of name-value arguments passed
+%     to the estimator. For the default estimator, NumberOfNeighborBlocks,
+%     NumberOfResidualBlocks, Width and BottleneckSize are passed before
+%     them; other estimators receive EstimatorOptions only.
+%
 % Requirements: MATLAB R2022a
 %
 % Copyright (c) 2026, Motoyasu SUZUKI and Shogo MURAMATSU
@@ -43,6 +70,9 @@ addParameter(p,'NumberOfNeighborBlocks',[3 3])
 addParameter(p,'NumberOfResidualBlocks',3)
 addParameter(p,'Width',2)
 addParameter(p,'BottleneckSize',0)
+addParameter(p,'EstimatorFunction',@tansacnet.salsun.fcn_createparamestimator2dlgraph,...
+    @(x) isa(x,'function_handle'))
+addParameter(p,'EstimatorOptions',{},@iscell)
 parse(p,varargin{:})
 
 nComponents = p.Results.NumberOfComponents;
@@ -54,10 +84,16 @@ device = p.Results.Device;
 dtype = p.Results.DType;
 prefix = p.Results.Prefix;
 isapndinout = p.Results.AppendInOutLayers;
-neighbor = p.Results.NumberOfNeighborBlocks;
-nResBlocks = p.Results.NumberOfResidualBlocks;
-width = p.Results.Width;
-bottleneck = p.Results.BottleneckSize;
+
+% Angle estimator (see the estimator interface above)
+est.Function = p.Results.EstimatorFunction;
+est.Options = p.Results.EstimatorOptions;
+if endsWith(func2str(est.Function),'fcn_createparamestimator2dlgraph')
+    est.Options = [{'NumberOfNeighborBlocks',p.Results.NumberOfNeighborBlocks,...
+        'NumberOfResidualBlocks',p.Results.NumberOfResidualBlocks,...
+        'Width',p.Results.Width,...
+        'BottleneckSize',p.Results.BottleneckSize} est.Options(:).'];
+end
 
 noDcLeakage = p.Results.NumberOfVanishingMoments;
 if isscalar(noDcLeakage)
@@ -178,15 +214,9 @@ if isAnalyzer
                 'NumberOfBlocks',nBlocksLv,...
                 'Device',device,...
                 'DType',dtype));
-            salsunLgraph = fcn_createparamestimator2dlgraph(salsunLgraph,...
-                'Prefix',estV0Prefix,...
-                'TargetType','Initial',...
-                'NumberOfChannels',nDecs,...
-                'NumberOfNeighborBlocks',neighbor,...
-                'NumberOfResidualBlocks',nResBlocks,...
-                'Width',width,...
-                'BottleneckSize',bottleneck,...
-                'NoDcLeakage',logical(noDcLeakage(1)));
+            salsunLgraph = addEstimator(salsunLgraph,est,estV0Prefix,...
+                'Initial',nDecs,logical(noDcLeakage(1)),nBlocksLv,stride,...
+                'Analysis','V0');
             if nComponents > 1
                 e0OutName = [prefix strLv 'E0/out' num2str(iCmp)];
             else
@@ -204,7 +234,7 @@ if isAnalyzer
                 [salsunLgraph,lastName] = addAnalysisStage(salsunLgraph,...
                 lastName,stageSpecs(iStage),...
                 compPrefix,stride,nBlocksLv,nDecs,...
-                neighbor,nResBlocks,[width bottleneck],device,dtype);
+                est,logical(noDcLeakage(1)),device,dtype);
             end
 
             salsunLgraph = salsunLgraph.addLayers(...
@@ -303,7 +333,7 @@ if isSynthesizer
             for iStage = numel(stageSpecs):-1:1
                 [salsunLgraph,lastName] = addSynthesisStage(salsunLgraph,lastName,...
                     stageSpecs(iStage),compPrefix,stride,nBlocksLv,nDecs,...
-                    neighbor,nResBlocks,[width bottleneck],device,dtype,thetaMode);
+                    est,logical(noDcLeakage(2)),device,dtype,thetaMode);
             end
 
             v0sName = [compPrefix 'V0~'];
@@ -324,11 +354,9 @@ if isSynthesizer
                     [estV0Prefix 'Theta'],[v0sName '/theta']);
             else
                 estV0sPrefix = [compPrefix 'V0~_'];
-                salsunLgraph = fcn_createparamestimator2dlgraph(salsunLgraph,...
-                    'Prefix',estV0sPrefix,'TargetType','Initial',...
-                    'NumberOfChannels',nDecs,'NumberOfNeighborBlocks',neighbor,...
-                    'NumberOfResidualBlocks',nResBlocks,'Width',width,'BottleneckSize',bottleneck,...
-                    'NoDcLeakage',logical(noDcLeakage(2)));
+                salsunLgraph = addEstimator(salsunLgraph,est,estV0sPrefix,...
+                    'Initial',nDecs,logical(noDcLeakage(2)),nBlocksLv,stride,...
+                    'Synthesis','V0');
                 salsunLgraph = salsunLgraph.connectLayers(lastName,[estV0sPrefix 'Ext']);
                 salsunLgraph = salsunLgraph.connectLayers(...
                     [estV0sPrefix 'Theta'],[v0sName '/theta']);
@@ -380,9 +408,30 @@ end
 
 %%%
 
+function lgraph = addEstimator(lgraph,est,estPrefix,targetType,nDecs,...
+    noDcLeakage,nBlocks,stride,side,stageName)
+% Adds the angle estimator est with the interface described above. The
+% arguments of the builder come after EstimatorOptions, so they cannot
+% be overridden by them.
+lgraph = est.Function(lgraph,est.Options{:},...
+    'Prefix',estPrefix,'TargetType',targetType,...
+    'NumberOfChannels',nDecs,'NoDcLeakage',noDcLeakage,...
+    'NumberOfBlocks',nBlocks,'Stride',stride,...
+    'Side',side,'StageName',stageName);
+layerNames = {lgraph.Layers.Name};
+for name = {[estPrefix 'Ext'],[estPrefix 'Theta']}
+    if ~any(strcmp(layerNames,name{1}))
+        throw(MException('SaLsunLayer:InvalidEstimator',...
+            '%s : The estimator %s must add a layer named %s.',...
+            stageName,func2str(est.Function),name{1}))
+    end
+end
+end
+
+%%%
+
 function [lgraph,lastName] = addAnalysisStage(lgraph,lastName,stage,prefix,...
-    stride,nBlocks,nDecs,neighbor,nResBlocks,estSize,device,dtype)
-% estSize = [Width BottleneckSize] of the angle estimator
+    stride,nBlocks,nDecs,est,noDcLeakage,device,dtype)
 import tansacnet.lsun.*
 import tansacnet.salsun.*
 
@@ -413,10 +462,8 @@ rotName = [prefix 'V' stage.name '_'];
 lgraph = lgraph.addLayers(salsunIntermediateRotation2dLayer('Name',rotName,...
     'Stride',stride,'NumberOfBlocks',nBlocks,'Mode','Analysis','Mus',-1,...
     'Device',device,'DType',dtype));
-lgraph = fcn_createparamestimator2dlgraph(lgraph,'Prefix',rotName,...
-    'TargetType','Intermediate','NumberOfChannels',nDecs,...
-    'NumberOfNeighborBlocks',neighbor,'NumberOfResidualBlocks',nResBlocks,...
-    'Width',estSize(1),'BottleneckSize',estSize(2));
+lgraph = addEstimator(lgraph,est,rotName,'Intermediate',nDecs,...
+    noDcLeakage,nBlocks,stride,'Analysis',stage.name);
 lgraph = lgraph.connectLayers(atomName,[rotName '/x']);
 lgraph = lgraph.connectLayers(atomName,[rotName 'Ext']);
 lgraph = lgraph.connectLayers([rotName 'Theta'],[rotName '/theta']);
@@ -427,8 +474,7 @@ end
 %%%
 
 function [lgraph,lastName] = addSynthesisStage(lgraph,lastName,stage,prefix,...
-    stride,nBlocks,nDecs,neighbor,nResBlocks,estSize,device,dtype,thetaMode)
-% estSize = [Width BottleneckSize] of the angle estimator
+    stride,nBlocks,nDecs,est,noDcLeakage,device,dtype,thetaMode)
 import tansacnet.lsun.*
 import tansacnet.salsun.*
 
@@ -465,10 +511,8 @@ if strcmp(thetaMode,'Reuse')
     lgraph = lgraph.connectLayers(estPrefix,[rotName '/theta']);
 else
     estPrefix = [prefix 'V' stage.name '~_'];
-    lgraph = fcn_createparamestimator2dlgraph(lgraph,'Prefix',estPrefix,...
-        'TargetType','Intermediate','NumberOfChannels',nDecs,...
-        'NumberOfNeighborBlocks',neighbor,'NumberOfResidualBlocks',nResBlocks,...
-        'Width',estSize(1),'BottleneckSize',estSize(2));
+    lgraph = addEstimator(lgraph,est,estPrefix,'Intermediate',nDecs,...
+        noDcLeakage,nBlocks,stride,'Synthesis',stage.name);
     lgraph = lgraph.connectLayers(lastName,[estPrefix 'Ext']);
     lgraph = lgraph.connectLayers([estPrefix 'Theta'],[rotName '/theta']);
 end
