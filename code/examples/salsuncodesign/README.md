@@ -42,7 +42,7 @@ train on GPU ──> params (.mat) ───────────────
 | `salsun2d_band_fixed_model.m`, `salsun2d_round_fixed.m` | Reference model of the fixed-point estimators of the band design (rounded weights, quantizer), and the rounding of `ap_fixed` (nearest, saturate) |
 | `salsun2d_calibrate_formats.m`, `salsun2d_static_quantizer.m`, `evaluate_salsun2d_fixed_estimator.m` | Fixed-point formats from calibration frames, quantizer with fixed formats, and the evaluation of the estimators with fixed formats |
 | `salsun2d_check_band_mask.m` | Checks that the coefficient mask suits the band design (last stage reduced to 7 angles) |
-| `salsun2d_infer_klt.m` | SA-LSUN with local KLT (local block PCA) rotations instead of the estimators, for the study below |
+| `salsun2d_infer_klt.m` | SA-LSUN with local KLT rotations instead of the estimators, a naive training-free baseline for the study below (not a local block PCA; see there) |
 | `salsun2d_hls_layout.m` | Fixed configuration of the HLS version and offsets of each parameter in the packed vector |
 | `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
 | `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
@@ -504,18 +504,41 @@ network:
 | estimator | MSE / learned |
 |---|---|
 | linear map of the estimator features to the angles (least squares on frames 1-10) | 28 |
-| local KLT (local block PCA) of the rotated channels, 3 x 3 blocks (`salsun2d_infer_klt`) | 49 |
+| local KLT of the rotated channels, 3 x 3 blocks (`salsun2d_infer_klt`) | 49 |
 | local KLT, 3 x 3 without the block itself | 95 |
 | local KLT, 5 x 5 | 66 |
 | local KLT of the block alone | 4.1 |
 | constant angles (no adaptation) | 162 |
 
+Here the local KLT of a block is the rotation whose rows are the
+eigenvectors, in decreasing order of the eigenvalues, of the second-moment
+matrix of the rotated channels over the neighboring blocks (one sample per
+block, the coefficient vector of the channels being rotated). It is
+computed anew at each rotation (the W and U halves of the initial rotation
+and each intermediate stage). It is not a local block PCA:
+
+* The mean is not subtracted, so the matrix is the second-moment
+  (correlation) matrix, not the covariance matrix.
+* It does not rotate the whole block: the DC channel is kept, and the two
+  halves (and, in the intermediate stages, the antisymmetric half only) are
+  rotated separately, within the structure of SA-LSUN.
+* It is greedy stage by stage, and the later atom extensions undo the
+  decorrelation, so the transform as a whole is not a KLT of the blocks.
+
 The local KLT orders the energy greedily stage by stage; it cannot
 anticipate that only channels 1 and 9 survive the mask after the last
 atom extension, which the learned estimators exploit end to end. Even
-with the block itself as the only sample the greedy KLT is 4x worse.
-So a training-free parametric estimator is not viable here; the
-estimators can only be made cheaper by training smaller ones end to end.
+with the block itself as the only sample the greedy KLT is 4x worse
+(with one sample the matrix has rank one, so only the first row of each
+rotation is determined by the data).
+
+This is a comparison with naive implementations. The statistics of the
+local KLT are 9 samples per block with uniform weights and a small ridge,
+without centering, shrinkage of the estimate, or accumulation over frames,
+and the criterion ignores the mask. Within these implementations, a
+training-free parametric estimator is not viable, and the estimators
+were made cheaper by training smaller ones end to end. Whether refined
+training-free estimators could do better was not studied.
 
 ## Fixed-point word lengths (simulated)
 

@@ -3,12 +3,15 @@ function [y,coefs] = salsun2d_infer_klt(x,params,options)
 %
 %   y = salsun2d_infer_klt(x,params) runs the analysis, the coefficient
 %   mask and the synthesis of salsun2d_infer with the same block DCT, atom
-%   extensions and mask, but each rotation is the local KLT (local block
-%   PCA) of the coefficients it rotates instead of the rotation of the
-%   learned angle estimator: for every block, the second-moment matrix of
-%   the rotated channels over the neighboring blocks is diagonalized and
-%   its eigenvectors, in decreasing order of the eigenvalues, are the rows
-%   of the rotation. No parameter is learned. The initial rotation keeps
+%   extensions and mask, but each rotation is the local KLT of the
+%   coefficients it rotates instead of the rotation of the learned angle
+%   estimator: for every block, the second-moment matrix of the rotated
+%   channels over the neighboring blocks (one sample per block) is
+%   diagonalized and its eigenvectors, in decreasing order of the
+%   eigenvalues, are the rows of the rotation. No parameter is learned.
+%   This is not a local block PCA: the mean is not subtracted, the
+%   channels are rotated in parts within the structure of SA-LSUN, and the
+%   rotation is computed greedily stage by stage. The initial rotation keeps
 %   the DC channel (no DC leakage) and rotates channels 2..Ps and
 %   Ps+1..2Ps; each intermediate stage rotates channels Ps+1..2Ps. The
 %   synthesis uses the transposes, so without the mask the reconstruction
@@ -22,9 +25,13 @@ function [y,coefs] = salsun2d_infer_klt(x,params,options)
 %     Ridge         - relative regularization of the second-moment
 %                     matrix (default 1e-6 of its trace)
 %
-%   This is a study of a parametric replacement of the angle estimators;
-%   in hardware the rotations of the local KLT would come from Jacobi
-%   iterations, which produce Givens rotations directly.
+%   This is a naive baseline for the study of a parametric replacement of
+%   the angle estimators (see README.md): the statistics are the plain sum
+%   over the neighborhood with uniform weights and a small ridge, without
+%   centering, shrinkage or accumulation over frames, and the criterion
+%   ignores the coefficient mask. In hardware the rotations of the local
+%   KLT would come from Jacobi iterations, which produce Givens rotations
+%   directly.
 %
 % Requirements: MATLAB R2026b
 %
