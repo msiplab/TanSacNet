@@ -42,6 +42,7 @@ addParameter(p,'DType','single')
 addParameter(p,'NumberOfNeighborBlocks',[3 3])
 addParameter(p,'NumberOfResidualBlocks',3)
 addParameter(p,'Width',2)
+addParameter(p,'BottleneckSize',0)
 parse(p,varargin{:})
 
 nComponents = p.Results.NumberOfComponents;
@@ -56,6 +57,7 @@ isapndinout = p.Results.AppendInOutLayers;
 neighbor = p.Results.NumberOfNeighborBlocks;
 nResBlocks = p.Results.NumberOfResidualBlocks;
 width = p.Results.Width;
+bottleneck = p.Results.BottleneckSize;
 
 noDcLeakage = p.Results.NumberOfVanishingMoments;
 if isscalar(noDcLeakage)
@@ -183,6 +185,7 @@ if isAnalyzer
                 'NumberOfNeighborBlocks',neighbor,...
                 'NumberOfResidualBlocks',nResBlocks,...
                 'Width',width,...
+                'BottleneckSize',bottleneck,...
                 'NoDcLeakage',logical(noDcLeakage(1)));
             if nComponents > 1
                 e0OutName = [prefix strLv 'E0/out' num2str(iCmp)];
@@ -201,7 +204,7 @@ if isAnalyzer
                 [salsunLgraph,lastName] = addAnalysisStage(salsunLgraph,...
                 lastName,stageSpecs(iStage),...
                 compPrefix,stride,nBlocksLv,nDecs,...
-                neighbor,nResBlocks,width,device,dtype);
+                neighbor,nResBlocks,[width bottleneck],device,dtype);
             end
 
             salsunLgraph = salsunLgraph.addLayers(...
@@ -300,7 +303,7 @@ if isSynthesizer
             for iStage = numel(stageSpecs):-1:1
                 [salsunLgraph,lastName] = addSynthesisStage(salsunLgraph,lastName,...
                     stageSpecs(iStage),compPrefix,stride,nBlocksLv,nDecs,...
-                    neighbor,nResBlocks,width,device,dtype,thetaMode);
+                    neighbor,nResBlocks,[width bottleneck],device,dtype,thetaMode);
             end
 
             v0sName = [compPrefix 'V0~'];
@@ -324,7 +327,7 @@ if isSynthesizer
                 salsunLgraph = fcn_createparamestimator2dlgraph(salsunLgraph,...
                     'Prefix',estV0sPrefix,'TargetType','Initial',...
                     'NumberOfChannels',nDecs,'NumberOfNeighborBlocks',neighbor,...
-                    'NumberOfResidualBlocks',nResBlocks,'Width',width,...
+                    'NumberOfResidualBlocks',nResBlocks,'Width',width,'BottleneckSize',bottleneck,...
                     'NoDcLeakage',logical(noDcLeakage(2)));
                 salsunLgraph = salsunLgraph.connectLayers(lastName,[estV0sPrefix 'Ext']);
                 salsunLgraph = salsunLgraph.connectLayers(...
@@ -378,7 +381,8 @@ end
 %%%
 
 function [lgraph,lastName] = addAnalysisStage(lgraph,lastName,stage,prefix,...
-    stride,nBlocks,nDecs,neighbor,nResBlocks,width,device,dtype)
+    stride,nBlocks,nDecs,neighbor,nResBlocks,estSize,device,dtype)
+% estSize = [Width BottleneckSize] of the angle estimator
 import tansacnet.lsun.*
 import tansacnet.salsun.*
 
@@ -412,7 +416,7 @@ lgraph = lgraph.addLayers(salsunIntermediateRotation2dLayer('Name',rotName,...
 lgraph = fcn_createparamestimator2dlgraph(lgraph,'Prefix',rotName,...
     'TargetType','Intermediate','NumberOfChannels',nDecs,...
     'NumberOfNeighborBlocks',neighbor,'NumberOfResidualBlocks',nResBlocks,...
-    'Width',width);
+    'Width',estSize(1),'BottleneckSize',estSize(2));
 lgraph = lgraph.connectLayers(atomName,[rotName '/x']);
 lgraph = lgraph.connectLayers(atomName,[rotName 'Ext']);
 lgraph = lgraph.connectLayers([rotName 'Theta'],[rotName '/theta']);
@@ -423,7 +427,8 @@ end
 %%%
 
 function [lgraph,lastName] = addSynthesisStage(lgraph,lastName,stage,prefix,...
-    stride,nBlocks,nDecs,neighbor,nResBlocks,width,device,dtype,thetaMode)
+    stride,nBlocks,nDecs,neighbor,nResBlocks,estSize,device,dtype,thetaMode)
+% estSize = [Width BottleneckSize] of the angle estimator
 import tansacnet.lsun.*
 import tansacnet.salsun.*
 
@@ -463,7 +468,7 @@ else
     lgraph = fcn_createparamestimator2dlgraph(lgraph,'Prefix',estPrefix,...
         'TargetType','Intermediate','NumberOfChannels',nDecs,...
         'NumberOfNeighborBlocks',neighbor,'NumberOfResidualBlocks',nResBlocks,...
-        'Width',width);
+        'Width',estSize(1),'BottleneckSize',estSize(2));
     lgraph = lgraph.connectLayers(lastName,[estPrefix 'Ext']);
     lgraph = lgraph.connectLayers([estPrefix 'Theta'],[rotName '/theta']);
 end

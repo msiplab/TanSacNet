@@ -37,6 +37,7 @@ addParameter(p,'NumberOfChannels',[])
 addParameter(p,'NumberOfNeighborBlocks',[3 3])
 addParameter(p,'NumberOfResidualBlocks',3)
 addParameter(p,'Width',2)
+addParameter(p,'BottleneckSize',0)
 addParameter(p,'NoDcLeakage',false)
 parse(p,varargin{:})
 
@@ -46,6 +47,7 @@ nChs = p.Results.NumberOfChannels;
 nNeighbor = p.Results.NumberOfNeighborBlocks;
 nResBlocks = p.Results.NumberOfResidualBlocks;
 width = p.Results.Width;
+bottleneck = p.Results.BottleneckSize;
 noDcLeakage = p.Results.NoDcLeakage;
 
 if mod(nChs,2)~=0
@@ -79,15 +81,28 @@ layers = [
         'NumberOfNeighborBlocks',nNeighbor,'Channels',channels)
     salsunStateStandardization2dLayer('Name',[prefix 'Std'])
     ];
+% Optional bottleneck: a learned linear projection of the standardized
+% local state to BottleneckSize features, on which the residual blocks
+% and the output layer operate (fewer multiply-adds for the same
+% neighborhood)
+if bottleneck > 0
+    layers = [layers
+        salsunFeatureProjection2dLayer('Name',[prefix 'Proj'],...
+            'InputSize',nFeat,'OutputSize',bottleneck)
+        ];
+    nInner = bottleneck;
+else
+    nInner = nFeat;
+end
 for iBlock = 1:nResBlocks
     layers = [layers %#ok<AGROW>
         salsunResidualEstimatorBlock2dLayer('Name',[prefix 'ResBlk' num2str(iBlock)],...
-            'InputSize',nFeat,'Width',width)
+            'InputSize',nInner,'Width',width)
         ];
 end
 layers = [layers
     salsunAngleEstimatorOutput2dLayer('Name',[prefix 'Theta'],...
-        'InputSize',nFeat,'NumberOfAngles',nAnglesPredicted,...
+        'InputSize',nInner,'NumberOfAngles',nAnglesPredicted,...
         'NumberOfZeroPadAngles',nZeroPad)
     ];
 
