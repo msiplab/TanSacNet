@@ -103,11 +103,24 @@ void blockDct(const float *src, const float prm[NPRM], int r0, blk_t Y[NBLK])
 columns:
     for (int c = 0; c < NCOLS; c++) {
     load:
+        // the rows of a pixel column in runs up to the bottom of the frame
+        // (then on from the top), so that the reads are bursts (with the
+        // wrap in the address they were single reads, latency bound)
         for (int ih = 0; ih < MX; ih++) {
-            for (int i = 0; i < SUBROWS * MY; i++) {
+            const int base = (c * MX + ih) * SZY;
+            int row = wrap(r0 - HALO, NROWS) * MY;
+        runs:
+            for (int i0 = 0; i0 < SUBROWS * MY;) {
+#pragma HLS LOOP_TRIPCOUNT max = 2
+                const int n = (SZY - row < SUBROWS * MY - i0) ? SZY - row : SUBROWS * MY - i0;
+            run:
+                for (int i = 0; i < n; i++) {
 #pragma HLS PIPELINE II = 1
-                const int brow = wrap(r0 - HALO + i / MY, NROWS);
-                px[ih][i] = src[(c * MX + ih) * SZY + brow * MY + i % MY];
+#pragma HLS LOOP_TRIPCOUNT max = SUBROWS * MY
+                    px[ih][i0 + i] = src[base + row + i];
+                }
+                i0 += n;
+                row = 0;
             }
         }
     blocks:
@@ -420,15 +433,22 @@ columns:
                 Y[c * SUBROWS + g * NB + b] = o;
             }
         }
+        // the words of the groups of a column are one run of memory: one
+        // flat loop, so that the writes are one burst
+        const int qbase = qgAddr(s, c * NG), nw = qgWords(s);
+        int g = 0, w = 0;
     store_angles:
-        for (int g = 0; g < NG; g++) {
-            const int nw = qgWords(s);
-            for (int w = 0; w < nw; w++) {
+        for (int i = 0; i < NG * nw; i++) {
 #pragma HLS PIPELINE II = 1
-#pragma HLS LOOP_TRIPCOUNT max = 2 * NQ5
-                const bool isW = (s == 0 && w < NQ5);
-                const int wu = (s == 0) ? w - NQ5 : w;
-                qmem[qgAddr(s, c * NG + g) + w] = isW ? qw[w * NG + g] : qu[wu * NG + g];
+#pragma HLS LOOP_TRIPCOUNT max = NG * 2 * NQ5
+            const bool isW = (s == 0 && w < NQ5);
+            const int wu = (s == 0) ? w - NQ5 : w;
+            qmem[qbase + i] = isW ? qw[w * NG + g] : qu[wu * NG + g];
+            if (w == nw - 1) {
+                w = 0;
+                g++;
+            } else {
+                w++;
             }
         }
     }
@@ -483,18 +503,25 @@ columns:
                 }
             }
         }
+        // one run of memory per column, read as one burst (with the address
+        // per group the reads were single, latency bound on the card)
+        const int qbase = qgAddr(s, c * NG), nw = qgWords(s);
+        int g = 0, w = 0;
     read_angles:
-        for (int g = 0; g < NG; g++) {
-            const int nw = qgWords(s);
-            for (int w = 0; w < nw; w++) {
+        for (int i = 0; i < NG * nw; i++) {
 #pragma HLS PIPELINE II = 1
-#pragma HLS LOOP_TRIPCOUNT max = 2 * NQ5
-                const qword_t q = qmem[qgAddr(s, c * NG + g) + w];
-                if (s == 0 && w < NQ5) {
-                    qw[w * NG + g] = q;
-                } else {
-                    qu[((s == 0) ? w - NQ5 : w) * NG + g] = q;
-                }
+#pragma HLS LOOP_TRIPCOUNT max = NG * 2 * NQ5
+            const qword_t q = qmem[qbase + i];
+            if (s == 0 && w < NQ5) {
+                qw[w * NG + g] = q;
+            } else {
+                qu[((s == 0) ? w - NQ5 : w) * NG + g] = q;
+            }
+            if (w == nw - 1) {
+                w = 0;
+                g++;
+            } else {
+                w++;
             }
         }
     rotations:
@@ -538,7 +565,10 @@ extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf
                                  const float *stats_in, float *dst, float *stats_out,
                                  bdf::qword_t *qmem, int first_band, int num_bands)
 {
-#pragma HLS INTERFACE m_axi port = src offset = slave bundle = gmem0 depth = SZY * SZX
+    // src on a bundle of its own: with dst (writes widened to 128 bits) the
+    // port was 128 bits wide, the float reads one per beat in bursts of 16
+    // with one burst in flight (about 13 cycles per pixel)
+#pragma HLS INTERFACE m_axi port = src offset = slave bundle = gmem5 depth = SZY * SZX
 #pragma HLS INTERFACE m_axi port = dst offset = slave bundle = gmem0 depth = SZY * SZX
 #pragma HLS INTERFACE m_axi port = prm offset = slave bundle = gmem1 depth = bdf::NPRM
 #pragma HLS INTERFACE m_axi port = stats_in offset = slave bundle = gmem1 depth = 2 * bdf::NSTATS

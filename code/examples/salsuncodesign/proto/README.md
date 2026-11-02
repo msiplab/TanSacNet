@@ -55,9 +55,14 @@ column of a band, the gather takes 1299-1866 cycles and the rotation
 879-2067 (4538-5105 and 5038-6928 before), below the estimator from
 stage 1 on (about 2300); stage 0 is bound by its first FC (about 7650).
 
-On the card (Alveo U250, three compute units at 300 MHz, LUT 152k per
-unit): 0.160 s/frame with a frame per unit (0.199 before), 0.173 with a
-frame split over the units; the output equals the fixed-point model
-(max error 4.4e-5). 15.4 M cycles per band for a unit, against about
-12.7 M from the synthesis estimates. Board power 60.1 W under load,
-50.5 W idle: 9.6 J/frame (11.3 before).
+On the card (Alveo U250, three compute units at 298.8 MHz, scaled down
+by v++ from 300 MHz for a WNS of -0.021 ns): 0.144 s/frame with a frame
+per unit (0.160 before, 0.199 before that), 0.137 s/frame over 60 s of
+calls, 0.153 with a frame split over the units; the output equals the
+fixed-point model (max error 4.4e-5). 13.1 M cycles per band for a unit
+(15.4 M before), against about 12.7 M from the synthesis estimates. The
+input `src` has an m_axi bundle of its own: sharing one with `dst`,
+whose writes are 128 bits wide, the DCT read the float pixels one per
+beat in bursts of 16 with one burst in flight (about 13 cycles per
+pixel, 2 M cycles per band). Board power 60.5 W under load, 50.2 W idle:
+8.3 J/frame (9.6 before, 11.3 before that).

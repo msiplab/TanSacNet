@@ -347,7 +347,9 @@ void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const
     hls::stream<acc_t, 4> b1s[NRES], b2s[NRES], bos;
     hls::stream<lnpar_t, 4> lns[NRES];
     hls::stream<row_t, FIFO> ln0, ln1, ln2, a0, a1, a2, f1, f2, f3;
-    hls::stream<row_t, 512> skip0, skip1, skip2;   // groups wait for their two FC layers
+    // groups wait for their two FC layers: about three groups (135 rows) in
+    // stage 0, more than 512 rows at times (the same URAM up to 4096)
+    hls::stream<row_t, 1024> skip0, skip1, skip2;
 #pragma HLS BIND_STORAGE variable = skip0 type = fifo impl = uram
 #pragma HLS BIND_STORAGE variable = skip1 type = fifo impl = uram
 #pragma HLS BIND_STORAGE variable = skip2 type = fifo impl = uram
