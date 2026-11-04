@@ -50,19 +50,23 @@ frames, one band without halo or two 6-row bands with halo 7: max error
 against the MATLAB fixed-point model 1.3e-5 (max |y| 0.155).
 
 Synthesis for Full HD (1080 x 1920, 31-row bands, halo 7): estimated
-clock 3.66 ns; LUT 257k, FF 272k, DSP 1258, BRAM 373, URAM 190. Per
+clock 3.66 ns; LUT 259k, FF 280k, DSP 1258, BRAM 370, URAM 190. Per
 column of a band, the gather takes 1299-1866 cycles and the rotation
 879-2067 (4538-5105 and 5038-6928 before), below the estimator from
 stage 1 on (about 2300); stage 0 is bound by its first FC (about 7650).
 
-On the card (Alveo U250, three compute units at 298.8 MHz, scaled down
-by v++ from 300 MHz for a WNS of -0.021 ns): 0.144 s/frame with a frame
-per unit (0.160 before, 0.199 before that), 0.137 s/frame over 60 s of
-calls, 0.153 with a frame split over the units; the output equals the
-fixed-point model (max error 4.4e-5). 13.1 M cycles per band for a unit
-(15.4 M before), against about 12.7 M from the synthesis estimates. The
-input `src` has an m_axi bundle of its own: sharing one with `dst`,
-whose writes are 128 bits wide, the DCT read the float pixels one per
-beat in bursts of 16 with one burst in flight (about 13 cycles per
-pixel, 2 M cycles per band). Board power 60.5 W under load, 50.2 W idle:
-8.3 J/frame (9.6 before, 11.3 before that).
+On the card (Alveo U250, three compute units at 300 MHz): 0.138 s/frame
+with a frame per unit (0.160 before, 0.199 before that), 0.131 s/frame
+over 60 s of calls, 0.149 with a frame split over the units; the output
+equals the fixed-point model (max error 4.4e-5). 12.6 M cycles per band
+for a unit (15.4 M before), against about 12.7 M from the synthesis
+estimates. Two changes to the reading of the input: `src` has an m_axi
+bundle of its own (sharing one with `dst`, whose writes are 128 bits
+wide, the DCT read the float pixels one per beat in bursts of 16 with
+one burst in flight, about 2 M cycles per band), and the DCT requests
+the runs of the next column ahead (`hls::burst_maxi`) and reads a column
+while it transforms the previous one (about 0.5 M cycles less). The
+link (`band_df_3cu.cfg`) runs `phys_opt_design` after placement: without
+it the write enables of the URAM buffers A and B, which have no input
+register, failed timing (286.5 MHz). Board power 61.9 W under load,
+50.5 W idle: 8.1 J/frame (9.6 before, 11.3 before that).

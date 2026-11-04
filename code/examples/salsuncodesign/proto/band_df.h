@@ -25,6 +25,7 @@
 #define BAND_DF_H
 
 #include "est_df.h"
+#include <hls_burst_maxi.h>
 
 #ifndef SZY
 #define SZY 40
@@ -88,7 +89,7 @@ typedef ap_uint<512> qword_t;     // 28 angles of 18 bits
 
 } // namespace bdf
 
-extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf::wraw_t *wmem,
+extern "C" void salsun2d_band_df(hls::burst_maxi<float> src, const float *prm, const estdf::wraw_t *wmem,
                                  const estdf::braw_t *bmem, const float *lnmem,
                                  const float *stats_in, float *dst, float *stats_out,
                                  bdf::qword_t *qmem, int first_band, int num_bands);

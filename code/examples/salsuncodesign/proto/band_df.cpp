@@ -88,9 +88,32 @@ q_t toAngle(acc_t v)
 }
 
 //---------------------------------------------------------------------------
+// Requests the rows of the band with halo for the MX pixel columns of block
+// column c, in runs up to the bottom of the frame (then on from the top)
+void requestColumn(hls::burst_maxi<float> &src, int c, int row0)
+{
+    for (int ih = 0; ih < MX; ih++) {
+        const int base = (c * MX + ih) * SZY;
+        int row = row0;
+    runs:
+        for (int i0 = 0; i0 < SUBROWS * MY;) {
+#pragma HLS LOOP_TRIPCOUNT max = 2
+            const int n = (SZY - row < SUBROWS * MY - i0) ? SZY - row : SUBROWS * MY - i0;
+            src.read_request(base + row, n);
+            i0 += n;
+            row = 0;
+        }
+    }
+}
+
 // Block DCT of the band: src (column-major frame) -> Y. Rows of the band
-// with halo wrap around the frame (circular boundary).
-void blockDct(const float *src, const float prm[NPRM], int r0, blk_t Y[NBLK])
+// with halo wrap around the frame (circular boundary). The runs of the
+// next column are requested before the pixels of a column are read, so
+// that the latency of the bursts overlaps (one run at a time cost about
+// 200 cycles each), and the pixels of a column are read while the blocks
+// of the previous one are transformed (two buffers)
+static_assert(MX * MY == NDEC, "a column of pixels takes as many cycles as its coefficients");
+void blockDct(hls::burst_maxi<float> src, const float prm[NPRM], int r0, blk_t Y[NBLK])
 {
     float cvh[NDEC][NDEC];
 #pragma HLS ARRAY_PARTITION variable = cvh type = complete dim = 2
@@ -98,45 +121,38 @@ void blockDct(const float *src, const float prm[NPRM], int r0, blk_t Y[NBLK])
 #pragma HLS PIPELINE II = 1
         cvh[i % NDEC][i / NDEC] = prm[P_CVH + i];        // Cvh(k,n) at k + 16 n
     }
-    float px[MX][SUBROWS * MY];
+    // two buffers, a bank per pixel of a block (iv + ih MY), a word per block row
+    float px[2][NDEC][SUBROWS];
 #pragma HLS ARRAY_PARTITION variable = px type = complete dim = 1
+#pragma HLS ARRAY_PARTITION variable = px type = complete dim = 2
+    const int row0 = wrap(r0 - HALO, NROWS) * MY;
+    requestColumn(src, 0, row0);
 columns:
-    for (int c = 0; c < NCOLS; c++) {
-    load:
-        // the rows of a pixel column in runs up to the bottom of the frame
-        // (then on from the top), so that the reads are bursts (with the
-        // wrap in the address they were single reads, latency bound)
-        for (int ih = 0; ih < MX; ih++) {
-            const int base = (c * MX + ih) * SZY;
-            int row = wrap(r0 - HALO, NROWS) * MY;
-        runs:
-            for (int i0 = 0; i0 < SUBROWS * MY;) {
-#pragma HLS LOOP_TRIPCOUNT max = 2
-                const int n = (SZY - row < SUBROWS * MY - i0) ? SZY - row : SUBROWS * MY - i0;
-            run:
-                for (int i = 0; i < n; i++) {
+    for (int c = 0; c <= NCOLS; c++) {
+        if (c + 1 < NCOLS) requestColumn(src, c + 1, row0);
+        const int wb = c & 1;
+        int ih = 0, i = 0;                     // the pixel read: column ih, row i of the band
+        int r = 0, k = 0;                      // the coefficient: k of block row r (column c - 1)
+        float yv[NDEC];
+#pragma HLS ARRAY_PARTITION variable = yv type = complete
+    step:
+        for (int t = 0; t < SUBROWS * NDEC; t++) {
 #pragma HLS PIPELINE II = 1
-#pragma HLS LOOP_TRIPCOUNT max = SUBROWS * MY
-                    px[ih][i0 + i] = src[base + row + i];
-                }
-                i0 += n;
-                row = 0;
-            }
-        }
-    blocks:
-        for (int r = 0; r < SUBROWS; r++) {
-            blk_t y;
-            for (int k = 0; k < NDEC; k++) {
-#pragma HLS PIPELINE II = 1
+#pragma HLS DEPENDENCE variable = px inter false
+#pragma HLS DEPENDENCE variable = px intra false
+            if (c < NCOLS) px[wb][i % MY + ih * MY][i / MY] = src.read();
+            if (c > 0) {
                 float acc = 0.0f;
-                for (int ih = 0; ih < MX; ih++) {
-                    for (int iv = 0; iv < MY; iv++) {
-                        acc += cvh[k][iv + ih * MY] * px[ih][r * MY + iv];
-                    }
+                for (int j = 0; j < NDEC; j++) acc += cvh[k][j] * px[1 - wb][j][r];
+                yv[k] = acc;
+                if (k == NDEC - 1) {
+                    blk_t y;
+                    for (int j = 0; j < NDEC; j++) y.v[j] = yv[j];
+                    Y[(c - 1) * SUBROWS + r] = y;
                 }
-                y.v[k] = acc;
             }
-            Y[c * SUBROWS + r] = y;
+            if (i == SUBROWS * MY - 1) { i = 0; ih++; } else { i++; }
+            if (k == NDEC - 1) { k = 0; r++; } else { k++; }
         }
     }
 }
@@ -560,15 +576,16 @@ columns:
 } // namespace bdf
 
 //---------------------------------------------------------------------------
-extern "C" void salsun2d_band_df(const float *src, const float *prm, const estdf::wraw_t *wmem,
+extern "C" void salsun2d_band_df(hls::burst_maxi<float> src, const float *prm, const estdf::wraw_t *wmem,
                                  const estdf::braw_t *bmem, const float *lnmem,
                                  const float *stats_in, float *dst, float *stats_out,
                                  bdf::qword_t *qmem, int first_band, int num_bands)
 {
     // src on a bundle of its own: with dst (writes widened to 128 bits) the
     // port was 128 bits wide, the float reads one per beat in bursts of 16
-    // with one burst in flight (about 13 cycles per pixel)
-#pragma HLS INTERFACE m_axi port = src offset = slave bundle = gmem5 depth = SZY * SZX
+    // with one burst in flight (about 13 cycles per pixel). The buffer holds
+    // the runs of two columns (requested ahead, blockDct)
+#pragma HLS INTERFACE m_axi port = src offset = slave bundle = gmem5 depth = SZY * SZX max_read_burst_length = 64 num_read_outstanding = 64
 #pragma HLS INTERFACE m_axi port = dst offset = slave bundle = gmem0 depth = SZY * SZX
 #pragma HLS INTERFACE m_axi port = prm offset = slave bundle = gmem1 depth = bdf::NPRM
 #pragma HLS INTERFACE m_axi port = stats_in offset = slave bundle = gmem1 depth = 2 * bdf::NSTATS
