@@ -37,7 +37,8 @@ end
 %% Package list
 packageList = { ...
     'tansacnet.testcase.lsun',...
-    'tansacnet.testcase.utility'
+    'tansacnet.testcase.utility',...
+    'tansacnet.testcase.salsun'
     };
 
 %% Set path
