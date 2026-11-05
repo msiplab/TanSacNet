@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame (slower than an optimized CPU or GPU implementation; see "Fair comparison with CPUs and GPUs") |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame (slower than an optimized CPU or GPU implementation; see "Fair comparison with CPUs and GPUs"); Full HD dataflow band kernel (`proto/`), three units at 300 MHz: 0.131 s/frame, 8.1 J/frame, a third of the energy of the A800 |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | fixed-point estimators in the band design, validated on the U250 |
 
@@ -440,11 +440,24 @@ frame, the same statistics rule):
 
 The A800 is 3.2 times faster than the three-unit FPGA kernel and uses
 15% less energy per frame; the FPGA uses less energy than the other
-GPUs and than the A800 frame by frame. Full HD frames (1920 x 1080, R3W1,
-six sources): A800 0.0997 s/frame at 227.6 W (22.7 J/frame), CPU 36
-threads 2.37 s/frame. The FPGA band kernel for Full HD (31-row bands)
-does not fit one SLR (HLS: 330 URAM, 1322 BRAM per unit) and would take
-about 1.4 s/frame with three units.
+GPUs and than the A800 frame by frame.
+
+Full HD frames (1920 x 1080, R3W1, six sources). The FPGA is the
+dataflow band kernel of `proto/` (31-row bands with halo 7, three
+compute units at 300 MHz, one frame per unit, 60 s of calls); the A800
+and CPU figures take one frame per call:
+
+| Device | s/frame | Load W | J/frame |
+|---|---|---|---|
+| GPU A800 | **0.0997** | 227.6 | 22.7 |
+| FPGA U250, three compute units | 0.131 | 61.9 | **8.1** |
+| CPU, 36 threads | 2.37 | | |
+
+In Full HD the A800 is 1.3 times faster than the FPGA, and the FPGA uses
+a third of its energy per frame (about 50 W of the 61.9 W is the idle
+power of the card with the xclbin loaded). The earlier band kernel of
+`hls/` did not fit one SLR for Full HD (HLS: 330 URAM, 1322 BRAM per
+unit) and would have taken about 1.4 s/frame with three units.
 
 ## Smaller estimators by retraining (study)
 
