@@ -19,6 +19,7 @@
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
+#include <xrt/experimental/xrt_xclbin.h>
 
 #include <chrono>
 #include <cmath>
@@ -71,7 +72,13 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < b.size(); i++) bias[i] = std::llround(b[i] * 134217728.0);
 
     xrt::device dev(0);
-    auto uuid = dev.load_xclbin(argv[1]);
+    xrt::xclbin xb{std::string(argv[1])};
+    auto uuid = dev.load_xclbin(xb);
+    // an earlier kernel keeps the angles in memory (the qmem argument)
+    bool qmemPort = false;
+    for (const auto &k : xb.get_kernels()) {
+        if (k.get_name() == "salsun2d_band_df") qmemPort = (k.get_num_args() == 11);
+    }
     // units: "2" for one, "123" for several run at once (bands split among them)
     const std::string units = argv[2];
     struct Unit {
@@ -95,7 +102,7 @@ int main(int argc, char **argv)
         u.bs = xrt::bo(dev, st.size() * 4, u.k.group_id(5));
         u.by = xrt::bo(dev, x.size() * 4, u.k.group_id(6));
         u.bso = xrt::bo(dev, st.size() * 4, u.k.group_id(7));
-        u.bq = xrt::bo(dev, (size_t)NQMEM * 64, u.k.group_id(8));
+        if (qmemPort) u.bq = xrt::bo(dev, (size_t)NQMEM * 64, u.k.group_id(8));
         float *px = u.bx.map<float *>(), *pp = u.bp.map<float *>(), *pl = u.bl.map<float *>(),
               *ps = u.bs.map<float *>();
         for (size_t i = 0; i < x.size(); i++) px[i] = (float)x[i];
@@ -105,7 +112,7 @@ int main(int argc, char **argv)
         std::memcpy(u.bw.map<uint8_t *>(), words.data(), words.size());
         std::memcpy(u.bb.map<int64_t *>(), bias.data(), bias.size() * 8);
         for (auto *bo : {&u.bx, &u.bp, &u.bw, &u.bb, &u.bl, &u.bs}) bo->sync(XCL_BO_SYNC_BO_TO_DEVICE);
-        if (std::getenv("QFILL")) {   // the angle memory filled with a pattern (default: as allocated)
+        if (qmemPort && std::getenv("QFILL")) {   // the angle memory filled with a pattern (default: as allocated)
             std::memset(u.bq.map<uint8_t *>(), std::atoi(std::getenv("QFILL")), (size_t)NQMEM * 64);
             u.bq.sync(XCL_BO_SYNC_BO_TO_DEVICE);
         }
@@ -141,12 +148,13 @@ int main(int argc, char **argv)
                 u.bs.sync(XCL_BO_SYNC_BO_TO_DEVICE);
             }
             if (j == 0) t0 = std::chrono::steady_clock::now();
-            runs.push_back(u.k(u.bx, u.bp, u.bw, u.bb, u.bl, u.bs, u.by, u.bso, u.bq, f[j], c[j]));
+            runs.push_back(qmemPort ? u.k(u.bx, u.bp, u.bw, u.bb, u.bl, u.bs, u.by, u.bso, u.bq, f[j], c[j])
+                                    : u.k(u.bx, u.bp, u.bw, u.bb, u.bl, u.bs, u.by, u.bso, f[j], c[j]));
         }
         for (int j = 0; j < n; j++) {
             const auto st0 = runs[j].wait();
             std::printf("unit %c: state %d after %.3f s; ", units[j], (int)st0, std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
-            if (const char *qd = std::getenv("QDUMP")) {   // the angles of the last band to a file
+            if (const char *qd = qmemPort ? std::getenv("QDUMP") : nullptr) {   // the angles of the last band to a file
                 us[j].bq.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
                 FILE *fq = std::fopen((std::string(qd) + "." + std::to_string(a) + "." + units[j]).c_str(), "wb");
                 std::fwrite(us[j].bq.map<uint8_t *>(), 1, (size_t)NQMEM * 64, fq);

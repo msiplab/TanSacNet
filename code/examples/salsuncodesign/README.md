@@ -17,7 +17,7 @@ train on GPU ──> params (.mat) ───────────────
 |---|---|---|
 | 1 | MATLAB reference implementation without Deep Learning Toolbox | done |
 | 2 | HLS-friendly rewrite (fixed sizes, loops, parameters as arguments) | done |
-| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame (slower than an optimized CPU or GPU implementation; see "Fair comparison with CPUs and GPUs"); Full HD dataflow band kernel (`proto/`), three units at 300 MHz: 0.131 s/frame, 8.1 J/frame, a third of the energy of the A800 |
+| 3 | HDL Coder -> Vitis HLS, `sw_emu`, hardware build on temsip02 | whole-frame builds failed in routing (see Slack); streaming band design built (237.7 MHz) and validated on the U250: 10 frames match the reference to 8e-7; 90-lane engine failed timing (congestion); fixed-point estimators validated on the U250 (SLR3, 234.0 MHz, 0.43 s/frame); retrained estimators with 3 residual blocks of width 1: 248.5 MHz, 0.29 s/frame (slower than an optimized CPU or GPU implementation; see "Fair comparison with CPUs and GPUs"); Full HD dataflow band kernel (`proto/`), three units at 300 MHz: 0.131 s/frame, 8.1 J/frame, a third of the energy of the A800; angles on chip (10 bits): 0.128 s/frame, 8.05 J/frame |
 | 4 | GPU training -> FPGA inference -> comparison in one script on temsip07 | |
 | 5 | Fixed-point conversion and accuracy evaluation | fixed-point estimators in the band design, validated on the U250 |
 
@@ -450,12 +450,16 @@ and CPU figures take one frame per call:
 | Device | s/frame | Load W | J/frame |
 |---|---|---|---|
 | GPU A800 | **0.0997** | 227.6 | 22.7 |
-| FPGA U250, three compute units | 0.131 | 61.9 | **8.1** |
+| FPGA U250, three compute units | 0.131 | 61.9 | 8.1 |
+| FPGA U250, angles on chip (10 bits) | 0.128 | 62.7 | **8.05** |
+| FPGA U250, angles on chip (offsets of 8 bits from centers, 299 MHz) | 0.131 | 62.0 | 8.1 |
 | CPU, 36 threads | 2.37 | | |
 
 In Full HD the A800 is 1.3 times faster than the FPGA, and the FPGA uses
 a third of its energy per frame (about 50 W of the 61.9 W is the idle
-power of the card with the xclbin loaded). The earlier band kernel of
+power of the card with the xclbin loaded). With the angles on chip (no
+DDR traffic for them) the time and energy hardly change; the angles
+cost URAM instead (see `proto/README.md`). The earlier band kernel of
 `hls/` did not fit one SLR for Full HD (HLS: 330 URAM, 1322 BRAM per
 unit) and would have taken about 1.4 s/frame with three units.
 

@@ -75,16 +75,44 @@ float cospi(q_t q)
     return sinpi(qq);
 }
 
-// Angle (radians, accumulator format) into theta/pi [18 17]: rounded to
-// [27 21], times 1/pi in [18 18], rounded and wrapped (salsun2d_round_angle)
-q_t toAngle(acc_t v)
+// Angle (radians, accumulator format) into theta/pi [NQA NQA-1]: rounded
+// to [27 21], times 1/pi in [18 18], rounded and wrapped
+// (salsun2d_round_angle with NQA bits)
+ap_fixed<NQA, 1> toAngle(acc_t v)
 {
     const ap_fixed<27, 6, AP_RND, AP_SAT> a = v;
     // 1/pi rounded to 18 bits; below 1/2, so 17 bits hold it and the
     // product fits one DSP (as two DSPs, wide products were wrong on the card)
     const ap_ufixed<17, -1> c = 0.31830988618379067;
-    const ap_fixed<18, 1, AP_RND, AP_WRAP> q = a * c;
+    const ap_fixed<NQA, 1, AP_RND, AP_WRAP> q = a * c;
     return q;
+}
+
+// The stored angle: the offset of an angle from its center c (units of
+// 2^(1-NQA), wrapped), saturated to NQB bits
+ap_uint<NQB> encodeAngle(ap_fixed<NQA, 1> q, qctr_t c)
+{
+    ap_int<NQA> qi;
+    qi.range(NQA - 1, 0) = q.range(NQA - 1, 0);
+    ap_int<NQA> d = qi - c;                    // wrapped
+    if (NQB < NQA) {
+        const int lim = 1 << (NQB - 1);
+        if (d < -lim) d = -lim;
+        if (d > lim - 1) d = lim - 1;
+    }
+    return d.range(NQB - 1, 0);
+}
+
+// The centers of the angles of stage s from prm: W (stage 0) and U
+void loadCenters(const float prm[NPRM], int s, qctr_t ctrW[NROT], qctr_t ctrU[NROT])
+{
+    const int baseU = (s == 0) ? P_CTR + NROT : P_CTR + (s + 1) * NROT;
+    const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
+    for (int k = 0; k < NROT; k++) {
+#pragma HLS PIPELINE II = 1
+        ctrW[k] = (s == 0 && k >= NZ0) ? qctr_t((int)prm[P_CTR + k]) : qctr_t(0);   // zero angles: stored as 0
+        ctrU[k] = (k < nRot) ? qctr_t((int)prm[baseU + k]) : qctr_t(0);
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -328,13 +356,17 @@ columns:
     }
 }
 
-// Angle k of block b of a group in its word of qmem (band_df.h)
-q_t angleOf(const qword_t &w, int k, int b)
+// Angle k of block b of a group in its word of qmem (band_df.h), with
+// its center c
+q_t angleOf(const qword_t &w, int k, int b, qctr_t c)
 {
-    const int bit = 18 * (NB * ((k + NQPAD) % NQR) + b);
-    q_t q;
-    q.range(17, 0) = w.range(bit + 17, bit);
-    return q;
+    const int bit = NQB * (NB * ((k + NQPAD) % NQR) + b);
+    ap_int<NQB> r;
+    r.range(NQB - 1, 0) = w.range(bit + NQB - 1, bit);
+    const ap_int<NQA> v = c + r;               // wrapped
+    ap_fixed<NQA, 1> a;
+    a.range(NQA - 1, 0) = v.range(NQA - 1, 0);
+    return a;
 }
 
 // Rotations of the blocks of a column by the angles of stage s: stage 0
@@ -344,7 +376,7 @@ q_t angleOf(const qword_t &w, int k, int b)
 // sign flips (mus), and in the last stage the coefficient mask. Writes the
 // angles to qmem for the synthesis.
 void rotate(hls::stream<arow_t> &angles, hls::stream<blk_t> &blocks, const float prm[NPRM], int s,
-            blk_t Y[NBLK], qword_t *qmem)
+            blk_t Y[NBLK], qword_t qmem[NQMEM])
 {
     const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
     const int nA = NAK[s];
@@ -358,6 +390,8 @@ void rotate(hls::stream<arow_t> &angles, hls::stream<blk_t> &blocks, const float
         negU[j] = ((s == 0) ? prm[P_V0U + j] : prm[P_MUS + (s - 1) * PA + j]) < 0;
     }
     for (int j = 0; j < NDEC; j++) drop[j] = (s == NSTAGES) && prm[P_MASK + j] == 0.0f;
+    qctr_t ctrW[NROT], ctrU[NROT];
+    loadCenters(prm, s, ctrW, ctrU);
     qword_t qw[NQ5 * NG], qu[NQ5 * NG];   // the angles of the groups, as in qmem
     float vs[NG][NB][PS], va[NG][NB][PA];
 #pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
@@ -382,7 +416,7 @@ columns:
             // leading zero angles of W: the first word, the first places
             // of the second, as acc starts from zero)
             qw[g] = 0;
-            ap_uint<18 * NB * NQR> acc = 0;
+            ap_uint<NQB * NB * NQR> acc = 0;
             bool toW = (s == 0);
             int i = toW ? (NZ0 + NQPAD) % NQR : NQPAD, w = toW ? (NZ0 + NQPAD) / NQR : 0;
         read_angles:
@@ -390,9 +424,11 @@ columns:
 #pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = 49
                 const arow_t z = angles.read();
-                ap_uint<18 * NB> row;
-                for (int b = 0; b < NB; b++) row.range(18 * b + 17, 18 * b) = toAngle(z.v[b]).range(17, 0);
-                acc = (acc >> (18 * NB)) | (ap_uint<18 * NB * NQR>(row) << (18 * NB * (NQR - 1)));
+                const int k = w * NQR + i - NQPAD;
+                const qctr_t ck = toW ? ctrW[k] : ctrU[k];
+                ap_uint<NQB * NB> row;
+                for (int b = 0; b < NB; b++) row.range(NQB * b + NQB - 1, NQB * b) = encodeAngle(toAngle(z.v[b]), ck);
+                acc = (acc >> (NQB * NB)) | (ap_uint<NQB * NB * NQR>(row) << (NQB * NB * (NQR - 1)));
                 if (i == NQR - 1) {
                     if (toW) {
                         qw[w * NG + g] = acc;
@@ -421,10 +457,10 @@ columns:
 #pragma HLS PIPELINE II = 1
 #pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
 #pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
-                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b);
+                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b, ctrU[k]);
                     givens(va[g][b], t, bt, cospi(qk), sinpi(qk), false);
                     if (s == 0) {
-                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b);
+                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b, ctrW[k]);
                         givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), false);
                     }
                 }
@@ -449,8 +485,7 @@ columns:
                 Y[c * SUBROWS + g * NB + b] = o;
             }
         }
-        // the words of the groups of a column are one run of memory: one
-        // flat loop, so that the writes are one burst
+        // the words of the groups of a column, one per cycle
         const int qbase = qgAddr(s, c * NG), nw = qgWords(s);
         int g = 0, w = 0;
     store_angles:
@@ -473,7 +508,7 @@ columns:
 // One analysis stage: features -> estimator -> rotations, as a dataflow
 void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM],
                    const wraw_t *wmem, const braw_t *bmem, const float *lnmem,
-                   const float stats_in[2 * NSTATS], qword_t *qmem, int s, int sumFirst, int sumLast,
+                   const float stats_in[2 * NSTATS], qword_t qmem[NQMEM], int s, int sumFirst, int sumLast,
                    bool load, float sums[2][NDEC])
 {
 #pragma HLS DATAFLOW
@@ -491,7 +526,7 @@ void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM
 // Synthesis: the transposed rotations of stage s (s = 0: the final
 // rotation, W and U), after the sign flips, from the angles in qmem
 void synthesisRotation(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM], int s,
-                       const qword_t *qmem)
+                       const qword_t qmem[NQMEM])
 {
     const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
     bool negW[PS], negU[PA];
@@ -502,6 +537,8 @@ void synthesisRotation(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[
         negW[j] = prm[P_V0TW + j] < 0;
         negU[j] = ((s == 0) ? prm[P_V0TU + j] : prm[P_SYNMUS + (s - 1) * PA + j]) < 0;
     }
+    qctr_t ctrW[NROT], ctrU[NROT];
+    loadCenters(prm, s, ctrW, ctrU);
     qword_t qw[NQ5 * NG], qu[NQ5 * NG];   // the angles of the groups, as in qmem
     float vs[NG][NB][PS], va[NG][NB][PA];
 #pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
@@ -519,8 +556,7 @@ columns:
                 }
             }
         }
-        // one run of memory per column, read as one burst (with the address
-        // per group the reads were single, latency bound on the card)
+        // the words of the groups of a column, one per cycle
         const int qbase = qgAddr(s, c * NG), nw = qgWords(s);
         int g = 0, w = 0;
     read_angles:
@@ -549,10 +585,10 @@ columns:
 #pragma HLS PIPELINE II = 1
 #pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
 #pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
-                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b);
+                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b, ctrU[k]);
                     givens(va[g][b], t, bt, cospi(qk), sinpi(qk), true);
                     if (s == 0) {
-                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b);
+                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b, ctrW[k]);
                         givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), true);
                     }
                 }
@@ -579,7 +615,7 @@ columns:
 extern "C" void salsun2d_band_df(hls::burst_maxi<float> src, const float *prm, const estdf::wraw_t *wmem,
                                  const estdf::braw_t *bmem, const float *lnmem,
                                  const float *stats_in, float *dst, float *stats_out,
-                                 bdf::qword_t *qmem, int first_band, int num_bands)
+                                 int first_band, int num_bands)
 {
     // src on a bundle of its own: with dst (writes widened to 128 bits) the
     // port was 128 bits wide, the float reads one per beat in bursts of 16
@@ -593,7 +629,6 @@ extern "C" void salsun2d_band_df(hls::burst_maxi<float> src, const float *prm, c
 #pragma HLS INTERFACE m_axi port = wmem offset = slave bundle = gmem2 depth = estdf::NWORDS
 #pragma HLS INTERFACE m_axi port = bmem offset = slave bundle = gmem3 depth = estdf::NBIAS
 #pragma HLS INTERFACE m_axi port = lnmem offset = slave bundle = gmem3 depth = 2 * estdf::NLN
-#pragma HLS INTERFACE m_axi port = qmem offset = slave bundle = gmem4 depth = bdf::NQMEM
     using namespace bdf;
     // The coefficients of the band, one block (16 floats) per word, column
     // by column, in two buffers of two ports (URAM). (Five banks by row with
@@ -604,6 +639,9 @@ extern "C" void salsun2d_band_df(hls::burst_maxi<float> src, const float *prm, c
 #pragma HLS BIND_STORAGE variable = A type = ram_t2p impl = uram
 #pragma HLS BIND_STORAGE variable = B type = ram_t2p impl = uram
 #pragma HLS ALLOCATION function instances = analysisStage limit = 1
+    // the angles of the band for the synthesis (URAM), written by the analysis
+    static qword_t qmem[NQMEM];
+#pragma HLS BIND_STORAGE variable = qmem type = ram_t2p impl = uram latency = 3
     // the small parameters and the statistics, read once (the tasks of a
     // dataflow region cannot share their memory interface)
     float prmL[NPRM], stL[2 * NSTATS];

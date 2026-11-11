@@ -15,6 +15,9 @@ function [y,info] = salsun2d_band_df_u250(u,params,target,options)
 %   otherwise the bands of a frame are split among the units.
 %
 %   params as from salsun2d_extract_params, 3 residual blocks of width 1.
+%   Xclbin gives the path of another xclbin. AngleCenters gives the
+%   centers of the angles for a kernel that stores them as offsets
+%   (QOFS < QBITS; salsun2d_angle_centers).
 %
 % Requirements: MATLAB R2026b, XRT, the xclbin and salsun2d_band_df_mex
 %               (see build_mex_salsun2d)
@@ -41,6 +44,8 @@ arguments
     options.Statistics {mustBeMember(options.Statistics,{'previous','ema','fir2'})} = 'fir2'
     options.StatsRho (1,1) double = 0.9
     options.InitFast (1,1) logical = true
+    options.AngleCenters (:,1) double = []
+    options.Xclbin {mustBeTextScalar} = ""
 end
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here,'proto'));
@@ -48,6 +53,9 @@ buildDir = fullfile(here,'proto','build',target);
 frameSize = [size(u,1) size(u,2)];
 xclbinPath = fullfile(buildDir,sprintf('salsun2d_band_df_%dx%d_b%dh%d_cu%d.xclbin',frameSize, ...
     options.BandRows,options.Halo,options.ComputeUnits));
+if strlength(options.Xclbin) > 0
+    xclbinPath = char(options.Xclbin);
+end
 if ~isfile(xclbinPath)
     error('salsun2d_band_df_u250:noXclbin','%s not found. Build it with proto/Makefile.',xclbinPath)
 end
@@ -62,6 +70,10 @@ prm = single([params.Cvh(:); params.Mask(:); params.V0.MusW(:,1); params.V0.MusU
     params.V0t.MusW(:,1); params.V0t.MusU(:,1)]);
 for s = 1:numel(params.Stages), prm = [prm; single(params.Stages(s).Mus(:,1))]; end %#ok<AGROW>
 for s = 1:numel(params.Stages), prm = [prm; single(params.Stages(s).SynMus(:,1))]; end %#ok<AGROW>
+if ~isempty(options.AngleCenters)
+    assert(numel(options.AngleCenters) == 147,'147 centers (salsun2d_angle_centers)')
+    prm = [prm; single(options.AngleCenters)];
+end
 [w,b,ln] = pack_est_df(params);
 W = w.'; LN = single(ln.');
 

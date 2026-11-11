@@ -11,6 +11,15 @@ function export_band_df(outDir,options)
 %   (sums.bin: sums then sums of squares, NDec x NEst each). It also writes
 %   sin_table.h for band_df.cpp.
 %
+%   export_band_df(...,AngleBits=n) rounds the angles of the model to n
+%   bits (band_df.cpp built with QBITS=n; 18 by default).
+%
+%   export_band_df(...,AngleBits=n,OffsetBits=b), b < n, stores the angles
+%   as offsets of b bits from centers (QOFS=b), the centers from another
+%   frame (salsun2d_angle_centers). prm.bin ends with the 147 centers
+%   (zeros for b >= n), also in centers.bin. The centers and offsets are
+%   an idea of Shogo Muramatsu.
+%
 % Requirements: MATLAB R2026b
 %
 % Copyright (c) 2026, Shogo MURAMATSU
@@ -27,6 +36,8 @@ function export_band_df(outDir,options)
 arguments
     outDir {mustBeTextScalar} = fullfile(fileparts(mfilename('fullpath')),'testdata_band')
     options.FrameSize (1,2) double = [40 40]
+    options.AngleBits (1,1) double {mustBeInteger} = 18
+    options.OffsetBits (1,1) double {mustBeInteger} = 18
 end
 here = fileparts(fileparts(mfilename('fullpath')));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -38,10 +49,12 @@ L = salsun2d_hls_layout();
 if all(options.FrameSize <= 210)
     u = single(salsun2d_wave_data());
     x = u(91:90+options.FrameSize(1),91:90+options.FrameSize(2),12);
+    xc = u(91:90+options.FrameSize(1),91:90+options.FrameSize(2),11);   % for the centers
 else
     u = single(salsun2d_wave_data(FrameSize=options.FrameSize,Frames=[401 402], ...
         Epicenters=[4 3; 10 6; 16 4; 7 8; 13 9; 2 9]*min(options.FrameSize)/1080));
     x = u(:,:,2);
+    xc = u(:,:,1);
 end
 writeBin(fullfile(outDir,'x.bin'),x);
 
@@ -50,7 +63,14 @@ prm = [P.Cvh(:); P.Mask(:); P.V0.MusW(:,1); P.V0.MusU(:,1); P.V0t.MusW(:,1); P.V
 for s = 1:numel(P.Stages), prm = [prm; P.Stages(s).Mus(:,1)]; end %#ok<AGROW>
 for s = 1:numel(P.Stages), prm = [prm; P.Stages(s).SynMus(:,1)]; end %#ok<AGROW>
 assert(numel(prm) == 368)
+if options.OffsetBits < options.AngleBits
+    ctr = salsun2d_angle_centers(P,xc,AngleBits=options.AngleBits);
+else
+    ctr = zeros(147,1);
+end
+prm = [prm; ctr];
 writeBin(fullfile(outDir,'prm.bin'),prm);
+writeBin(fullfile(outDir,'centers.bin'),ctr);
 
 % Estimator parameters
 [w,b,ln] = pack_est_df(P);
@@ -61,7 +81,7 @@ writeBin(fullfile(outDir,'ln.bin'),ln.');
 % Statistics of the frame itself, and the fixed-point model with them
 [~,~,~,mu,sg] = salsun2d_infer_fast(x,P,[],[]);
 writeBin(fullfile(outDir,'stats.bin'),[mu(:); sg(:)]);
-[pQ,q] = salsun2d_band_fixed_model(P);
+[pQ,q] = salsun2d_band_fixed_model(P,AngleBits=options.AngleBits,AngleCenters=ctr,OffsetBits=options.OffsetBits);
 ests = [P.V0.Estimator, P.Stages.Estimator];
 st = struct('Mu',cell(L.NEst,1),'Sigma',cell(L.NEst,1));
 for k = 1:L.NEst

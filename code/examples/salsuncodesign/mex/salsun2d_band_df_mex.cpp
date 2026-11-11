@@ -8,7 +8,8 @@
 //
 //   X        : one frame, szy x szx single, or one frame per compute unit,
 //              szy x szx x n
-//   prm      : the small parameters (368 single, proto/band_df.h)
+//   prm      : the small parameters (368 single, or 515 with the centers of
+//              the angles, proto/band_df.h; the rest zero)
 //   W        : the estimator weights, 24 x NWORDS double (pack_est_df),
 //              rounded to [18 16]
 //   B        : the estimator biases, NBIAS double, rounded to [48 27]
@@ -21,7 +22,9 @@
 //
 //   [Y, sums, q] = salsun2d_band_df_mex(...) also returns the angle memory
 //   of the first unit after the call (uint8, the angles of the last band
-//   it processed; for debugging)
+//   it processed; for debugging), with an xclbin whose kernel keeps the
+//   angles in memory (the qmem argument; the current kernel keeps them on
+//   chip, and both are run)
 //
 // With one frame, the bands are split into contiguous ranges, one per
 // compute unit, run at the same time; with n frames, frame j runs whole on
@@ -47,6 +50,7 @@
 #include <xrt/xrt_kernel.h>
 #include <xrt/experimental/xrt_xclbin.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -58,6 +62,7 @@ namespace {
 
 const char *KERNEL_NAME = "salsun2d_band_df";
 constexpr int P = 24;            // weights per word
+constexpr size_t NPRM_MAX = 515; // small parameters with the centers of the angles
 constexpr int WORD = 64;         // bytes per weight or angle word
 constexpr int NB = 5;            // blocks per group (rows of a column)
 constexpr int NQG = 36;          // angle words per group
@@ -71,6 +76,7 @@ struct Accelerator {
     std::string xclbinPath;
     xrt::device device;
     std::vector<Unit> units;
+    bool qmemPort = false;           // the kernel has the qmem argument
     size_t nBytesX = 0, nBytesQ = 0, nWords = 0, nBias = 0, nLn = 0;
     std::vector<uint8_t> paramCache;   // the parameters on the devices
 };
@@ -93,6 +99,7 @@ Accelerator &acquire(const std::string &xclbinPath)
         auto uuid = a->device.load_xclbin(xb);
         for (const auto &k : xb.get_kernels()) {
             if (k.get_name() != KERNEL_NAME) continue;
+            a->qmemPort = (k.get_num_args() == 11);
             for (const auto &cu : k.get_cus()) {
                 std::string cuName = cu.get_name();       // "kernel:instance"
                 const size_t colon = cuName.rfind(':');
@@ -110,7 +117,7 @@ Accelerator &acquire(const std::string &xclbinPath)
 }
 
 // Buffers of every unit (kernel arguments: src, prm, wmem, bmem, lnmem,
-// stats_in, dst, stats_out, qmem, first_band, num_bands)
+// stats_in, dst, stats_out, [qmem,] first_band, num_bands)
 void allocate(Accelerator &a, size_t nBytesX, size_t nBytesQ, size_t nWords, size_t nBias, size_t nLn)
 {
     if (a.nBytesX == nBytesX && a.nBytesQ == nBytesQ && a.nWords == nWords && a.nBias == nBias &&
@@ -119,19 +126,20 @@ void allocate(Accelerator &a, size_t nBytesX, size_t nBytesQ, size_t nWords, siz
     }
     for (auto &u : a.units) {
         u.x = xrt::bo(a.device, nBytesX, u.kernel.group_id(0));
-        u.prm = xrt::bo(a.device, 368 * sizeof(float), u.kernel.group_id(1));
+        u.prm = xrt::bo(a.device, NPRM_MAX * sizeof(float), u.kernel.group_id(1));
         u.w = xrt::bo(a.device, nWords * WORD, u.kernel.group_id(2));
         u.b = xrt::bo(a.device, nBias * sizeof(int64_t), u.kernel.group_id(3));
         u.ln = xrt::bo(a.device, nLn * sizeof(float), u.kernel.group_id(4));
         u.sin = xrt::bo(a.device, 160 * sizeof(float), u.kernel.group_id(5));
         u.y = xrt::bo(a.device, nBytesX, u.kernel.group_id(6));
         u.sout = xrt::bo(a.device, 160 * sizeof(float), u.kernel.group_id(7));
-        u.q = xrt::bo(a.device, nBytesQ, u.kernel.group_id(8));
+        if (a.qmemPort) u.q = xrt::bo(a.device, nBytesQ, u.kernel.group_id(8));
         // The outputs written once from the host: in memory the host had not
         // written since the card was programmed, the writes of the kernel
         // were lost on the card (uninitialized ECC, it seems), and a unit
         // working on some bands only returned what was there before
         for (xrt::bo *bo : {&u.y, &u.sout, &u.q}) {
+            if (!*bo) continue;
             std::memset(bo->map(), 0, bo->size());
             bo->sync(XCL_BO_SYNC_BO_TO_DEVICE);
         }
@@ -178,6 +186,13 @@ std::vector<uint8_t> packWeights(const double *w, size_t nWords)
     return out;
 }
 
+// Starts unit u on bands first .. first + count - 1
+xrt::run start(const Accelerator &a, Unit &u, int first, int count)
+{
+    if (a.qmemPort) return u.kernel(u.x, u.prm, u.w, u.b, u.ln, u.sin, u.y, u.sout, u.q, first, count);
+    return u.kernel(u.x, u.prm, u.w, u.b, u.ln, u.sin, u.y, u.sout, first, count);
+}
+
 // First block row of band k (as in the kernel: the last band is moved up)
 int bandStart(int k, int band, int nRows)
 {
@@ -206,8 +221,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     check(b, false, "B");
     check(ln, true, "LN");
     check(stats, true, "statsIn");
-    if (mxGetNumberOfElements(prm) != 368 || mxGetM(w) != P) {
-        mexErrMsgIdAndTxt("salsun2d_band_df_mex:invalidInput", "prm must have 368 values and W 24 rows.");
+    const size_t nPrm = mxGetNumberOfElements(prm);
+    if ((nPrm != 368 && nPrm != NPRM_MAX) || mxGetM(w) != P) {
+        mexErrMsgIdAndTxt("salsun2d_band_df_mex:invalidInput", "prm must have 368 or 515 values and W 24 rows.");
     }
     const int bandRows = static_cast<int>(mxGetScalar(prhs[7]));
     const int halo = static_cast<int>(mxGetScalar(prhs[8]));
@@ -235,12 +251,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                               (int)nFrames, (int)nUnits);
         }
         // Parameters: converted and transferred only when they change
-        std::vector<uint8_t> params(368 * sizeof(float) + nWords * P * sizeof(double) +
+        std::vector<uint8_t> params(nPrm * sizeof(float) + nWords * P * sizeof(double) +
                                     nBias * sizeof(double) + nLn * sizeof(float));
         {
             uint8_t *p = params.data();
-            std::memcpy(p, mxGetSingles(prm), 368 * sizeof(float));
-            p += 368 * sizeof(float);
+            std::memcpy(p, mxGetSingles(prm), nPrm * sizeof(float));
+            p += nPrm * sizeof(float);
             std::memcpy(p, mxGetDoubles(w), nWords * P * sizeof(double));
             p += nWords * P * sizeof(double);
             std::memcpy(p, mxGetDoubles(b), nBias * sizeof(double));
@@ -252,7 +268,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             std::vector<int64_t> bias(nBias);
             for (size_t i = 0; i < nBias; i++) bias[i] = std::llround(mxGetDoubles(b)[i] * 134217728.0);  // 2^27
             for (auto &u : a.units) {
-                std::memcpy(u.prm.map<float *>(), mxGetSingles(prm), 368 * sizeof(float));
+                std::fill_n(u.prm.map<float *>(), NPRM_MAX, 0.0f);
+                std::memcpy(u.prm.map<float *>(), mxGetSingles(prm), nPrm * sizeof(float));
                 std::memcpy(u.w.map<uint8_t *>(), words.data(), words.size());
                 std::memcpy(u.b.map<int64_t *>(), bias.data(), nBias * sizeof(int64_t));
                 std::memcpy(u.ln.map<float *>(), mxGetSingles(ln), nLn * sizeof(float));
@@ -274,7 +291,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 std::memcpy(u.sin.map<float *>(), sp + j * 160, 160 * sizeof(float));
                 u.x.sync(XCL_BO_SYNC_BO_TO_DEVICE);
                 u.sin.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-                runs.push_back(u.kernel(u.x, u.prm, u.w, u.b, u.ln, u.sin, u.y, u.sout, u.q, 0, nBands));
+                runs.push_back(start(a, u, 0, nBands));
             }
             for (size_t j = 0; j < nFrames; j++) {
                 Unit &u = a.units[j];
@@ -298,7 +315,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 std::memcpy(u.sin.map<float *>(), sp, 160 * sizeof(float));
                 u.x.sync(XCL_BO_SYNC_BO_TO_DEVICE);
                 u.sin.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-                runs.push_back(u.kernel(u.x, u.prm, u.w, u.b, u.ln, u.sin, u.y, u.sout, u.q, first[j], count[j]));
+                runs.push_back(start(a, u, first[j], count[j]));
             }
             std::fill(so, so + 160, 0.0f);
             for (size_t j = 0; j < nUsed; j++) {
@@ -316,6 +333,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             }
         }
         if (nlhs > 2) {
+            if (!a.qmemPort) {
+                mexErrMsgIdAndTxt("salsun2d_band_df_mex:invalidUsage", "The kernel keeps the angles on chip.");
+            }
             Unit &u = a.units[0];
             u.q.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
             plhs[2] = mxCreateNumericMatrix(nBytesQ, 1, mxUINT8_CLASS, mxREAL);

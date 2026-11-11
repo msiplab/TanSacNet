@@ -70,3 +70,40 @@ link (`band_df_3cu.cfg`) runs `phys_opt_design` after placement: without
 it the write enables of the URAM buffers A and B, which have no input
 register, failed timing (286.5 MHz). Board power 61.9 W under load,
 50.5 W idle: 8.1 J/frame (9.6 before, 11.3 before that).
+
+### Angles on chip
+
+The angles of the analysis of a band are kept in URAM for the synthesis
+(`qmem`) instead of going through DDR. They are rounded to `QBITS` bits
+of theta/pi and stored as offsets of `QOFS` bits from a center per angle
+index (prm, 147 centers after the small parameters), saturated; the
+analysis rotates with the stored angles as well (closed loop), as
+`salsun2d_band_fixed_model` with `AngleBits`, `AngleCenters` and
+`OffsetBits` computes. The centers are the medians of the angles on a
+calibration frame (`salsun2d_angle_centers`). Storing the angles as
+offsets from centers is an idea of Shogo Muramatsu. With `QOFS = QBITS`
+(centers zero) the angles are stored as they are.
+
+Rounded angles change the output beyond the rounding of the angles
+alone: a rounding of the kernel and of the model may fall on neighboring
+steps and the difference grows through the following stages, so the
+test benches compare the reconstruction MSE of the kernel and of the
+model (within 1%) instead of the samples.
+
+| Angles | URAM per unit (card) | Clock | s/frame (60 s) | J/frame | MSE / 18 bits (12 Full HD frames, card) |
+|---|---|---|---|---|---|
+| 18 bits in DDR | 144 | 300 MHz | 0.131 | 8.1 | 1 |
+| 10 bits on chip | 259 | 300 MHz | 0.128 | 8.05 | 1.001 |
+| 9-bit grid, offsets of 8 bits (default) | 236 | 299 MHz | 0.131 | 8.1 | 1.008 |
+
+Eight bits per angle make a word of 280 bits (four URAM wide instead of
+five). Plain 8-bit angles cost the same URAM and 1.9% of MSE; offsets of
+8 bits on a 10-bit grid saturate too often (+23%). The cycles per band
+do not change (about 12.6 M): the speed comes from the clock. The 10-bit
+kernel first failed timing at the read of `qmem` (293 MHz); placing with
+`ExtraTimingOpt` and routing with `AggressiveExplore` gave 300 MHz, and
+`qmem` now has a read latency of 3. Card output against the model: MSE
+ratio 1.0000 (10 bits) and 1.0006 (offsets). Four units do not fit: the
+fourth (SLR1) has 128 URAM sites, so two units would have to share an
+SLR (288 URAM of 320 for the DDR version, too many with the angles on
+chip).

@@ -48,7 +48,6 @@ int main()
     static wraw_t wmem[NWORDS];
     static braw_t bmem[NBIAS];
     static float lnmem[2 * NLN];
-    static qword_t qmem[NQMEM];
     for (int i = 0; i < SZY * SZX; i++) src[i] = (float)x[i];
     for (int i = 0; i < NPRM; i++) fprm[i] = (float)prm[i];
     for (int i = 0; i < NWORDS; i++) {
@@ -66,7 +65,7 @@ int main()
     }
     for (int i = 0; i < 2 * NLN; i++) lnmem[i] = (float)l[i];
     for (int i = 0; i < 2 * NSTATS; i++) sin_[i] = (float)st[i];
-    salsun2d_band_df(src, fprm, wmem, bmem, lnmem, sin_, dst, sout, qmem, 0, NBANDS);
+    salsun2d_band_df(src, fprm, wmem, bmem, lnmem, sin_, dst, sout, 0, NBANDS);
     double ey = 0, ymax = 0;
     for (int i = 0; i < SZY * SZX; i++) {
         ey = std::fmax(ey, std::fabs(dst[i] - yref[i]));
@@ -88,5 +87,18 @@ int main()
     std::printf("%dx%d, %d bands of %d rows (halo %d): max|y - fixed model| = %.3g (max|y| %.3g), "
                 "max rel. error of the sums = %.3g\n",
                 SZY, SZX, NBANDS, BAND, HALO, ey, ymax, es);
+    // With coarse angles (QBITS bits) an angle of the kernel and of the
+    // model may round to neighboring steps, so samples differ by more; the
+    // reconstruction errors must agree
+    double mk = 0, mm = 0;
+    int nd = 0;
+    for (int i = 0; i < SZY * SZX; i++) {
+        mk += (dst[i] - x[i]) * (dst[i] - x[i]);
+        mm += (yref[i] - x[i]) * (yref[i] - x[i]);
+        if (std::fabs(dst[i] - yref[i]) > 1e-4) nd++;
+    }
+    std::printf("angles of %d bits: MSE kernel %.5g, fixed model %.5g (ratio %.4f); %d samples differ by more than 1e-4\n",
+                QBITS, mk / (SZY * SZX), mm / (SZY * SZX), mk / mm, nd);
+    if (QBITS < 18) return std::fabs(mk / mm - 1) > 0.01 ? 1 : 0;
     return ey > 1e-4 ? 1 : 0;
 }
