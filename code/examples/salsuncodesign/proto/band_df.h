@@ -42,10 +42,10 @@
 #define HALO 0
 #endif
 #ifndef QBITS
-#define QBITS 9                   // bits of an angle (theta/pi)
+#define QBITS 10                  // bits of an angle (theta/pi)
 #endif
 #ifndef QOFS
-#define QOFS 8                    // bits of a stored angle (offset from its center)
+#define QOFS QBITS                // bits of a stored angle (offset from its center)
 #endif
 
 namespace bdf {

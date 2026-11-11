@@ -93,8 +93,8 @@ model (within 1%) instead of the samples.
 | Angles | URAM per unit (card) | Clock | s/frame (60 s) | J/frame | MSE / 18 bits (12 Full HD frames, card) |
 |---|---|---|---|---|---|
 | 18 bits in DDR | 144 | 300 MHz | 0.131 | 8.1 | 1 |
-| 10 bits on chip | 259 | 300 MHz | 0.128 | 8.05 | 1.001 |
-| 9-bit grid, offsets of 8 bits (default) | 236 | 299 MHz | 0.131 | 8.1 | 1.008 |
+| 10 bits on chip (default) | 259 | 300 MHz | 0.128 | 8.05 | 1.001 |
+| 9-bit grid, offsets of 8 bits (`QBITS=9 QOFS=8`) | 236 | 299 MHz | 0.131 | 8.1 | 1.008 |
 
 Eight bits per angle make a word of 280 bits (four URAM wide instead of
 five). Plain 8-bit angles cost the same URAM and 1.9% of MSE; offsets of
