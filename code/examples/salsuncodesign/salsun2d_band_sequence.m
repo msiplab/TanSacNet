@@ -25,7 +25,12 @@ function [y,info] = salsun2d_band_sequence(u,params,frameFcn,options)
 %   frames before t: frame t+k uses the statistics measured up to frame
 %   t-1, as the rule above gives them for frame t (for 'fir2', the frames
 %   t-1 and t-2). With one frame more of delay for the later frames of a
-%   call, the MSE grows by less than 1% on the wave simulations.
+%   call, the MSE grows by less than 1% on the wave simulations. The
+%   statistics of the initialization are measured once, on the first
+%   frame, and used for every frame that has no measured frames before it
+%   (the later frames of the first call); InitPerFrame=true measures them
+%   on each of these frames instead (one whole-frame pass on the host per
+%   frame: about 2.4 s for Full HD with InitFast).
 %
 %   info has the fields Mu and Sigma (cells of the statistics used per
 %   frame) and MuMeasured, SigmaMeasured.
@@ -56,6 +61,7 @@ arguments
     options.InitQuantizer = @(v,tag) v
     options.InitFast (1,1) logical = false
     options.FramesPerCall (1,1) double {mustBeInteger,mustBePositive} = 1
+    options.InitPerFrame (1,1) logical = false
 end
 L = salsun2d_hls_layout();
 if isempty(options.InitParams)
@@ -72,6 +78,8 @@ muUsed = cell(nFrames,1); sigmaUsed = cell(nFrames,1);
 muMeas = cell(nFrames,1); sigmaMeas = cell(nFrames,1);
 smoothedMu = []; smoothedSigma = [];
 rho = single(options.StatsRho);
+initCache = {};                        % statistics of the initialization, once measured
+if options.InitPerFrame, initCache = []; end
 for t0 = 1:options.FramesPerCall:nFrames
     idx = t0:min(t0+options.FramesPerCall-1,nFrames);
     last = t0 - 1;                     % frames measured before this call
@@ -81,10 +89,10 @@ for t0 = 1:options.FramesPerCall:nFrames
         t = idx(k);
         switch options.Statistics
             case 'previous'
-                [mu(:,:,k),sigma(:,:,k)] = previousOrInit(muMeas,sigmaMeas,last,u(:,:,t),init);
+                [mu(:,:,k),sigma(:,:,k),initCache] = previousOrInit(muMeas,sigmaMeas,last,u(:,:,t),init,initCache);
             case 'ema'
                 if isempty(smoothedMu)
-                    [mu(:,:,k),sigma(:,:,k)] = previousOrInit(muMeas,sigmaMeas,0,u(:,:,t),init);
+                    [mu(:,:,k),sigma(:,:,k),initCache] = previousOrInit(muMeas,sigmaMeas,0,u(:,:,t),init,initCache);
                 else
                     mu(:,:,k) = smoothedMu; sigma(:,:,k) = smoothedSigma;
                 end
@@ -93,7 +101,7 @@ for t0 = 1:options.FramesPerCall:nFrames
                     mu(:,:,k) = 0.5*(muMeas{last} + muMeas{last-1});
                     sigma(:,:,k) = 0.5*(sigmaMeas{last} + sigmaMeas{last-1});
                 else
-                    [mu(:,:,k),sigma(:,:,k)] = previousOrInit(muMeas,sigmaMeas,last,u(:,:,t),init);
+                    [mu(:,:,k),sigma(:,:,k),initCache] = previousOrInit(muMeas,sigmaMeas,last,u(:,:,t),init,initCache);
                 end
         end
     end
@@ -116,13 +124,18 @@ info.Mu = muUsed; info.Sigma = sigmaUsed;
 info.MuMeasured = muMeas; info.SigmaMeasured = sigmaMeas;
 end
 
-function [mu,sigma] = previousOrInit(muMeas,sigmaMeas,t,x,init)
+function [mu,sigma,cache] = previousOrInit(muMeas,sigmaMeas,t,x,init,cache)
 % Statistics of frame t, or, for the first frame, those of the frame
-% itself measured by the reference (initialization of the stream)
+% itself measured by the reference (initialization of the stream). cache:
+% {} before the first initialization, {mu, sigma} after it (used again),
+% [] to measure on every frame
 if t >= 1
     mu = muMeas{t}; sigma = sigmaMeas{t};
+elseif iscell(cache) && ~isempty(cache)
+    mu = cache{1}; sigma = cache{2};
 else
     [mu,sigma] = init(x);
+    if iscell(cache), cache = {mu, sigma}; end
 end
 end
 

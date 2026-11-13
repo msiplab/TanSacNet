@@ -6,7 +6,8 @@ function [y,info] = salsun2d_band_df_u250(u,params,target,options)
 %   frame of u (szy x szx x N, single) and returns the reconstructed frames,
 %   as salsun2d_band_u250 does for the HLS-generated kernel: the
 %   standardization statistics come from the previous frames
-%   (salsun2d_band_sequence; options Statistics, StatsRho, InitFast).
+%   (salsun2d_band_sequence; options Statistics, StatsRho, InitFast,
+%   InitPerFrame).
 %
 %   target is 'hw' (default) or 'sw_emu'. BandRows and Halo select the
 %   xclbin proto/build/<target>/salsun2d_band_df_<szy>x<szx>_b<BandRows>h<Halo>_cu<ComputeUnits>.xclbin
@@ -44,6 +45,7 @@ arguments
     options.Statistics {mustBeMember(options.Statistics,{'previous','ema','fir2'})} = 'fir2'
     options.StatsRho (1,1) double = 0.9
     options.InitFast (1,1) logical = true
+    options.InitPerFrame (1,1) logical = false
     options.AngleCenters (:,1) double = []
     options.Xclbin {mustBeTextScalar} = ""
 end
@@ -99,5 +101,5 @@ nBlocks = single(prod(frameSize./L.Stride));
     end
 [y,info] = salsun2d_band_sequence(u,params,@frameOnCard, ...
     Statistics=options.Statistics,StatsRho=options.StatsRho,InitFast=options.InitFast, ...
-    FramesPerCall=options.FramesPerCall);
+    FramesPerCall=options.FramesPerCall,InitPerFrame=options.InitPerFrame);
 end
