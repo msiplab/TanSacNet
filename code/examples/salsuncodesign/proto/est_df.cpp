@@ -20,24 +20,30 @@
 namespace estdf {
 
 // Fully connected layer of estimator k, output stationary over the NB
-// lanes: for each group of P inputs, every cycle adds P products to one
-// output of all NB blocks. The inputs of the next group of P are read
-// during the first P cycles of a group, so the groups and outputs are one
-// pipeline; the outputs of a group of blocks are sent once all inputs are
-// summed. ID makes each call site its own function, with its own static
-// parameter memory (kept between calls). NWMEM words of weights for all estimators (offsets woff, rows of
-// words(nIn) words, in URAM), biases boff. An output row is sent as soon as
-// it is complete, during the pass over the last group of inputs (the
-// output stream holds the rows of a group).
-template <int ID, int NOUTMAX, int NWMEM, int NBMEM>
+// lanes: for each group of P inputs, every cycle adds P products to OPAR
+// outputs (1 or 2: two reads of the weights per cycle, the two ports of the
+// URAM) of all NB blocks. The inputs of the next group of P are read
+// during the first P cycles of a pass over the outputs, those of the first
+// group of P of the next group of blocks during the last pass, so the
+// groups of inputs and of blocks are one pipeline. ID makes each call site
+// its own function, with its own static parameter memory (kept between
+// calls). NWMEM words of weights for all estimators (offsets woff, rows of
+// words(nIn) words, in URAM), biases boff. With OPAR = 1 an output row is
+// sent as soon as it is complete, during the last pass over the inputs;
+// with OPAR = 2 the rows of a group of blocks are kept and sent one per
+// cycle during the next group of blocks (and after the last). A pass has
+// ceil(nOut / OPAR) cycles: at least P, and (OPAR = 2) ngi >= 2.
+template <int ID, int NOUTMAX, int NWMEM, int NBMEM, int OPAR>
 void fc(hls::stream<row_t> &in, hls::stream<arow_t> &out, hls::stream<wword_t> &wload,
         hls::stream<acc_t> &bload, int nIn, int ngi, int nOut, int woff, int boff, int ngroups,
         bool load)
 {
+    constexpr int NJ = (NOUTMAX + OPAR - 1) / OPAR;
     static wword_t W[NWMEM];            // weights of this layer, on chip (kept between calls)
     static acc_t B[NBMEM];
 #pragma HLS AGGREGATE variable = W
-#pragma HLS BIND_STORAGE variable = W type = ram_2p impl = uram
+#pragma HLS BIND_STORAGE variable = W type = ram_t2p impl = uram
+#pragma HLS BIND_STORAGE variable = B type = ram_t2p
     if (load) {
     load_w:
         for (int i = 0; i < NWMEM; i++) {
@@ -50,75 +56,177 @@ void fc(hls::stream<row_t> &in, hls::stream<arow_t> &out, hls::stream<wword_t> &
             B[i] = bload.read();
         }
     }
-    arow_t Z[NOUTMAX];                  // partial sums, one row of NB lanes per word
+    arow_t Z[OPAR][NJ];                 // partial sums: output OPAR j + q in Z[q][j]
+    arow_t Za[OPAR][NJ], Zb[OPAR][NJ];  // finished rows (OPAR = 2), groups of blocks in turn
 #pragma HLS AGGREGATE variable = Z
+#pragma HLS AGGREGATE variable = Za
+#pragma HLS AGGREGATE variable = Zb
+#pragma HLS ARRAY_PARTITION variable = Z type = complete dim = 1
+#pragma HLS ARRAY_PARTITION variable = Za type = complete dim = 1
+#pragma HLS ARRAY_PARTITION variable = Zb type = complete dim = 1
     sig_t xr[P][NB], xn[P][NB];
 #pragma HLS ARRAY_PARTITION variable = xr type = complete dim = 0
 #pragma HLS ARRAY_PARTITION variable = xn type = complete dim = 0
+    const int npass = (nOut + OPAR - 1) / OPAR;
+first:
+    for (int p = 0; p < P; p++) {       // the first inputs of the first group of blocks
+#pragma HLS PIPELINE II = 1
+        row_t r;
+        if (p < nIn && ngroups > 0) {
+            r = in.read();
+        } else {
+            for (int b = 0; b < NB; b++) r.v[b] = 0;
+        }
+        for (int b = 0; b < NB; b++) xr[p][b] = r.v[b];
+    }
+    int ndrain = 0, kd = 0;             // rows of the previous group of blocks left to send
 group:
     for (int g = 0; g < ngroups; g++) {
-    first:
-        for (int p = 0; p < P; p++) {
-#pragma HLS PIPELINE II = 1
-            row_t r;
-            if (p < nIn) {
-                r = in.read();
-            } else {
-                for (int b = 0; b < NB; b++) r.v[b] = 0;
-            }
-            for (int b = 0; b < NB; b++) xr[p][b] = r.v[b];
-        }
-        int gi = 0, o = 0;
-        int inext = P;                      // next input to read
-        int wrow = woff;                    // first word of the row of output o
+        const bool odd = g & 1;
+        const bool more = g + 1 < ngroups;
+        int gi = 0, j = 0;
+        int inext = P;                      // next input of this group to read
+        int wrow = woff;                    // first word of the row of output OPAR j
     mac:
-        for (int t = 0; t < ngi * nOut; t++) {
+        for (int t = 0; t < ngi * npass; t++) {
 #pragma HLS PIPELINE II = 1
 #pragma HLS DEPENDENCE variable = Z type = inter false
-#pragma HLS LOOP_TRIPCOUNT max = 6 * 135
-            if (o < P && gi + 1 < ngi) {        // inputs of the next group
+#pragma HLS DEPENDENCE variable = Za type = inter false
+#pragma HLS DEPENDENCE variable = Zb type = inter false
+#pragma HLS LOOP_TRIPCOUNT max = 6 * 68
+            const bool last = gi == ngi - 1;
+            if (j < P && (!last || more)) {     // inputs of the next group of P
+                const int i = last ? j : inext;
                 row_t r;
-                if (inext < nIn) {
+                if (i < nIn) {
                     r = in.read();
                 } else {
                     for (int b = 0; b < NB; b++) r.v[b] = 0;
                 }
-                for (int b = 0; b < NB; b++) xn[o][b] = r.v[b];
+                for (int b = 0; b < NB; b++) xn[j][b] = r.v[b];
                 inext++;
             }
-            const wword_t wv = W[wrow + gi];
-            const arow_t zo = Z[o];
-            arow_t zn;
-            for (int b = 0; b < NB; b++) {
-                acc_t acc = (gi == 0) ? B[boff + o] : zo.v[b];
-                for (int p = 0; p < P; p++) {
-                    acc += wv.w[p] * xr[p][b];
-                }
-                zn.v[b] = acc;
+            if (OPAR > 1 && ndrain > 0) {       // a finished row of the previous group of blocks
+                const int qd = kd % OPAR, jd = kd / OPAR;
+                out.write(odd ? Za[qd][jd] : Zb[qd][jd]);
+                kd++;
+                ndrain--;
             }
-            Z[o] = zn;
-            if (gi == ngi - 1) out.write(zn);
-            if (o == nOut - 1) {
+            for (int q = 0; q < OPAR; q++) {
+                const int o = OPAR * j + q;
+                const bool valid = o < nOut;
+                const wword_t wv = W[valid ? wrow + q * ngi + gi : woff];
+                const arow_t zo = Z[q][j];
+                arow_t zn;
+                for (int b = 0; b < NB; b++) {
+                    // the products as one chain of multiply-adds (DSP cascade,
+                    // no adder tree in the fabric); exact, so the order is free
+#pragma HLS EXPRESSION_BALANCE off
+                    acc_t s = wv.w[0] * xr[0][b];
+                    for (int p = 1; p < P; p++) {
+                        s += wv.w[p] * xr[p][b];
+                    }
+                    zn.v[b] = s + ((gi == 0) ? B[boff + (valid ? o : 0)] : zo.v[b]);
+                }
+                Z[q][j] = zn;
+                if (last && valid) {
+                    if (OPAR == 1) {
+                        out.write(zn);
+                    } else if (odd) {
+                        Zb[q][j] = zn;
+                    } else {
+                        Za[q][j] = zn;
+                    }
+                }
+            }
+            if (j == npass - 1) {
                 for (int p = 0; p < P; p++)
                     for (int b = 0; b < NB; b++) xr[p][b] = xn[p][b];
-                o = 0;
+                j = 0;
                 gi++;
                 wrow = woff;
             } else {
-                o++;
-                wrow += ngi;
+                j++;
+                wrow += OPAR * ngi;
             }
         }
+        if (OPAR > 1) {
+            ndrain = nOut;
+            kd = 0;
+        }
+    }
+    const bool odd = ngroups & 1;           // the buffer of the last group of blocks
+drain:
+    for (; ndrain > 0; ndrain--) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT max = NOUTMAX
+        const int qd = kd % OPAR, jd = kd / OPAR;
+        out.write(odd ? Za[qd][jd] : Zb[qd][jd]);
+        kd++;
     }
 }
 
-// LayerNorm over the nF features of each block: the exact sums in fixed
-// point, the mean and the reciprocal standard deviation of each block in
-// single precision, the normalization in fixed point (est_df.h). The rows
-// go on to the residual add (skip).
+// LayerNorm over the nF features of each block, as three tasks so that the
+// groups of blocks overlap: the exact sums in fixed point (ln_sums, which
+// keeps the rows for the normalization and sends them on to the residual
+// add), the mean and the reciprocal standard deviation of each block in
+// single precision (ln_scale), the normalization in fixed point (ln_norm;
+// est_df.h)
+struct lnsum_t {
+    acc_t s1[NB];
+    sq_t s2[NB];
+};
+struct lnms_t {
+    lnm_t mean[NB];
+    lnr_t rs[NB];
+};
+void ln_sums(hls::stream<row_t> &in, hls::stream<row_t> &keep, hls::stream<row_t> &skip,
+             hls::stream<lnsum_t> &sums, int nF, int ngroups)
+{
+group:
+    for (int g = 0; g < ngroups; g++) {
+        lnsum_t s;
+        for (int b = 0; b < NB; b++) {
+#pragma HLS UNROLL
+            s.s1[b] = 0;
+            s.s2[b] = 0;
+        }
+    sums:
+        for (int i = 0; i < nF; i++) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT max = 135
+            row_t r = in.read();
+            keep.write(r);
+            skip.write(r);
+            for (int b = 0; b < NB; b++) {
+                s.s1[b] += r.v[b];
+                s.s2[b] += r.v[b] * r.v[b];
+            }
+        }
+        sums.write(s);
+    }
+}
+void ln_scale(hls::stream<lnsum_t> &sums, hls::stream<lnms_t> &ms, int nF, int ngroups)
+{
+group:
+    for (int g = 0; g < ngroups; g++) {
+        const lnsum_t s = sums.read();
+        lnms_t m;
+    scale:
+        for (int b = 0; b < NB; b++) {
+#pragma HLS PIPELINE II = 1
+            const float mf = (float)s.s1[b] / nF;
+            float v = (float)s.s2[b] / nF - mf * mf;
+            v = v > 0.0f ? v : 0.0f;
+            m.mean[b] = mf;
+            m.rs[b] = 1.0f / hls::sqrt(v + 1e-5f);
+        }
+        ms.write(m);
+    }
+}
 template <int ID>
-void layer_norm(hls::stream<row_t> &in, hls::stream<row_t> &out, hls::stream<row_t> &skip,
-                hls::stream<lnpar_t> &lnload, int nF, int poff, int ngroups, bool load)
+void ln_norm(hls::stream<row_t> &keep, hls::stream<lnms_t> &ms, hls::stream<row_t> &out,
+             hls::stream<lnpar_t> &lnload, int nF, int poff, int ngroups, bool load)
 {
     static lnp_t gam[NVEC], bet[NVEC];  // kept between calls
     if (load) {
@@ -130,49 +238,15 @@ void layer_norm(hls::stream<row_t> &in, hls::stream<row_t> &out, hls::stream<row
             bet[i] = q.beta;
         }
     }
-    row_t buf[NFMAX];
-#pragma HLS AGGREGATE variable = buf
-    acc_t s1[NB];
-    sq_t s2[NB];
-    lnm_t mean[NB];
-    lnr_t rs[NB];
-#pragma HLS ARRAY_PARTITION variable = s1 type = complete
-#pragma HLS ARRAY_PARTITION variable = s2 type = complete
-#pragma HLS ARRAY_PARTITION variable = mean type = complete
-#pragma HLS ARRAY_PARTITION variable = rs type = complete
 group:
     for (int g = 0; g < ngroups; g++) {
-        for (int b = 0; b < NB; b++) {
-#pragma HLS UNROLL
-            s1[b] = 0;
-            s2[b] = 0;
-        }
-    sums:
-        for (int i = 0; i < nF; i++) {
-#pragma HLS PIPELINE II = 1
-#pragma HLS LOOP_TRIPCOUNT max = 135
-            row_t r = in.read();
-            buf[i] = r;
-            skip.write(r);
-            for (int b = 0; b < NB; b++) {
-                s1[b] += r.v[b];
-                s2[b] += r.v[b] * r.v[b];
-            }
-        }
-    scale:
-        for (int b = 0; b < NB; b++) {
-#pragma HLS PIPELINE II = 1
-            const float m = (float)s1[b] / nF;
-            float v = (float)s2[b] / nF - m * m;
-            v = v > 0.0f ? v : 0.0f;
-            mean[b] = m;
-            rs[b] = 1.0f / hls::sqrt(v + 1e-5f);
-        }
+        const lnms_t m = ms.read();
     normalize:
         for (int i = 0; i < nF; i++) {
 #pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = 135
-            const lnp_t g = gam[poff + i], be = bet[poff + i];
+            const lnp_t gg = gam[poff + i], be = bet[poff + i];
+            const row_t x = keep.read();
             row_t r;
             for (int b = 0; b < NB; b++) {
                 // d * rs is wider than a DSP (27 x 18), and built by Vivado
@@ -182,15 +256,15 @@ group:
                 // So take the integer and fraction parts of rs apart: each
                 // product fits one DSP, and as the split is at 16 bits, not
                 // the cascade's 17, they cannot be merged into that again.
-                const ap_fixed<25, 9> d = buf[i].v[b] - mean[b];
-                const ap_uint<10> rh = rs[b].range(25, 16);
+                const ap_fixed<25, 9> d = x.v[b] - m.mean[b];
+                const ap_uint<10> rh = m.rs[b].range(25, 16);
                 ap_ufixed<16, 0> rl;
-                rl.range(15, 0) = rs[b].range(15, 0);
+                rl.range(15, 0) = m.rs[b].range(15, 0);
                 const ap_fixed<35, 19> ph = d * rh;
                 const ap_fixed<41, 9> pl = d * rl;
                 const ap_fixed<51, 19> pr = ph + pl;
                 const lnt_t t = pr;
-                r.v[b] = t * g + be;
+                r.v[b] = t * gg + be;
             }
             out.write(r);
         }
@@ -328,10 +402,12 @@ est_dims_t dims(int k)
 
 // One residual block: LayerNorm, FC, GELU, FC, skip
 #define RESBLOCK(R, FIN, FOUT)                                                                  \
-    layer_norm<R>(FIN, ln##R, skip##R, lns[R], d.nF, d.vec, ngroups, load);                   \
-    fc<2 * R, NFMAX, SQWORDS, NVEC>(ln##R, z1##R, w1s[R], b1s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups, load); \
+    ln_sums(FIN, keep##R, skip##R, sums##R, d.nF, ngroups);                                   \
+    ln_scale(sums##R, ms##R, d.nF, ngroups);                                                  \
+    ln_norm<R>(keep##R, ms##R, ln##R, lns[R], d.nF, d.vec, ngroups, load);                    \
+    fc<2 * R, NFMAX, SQWORDS, NVEC, 2>(ln##R, z1##R, w1s[R], b1s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups, load); \
     gelu(z1##R, a##R, d.nF, ngroups);                                                         \
-    fc<2 * R + 1, NFMAX, SQWORDS, NVEC>(a##R, z2##R, w2s[R], b2s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups, load); \
+    fc<2 * R + 1, NFMAX, SQWORDS, NVEC, 2>(a##R, z2##R, w2s[R], b2s[R], d.nF, d.ngi, d.nF, d.sq, d.vec, ngroups, load); \
     residual_add(z2##R, skip##R, FOUT, d.nF, ngroups);
 
 // Estimator k on ngroups groups of NB blocks: feature rows in, angle rows
@@ -354,11 +430,16 @@ void est_engine(hls::stream<row_t> &features, hls::stream<arow_t> &angles, const
 #pragma HLS BIND_STORAGE variable = skip1 type = fifo impl = uram
 #pragma HLS BIND_STORAGE variable = skip2 type = fifo impl = uram
     hls::stream<arow_t, FIFO> z10, z11, z12, z20, z21, z22;
+    // the rows of a group wait in keep for its statistics (with those of the
+    // next group arriving meanwhile)
+    hls::stream<row_t, 256> keep0, keep1, keep2;
+    hls::stream<lnsum_t, 2> sums0, sums1, sums2;
+    hls::stream<lnms_t, 2> ms0, ms1, ms2;
     loader(wmem, bmem, lnmem, w1s, w2s, wos, b1s, b2s, bos, lns, load);
     RESBLOCK(0, features, f1)
     RESBLOCK(1, f1, f2)
     RESBLOCK(2, f2, f3)
-    fc<2 * NRES, NAMAX, OUTWORDS, NAALL>(f3, angles, wos, bos, d.nF, d.ngi, d.nA, d.out, d.a, ngroups, load);
+    fc<2 * NRES, NAMAX, OUTWORDS, NAALL, 1>(f3, angles, wos, bos, d.nF, d.ngi, d.nA, d.out, d.a, ngroups, load);
 }
 
 } // namespace estdf
