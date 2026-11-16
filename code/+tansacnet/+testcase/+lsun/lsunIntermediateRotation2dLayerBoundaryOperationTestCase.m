@@ -308,7 +308,9 @@ classdef lsunIntermediateRotation2dLayerBoundaryOperationTestCase < matlab.unitt
             import matlab.unittest.constraints.AbsoluteTolerance
             tolObj = AbsoluteTolerance(1e-4,single(1e-4));
             import tansacnet.utility.*
-            genU = OrthonormalMatrixGenerationSystem('Device','cpu');
+            genU = OrthonormalMatrixGenerationSystem(...
+                'Device','cpu',...
+                'DType',datatype);
 
             % Parameters
             nSamples = 8;
@@ -441,9 +443,112 @@ classdef lsunIntermediateRotation2dLayerBoundaryOperationTestCase < matlab.unitt
                 IsEqualTo(expctddLdW,'Within',tolObj));
         end
 
+        function testPredictTerminationSetAfterConstruction(testCase, ...
+                stride, nrows, ncols, mode, bdir)
+            % Setting BoundaryOperation and Direction after construction
+            % takes effect on the next predict
+
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(1e-6,single(1e-6));
+            import tansacnet.utility.*
+            genU = OrthonormalMatrixGenerationSystem('Device','cpu');
+
+            % Parameters
+            nSamples = 8;
+            nChsTotal = prod(stride);
+            pa = floor(nChsTotal/2);
+            X = randn(nChsTotal,nrows,ncols,nSamples);
+            angles = randn((nChsTotal-2)*nChsTotal/8,nrows*ncols);
+            mus_ = 2*(rand(pa,nrows*ncols)>0.5)-1;
+
+            % Expected values
+            Un = genU.step(angles,mus_);
+            bblks = testCase.boundaryBlocks_(nrows,ncols,bdir);
+            Un(:,:,bblks) = repmat(-eye(pa),[1 1 numel(bblks)]);
+            expctdZ = testCase.rotateDifferenceChannels_(X,Un,mode);
+
+            % Instantiation of target class with 'Circular'
+            % Un is generated for 'Circular' at the end of construction
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows ncols],...
+                'Mode',mode,...
+                'Angles',angles,...
+                'Mus',mus_,...
+                'Device','cpu');
+
+            % Switch to 'Termination' after construction
+            layer.Direction = bdir;
+            layer.BoundaryOperation = 'Termination';
+
+            % Actual values
+            actualZ = layer.predict(X);
+
+            % Evaluation
+            testCase.verifyThat(actualZ,...
+                IsEqualTo(expctdZ,'Within',tolObj));
+        end
+
+        function testSetInvalidBoundaryOperation(testCase, stride)
+            % Setting an invalid BoundaryOperation after construction
+            % throws an exception
+
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'Device','cpu');
+            testCase.verifyError(@() testCase.setProperty_(layer,...
+                'BoundaryOperation','InvalidBoundaryOperation'),...
+                'LsunLayer:InvalidBoundaryOperation');
+        end
+
+        function testSetInvalidDirection(testCase, stride)
+            % Setting an invalid Direction after construction throws an
+            % exception
+
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'Device','cpu');
+            testCase.verifyError(@() testCase.setProperty_(layer,...
+                'Direction','InvalidDirection'),...
+                'LsunLayer:InvalidDirection');
+        end
+
+        function testPredictTerminationWithoutDirection(testCase, stride)
+            % Switching to 'Termination' without Direction after
+            % construction throws an exception on predict
+
+            % Parameters
+            nrows_ = 2;
+            ncols_ = 2;
+            nSamples = 1;
+            nChsTotal = prod(stride);
+            X = zeros(nChsTotal,nrows_,ncols_,nSamples);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunIntermediateRotation2dLayer(...
+                'Stride',stride,...
+                'NumberOfBlocks',[nrows_ ncols_],...
+                'Device','cpu');
+            layer.BoundaryOperation = 'Termination';
+
+            % Evaluation
+            testCase.verifyError(@() layer.predict(X),...
+                'LsunLayer:InvalidDirection');
+        end
+
     end
 
     methods (Static, Access = private)
+
+        function layer = setProperty_(layer,name,value)
+            % Set a property of a layer (value object) in a function
+            layer.(name) = value;
+        end
 
         function bblks = boundaryBlocks_(nrows,ncols,bdir)
             % Indices of the boundary blocks in column-major block order
