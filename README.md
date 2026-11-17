@@ -38,8 +38,8 @@ parts of your network.
         │   │   └── +utility
         │   │       ├── OrthonormalMatrixGenerationSystem.m
         │   │       ...
-        │   ├── appendix
-        │   │   ├── setup.py
+        │   ├── python
+        │   │   ├── pyproject.toml
         │   │   └── torch_tansacnet
         │   │       ├── lsunAnalysis2dNetwork.py
         │   │       ├── lsunSynthesis2dNetwork.py
@@ -118,6 +118,15 @@ For a quick tour of the package, run the live script 'quickstart' in the directo
 
 Its Python (PyTorch) counterpart is the notebook 'code/quickstart.ipynb'.
  
+## PyTorch implementation
+
+The LSUN layers and networks are also available for PyTorch as the package
+`torch_tansacnet` under 'code/python'. It can be installed directly from GitHub by
+
+        pip install "torch-tansacnet @ git+https://github.com/msiplab/TanSacNet.git@feature/pytorch#subdirectory=code/python"
+
+See [code/python/README.md](code/python/README.md) for the details.
+
 ## Contact address
  
      Shogo MURAMATSU,

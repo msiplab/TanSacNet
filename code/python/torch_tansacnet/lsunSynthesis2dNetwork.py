@@ -5,7 +5,7 @@ from .lsunFinalRotation2dLayer import LsunFinalRotation2dLayer
 from .lsunAtomExtension2dLayer import LsunAtomExtension2dLayer
 from .lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 from .lsunChannelConcatenation2dLayer import LsunChannelConcatenation2dLayer
-from .lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize
+from .lsunLayerExceptions import InvalidOverlappingFactor, InvalidNoDcLeakage, InvalidNumberOfLevels, InvalidStride, InvalidInputSize, InvalidBoundaryOperation
 from .lsunUtility import Direction
 
 class LsunSynthesis2dNetwork(nn.Module):
@@ -34,13 +34,25 @@ class LsunSynthesis2dNetwork(nn.Module):
         number_of_levels=0,
         prefix='',
         dtype=torch.get_default_dtype(),
-        device=torch.get_default_device()
+        device=torch.get_default_device(),
+        boundary_operation='Circular'
         ):
         super(LsunSynthesis2dNetwork, self).__init__()
         
         # Check and set parameters
         self.dtype = dtype
         self.device = device
+
+        # Boundary operation of the odd-order intermediate rotation layers,
+        # i.e., those right after the shift of the difference channels.
+        # 'Termination' fixes the rotation matrices of their boundary blocks
+        # to -I so that no coefficients wrap around to the opposite boundary
+        # (MATLAB fcn_createlsunlgraph2d with 'BoundaryOperation').
+        # The even-order layers are always 'Circular'.
+        if boundary_operation not in ('Circular', 'Termination'):
+            raise InvalidBoundaryOperation(
+                f"{boundary_operation} : BoundaryOperation should be either of Circular or Termination")
+        self.boundary_operation = boundary_operation
         
         # Stride
         nDecs = stride[Direction.VERTICAL]*stride[Direction.HORIZONTAL]
@@ -122,6 +134,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                     number_of_blocks=[nrows,ncols],
                     mode='Synthesis',
                     mus=-1,
+                    boundary_operation=self.boundary_operation,
+                    direction='Vertical',
                     dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(strLv+'Qv~%ddd'%(iOrderV-1),LsunAtomExtension2dLayer(
                     stride=self.stride,
@@ -145,6 +159,8 @@ class LsunSynthesis2dNetwork(nn.Module):
                     number_of_blocks=[nrows,ncols],
                     mode='Synthesis',
                     mus=-1,
+                    boundary_operation=self.boundary_operation,
+                    direction='Horizontal',
                     dtype=self.dtype,device=self.device))
                 stages[iStage].add_module(strLv+'Qh~%drd'%(iOrderH-1),LsunAtomExtension2dLayer(
                     stride=self.stride,
@@ -239,7 +255,8 @@ class LsunSynthesis2dNetwork(nn.Module):
             no_dc_leakage=self.no_dc_leakage,
             number_of_levels=self.number_of_levels,
             dtype=self.dtype,
-            device=self.device            
+            device=self.device,
+            boundary_operation=self.boundary_operation            
         )
 
         if self.number_of_levels == 0:
@@ -258,6 +275,10 @@ class LsunSynthesis2dNetwork(nn.Module):
 
         # Load state dictionary
         analyzer.load_state_dict(ana_state_dict)
+
+        # Copy mus, which are not included in the state dictionary
+        from .lsunUtility import copy_mus
+        copy_mus(analyzer, self)
 
         # Return adjoint
         return analyzer #.to(dtype=self.dtype,device=self.device)
