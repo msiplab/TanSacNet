@@ -6,7 +6,7 @@ from .lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
 from .lsunSynthesis2dNetwork import LsunSynthesis2dNetwork
 from .orthonormalTransform import OrthonormalTransform
 from .lsunUtility import Direction, ForwardTruncationLayer, AdjointTruncationLayer
-from .lsunLayerExceptions import InvalidMode, InvalidStride, InvalidOverlappingFactor
+from .lsunLayerExceptions import InvalidMode, InvalidStride, InvalidOverlappingFactor, InvalidBoundaryOperation
 
 __all__ = [
     'LsunAnalysis2dNetwork',
@@ -17,5 +17,6 @@ __all__ = [
     'Direction',
     'InvalidMode', 
     'InvalidStride',
-    'InvalidOverlappingFactor'
+    'InvalidOverlappingFactor',
+    'InvalidBoundaryOperation'
     ]

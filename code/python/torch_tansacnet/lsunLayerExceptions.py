@@ -45,3 +45,7 @@ class InvalidOverlappingFactor(Exception):
 class InvalidInputSize(Exception):
     def __init__(self,msg):
         super().__init__(self,msg)        
+
+class InvalidBoundaryOperation(Exception):
+    def __init__(self,msg):
+        super().__init__(self,msg)

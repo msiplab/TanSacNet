@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import math
 from .lsunUtility import Direction
-from .lsunLayerExceptions import InvalidMode, InvalidNumberOfBlocks, InvalidStride
+from .lsunLayerExceptions import InvalidMode, InvalidNumberOfBlocks, InvalidStride, \
+    InvalidBoundaryOperation, InvalidDirection
 from .orthonormalTransform import SetOfOrthonormalTransforms
 
 class LsunIntermediateRotation2dLayer(nn.Module):
@@ -14,6 +15,13 @@ class LsunIntermediateRotation2dLayer(nn.Module):
 
         コンポーネント別に出力(nComponents):    
             nSamples x nRows x nCols x nChs
+
+        boundary_operation ('Circular' or 'Termination') and direction
+        ('Vertical' or 'Horizontal') correspond to the MATLAB properties
+        BoundaryOperation and Direction. 'Termination' fixes the rotation
+        matrices of the boundary blocks (the first row for 'Vertical', the
+        first column for 'Horizontal') to -I, so that the boundary blocks do
+        not contribute to the gradient of the angles.
 
     Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
@@ -36,7 +44,9 @@ class LsunIntermediateRotation2dLayer(nn.Module):
                  stride=None,
                  mus=None,
                  number_of_blocks=None,
-                 name=''):
+                 name='',
+                 boundary_operation='Circular',
+                 direction=None):
         super(LsunIntermediateRotation2dLayer, self).__init__()
         self.dtype = dtype
         self.device = device
@@ -78,6 +88,51 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         self.mus = mus
         #self.update_parameters()
 
+        # Boundary operation (see the MATLAB lsunIntermediateRotation2dLayer)
+        self.boundary_operation = boundary_operation
+        self.direction = direction
+        self.__validate_direction()
+
+    @property
+    def boundary_operation(self):
+        return self.__boundary_operation
+
+    @boundary_operation.setter
+    def boundary_operation(self, boundary_operation):
+        if boundary_operation not in ('Circular', 'Termination'):
+            raise InvalidBoundaryOperation(
+                f"{boundary_operation} : BoundaryOperation should be either of Circular or Termination")
+        self.__boundary_operation = boundary_operation
+
+    @property
+    def direction(self):
+        return self.__direction
+
+    @direction.setter
+    def direction(self, direction):
+        # None is allowed only for 'Circular'
+        if direction in (None, ''):
+            direction = None
+        elif direction not in ('Vertical', 'Horizontal'):
+            raise InvalidDirection(
+                f"{direction} : Direction should be either of Horizontal or Vertical")
+        self.__direction = direction
+
+    def __validate_direction(self):
+        if self.__boundary_operation == 'Termination' and self.__direction is None:
+            raise InvalidDirection(
+                "Direction should be either of Horizontal or Vertical for Termination")
+
+    def __boundary_block_mask(self, nrows, ncols, device):
+        """(nRows x nCols) x 1 x 1 mask of the boundary blocks in row-major order."""
+        self.__validate_direction()
+        mask = torch.zeros(nrows, ncols, dtype=torch.bool, device=device)
+        if self.__direction == 'Vertical':
+            mask[0, :] = True  # first row
+        else:
+            mask[:, 0] = True  # first column
+        return mask.reshape(nrows*ncols, 1, 1)
+
     def forward(self, X):
         nSamples = X.size(dim=0)
         nrows = X.size(dim=1)
@@ -96,6 +151,10 @@ class LsunIntermediateRotation2dLayer(nn.Module):
         Y = X.permute(1,2,3,0).reshape(nrows*ncols,ps+pa,nSamples)
         Zs = Y[:,:ps,:].clone()
         Za = self.orthTransUnx(Y[:,ps:,:])
+        if self.__boundary_operation == 'Termination':
+            # The boundary blocks are rotated by the fixed matrix -I
+            isBoundary = self.__boundary_block_mask(nrows, ncols, X.device)
+            Za = torch.where(isBoundary, -Y[:,ps:,:], Za)
         Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,ps+pa,nSamples).permute(3,0,1,2)
         return Z
     
