@@ -19,13 +19,15 @@ setpath
 %[text] - Stride (decimation factor): $4\\times 4$, which gives $16$ channels
 %[text] - Overlapping factor: $3\\times 3$
 %[text] - Number of tree levels: $1$
-%[text] - No DC leakage, i.e. one vanishing moment \
+%[text] - No DC leakage, i.e. one vanishing moment
+%[text] - Boundary operation: termination, i.e. no wrap-around to the opposite boundary \
 szx = 32;            % Width
 szy = 32;            % Height
 stride = [4 4];      % Stride [vertical horizontal]
 ovlpFactor = [3 3];  % Overlapping factor [vertical horizontal]
 nLevels = 1;         % Number of tree levels
 noDcLeakage = true;  % No DC leakage
+boundaryOperation = 'Termination'; % Boundary operation ('Circular' or 'Termination')
 stdInitAng = pi/6;   % Standard deviation of the initial angles
 nChs = prod(stride); % Number of channels
 %%
@@ -38,6 +40,7 @@ analysislgraph = fcn_createlsunlgraph2d([],...
     'OverlappingFactor',ovlpFactor,...
     'NumberOfLevels',nLevels,...
     'NumberOfVanishingMoments',noDcLeakage,...
+    'BoundaryOperation',boundaryOperation,...
     'Mode','Analyzer');
 synthesislgraph = fcn_createlsunlgraph2d([],...
     'InputSize',[szy szx],...
@@ -45,6 +48,7 @@ synthesislgraph = fcn_createlsunlgraph2d([],...
     'OverlappingFactor',ovlpFactor,...
     'NumberOfLevels',nLevels,...
     'NumberOfVanishingMoments',noDcLeakage,...
+    'BoundaryOperation',boundaryOperation,...
     'Mode','Synthesizer');
 %[text] The angles of the rotation layers are the learnable parameters. They are set to random values here to obtain a non-trivial transform.
 rng(0)
@@ -127,6 +131,44 @@ end
 title(tl,"Atomic images of channel " + iCh + " at 3x3 blocks")
 %[text] For a convolutional dictionary, all of the images above would be identical. The maximum absolute difference from the atomic image at the center block is
 maxDiff = max(abs(atomsLoc - atomsLoc(:,:,(end+1)/2)),[],'all')
+%%
+%[text] ## Compare the boundary operations
+%[text] The option 'BoundaryOperation' of tansacnet.lsun.fcn\_createlsunlgraph2d specifies how the blocks on the image boundary are processed:
+%[text] - 'Circular': The image is extended periodically, so the left and right (top and bottom) edges are treated as adjacent.
+%[text] - 'Termination': The rotation matrices of the boundary blocks are fixed to $-\\mathbf{I}$ in the intermediate rotation layers right after the shift of the difference channels, so that no coefficients wrap around to the opposite boundary. The perfect reconstruction is kept. \
+%[text] Let us give an input only on the leftmost block column and compare the maximum absolute values of the coefficients in each block column. The same random angles are used for both. Since dlnetwork casts the learnable parameters to single, the networks are cast to double so that the zeros are exact.
+boundaryOperations = ["Circular" "Termination"];
+xEdge = zeros(szy,szx);
+xEdge(:,1:stride(2)) = randn(szy,stride(2)); % Input on the leftmost block column
+colMax = zeros(numel(boundaryOperations),szx/stride(2));
+for iBo = 1:numel(boundaryOperations)
+    lgraph = fcn_createlsunlgraph2d([],...
+        'InputSize',[szy szx],...
+        'Stride',stride,...
+        'OverlappingFactor',ovlpFactor,...
+        'NumberOfLevels',nLevels,...
+        'NumberOfVanishingMoments',noDcLeakage,...
+        'BoundaryOperation',boundaryOperations(iBo),...
+        'Mode','Analyzer');
+    net = dlnetwork(lgraph);
+    rng(0) % Same random angles for both
+    isAngles = net.Learnables.Parameter == "Angles";
+    net.Learnables.Value(isAngles) = cellfun(@(v) v+stdInitAng*randn(size(v)), ...
+        net.Learnables.Value(isAngles),'UniformOutput',false);
+    net = dlupdate(@double,net);
+    c = cell(1,2);
+    [c{1:2}] = net.predict(dlarray(xEdge,'SSCB')); % {AC, DC} coefficients
+    colMax(iBo,:) = gather(max(abs(cat(3,extractdata(c{1}),extractdata(c{2}))),[],[1 3]));
+end
+figure
+bar(colMax.')
+xlabel('Block column (1: the input edge)')
+ylabel('Max |coefficient|')
+legend(boundaryOperations,'Location','northeast')
+title('Wrap-around to the opposite boundary')
+%[text] With 'Circular', the input on the left edge wraps around to the rightmost block column. With 'Termination', the coefficients there are exactly zero:
+colMaxOnRightEdge = table(boundaryOperations.',colMax(:,end),...
+    'VariableNames',{'BoundaryOperation','MaxAbsCoef'})
 %%
 %[text] ## Next steps
 %[text] Several example codes are found under the directory 'examples'. For the training of LSUN as an image approximation like PCA, see examples/lsun/main\_lsun.m.
