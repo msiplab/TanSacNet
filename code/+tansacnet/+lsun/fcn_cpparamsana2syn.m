@@ -31,6 +31,10 @@ for iLayer = 1:nLayers
         if isa(alayer,'tansacnet.lsun.lsunInitialRotation2dLayer')
             slayer.NoDcLeakage = alayer.NoDcLeakage;
         end
+        if isprop(alayer,'BoundaryOperation')
+            slayer.Direction = alayer.Direction;
+            slayer.BoundaryOperation = alayer.BoundaryOperation;
+        end
         synthesislgraph = synthesislgraph.replaceLayer(slayer.Name,slayer);
         disp("Copy angles from " + alayerName + " to " + slayer.Name)
     end
