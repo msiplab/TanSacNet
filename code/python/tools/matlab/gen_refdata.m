@@ -1,0 +1,157 @@
+function gen_refdata(varargin)
+%GEN_REFDATA Generate reference data for the PyTorch port of tansacnet.lsun
+%
+%   gen_refdata() writes MAT-files to code/python/refdata, which
+%   torch_tansacnet/test_lsunMatlabRefdata.py compares with the PyTorch
+%   implementation:
+%     layers/   : lsunIntermediateRotation2dLayer with BoundaryOperation
+%                 'Circular' and 'Termination' (outputs and gradients)
+%     networks/ : the analyzer and synthesizer of fcn_createlsunlgraph2d
+%                 with random angles
+%
+%   gen_refdata('OutDir',folder) writes to the given folder.
+%
+%   Arrays are saved in the MATLAB layout. The angles and mus are those of
+%   the MATLAB layers (nAngles x nBlocks with the blocks in column-major
+%   order); the Python side converts them.
+%
+%   Run in the folder 'code' after setpath.
+%
+% Requirements: MATLAB R2022a or later, Deep Learning Toolbox
+%
+% Copyright (c) 2026, Shogo MURAMATSU
+%
+% All rights reserved.
+%
+% Contact address: Shogo MURAMATSU,
+%                Faculty of Engineering, Niigata University,
+%                8050 2-no-cho Ikarashi, Nishi-ku,
+%                Niigata, 950-2181, JAPAN
+%
+% http://msiplab.eng.niigata-u.ac.jp/
+
+p = inputParser;
+here = fileparts(mfilename('fullpath'));
+addParameter(p,'OutDir',fullfile(here,'..','..','refdata'))
+parse(p,varargin{:})
+outDir = char(p.Results.OutDir);
+
+genlayers_(fullfile(outDir,'layers'));
+gennetworks_(fullfile(outDir,'networks'));
+end
+
+function genlayers_(folder)
+if ~isfolder(folder), mkdir(folder); end
+nSamples = 2;
+nBlocks = [4 5]; % non-square so that the directions cannot be confused
+bopts = {{'Circular',''},{'Termination','Vertical'},{'Termination','Horizontal'}};
+for stride = {[2 2],[4 4]}
+    for mode = {'Analysis','Synthesis'}
+        for iBo = 1:numel(bopts)
+            [bo,dir] = bopts{iBo}{:};
+            name = sprintf('IntermediateRotation2d_str%s_%s_%s%s',...
+                strrep(num2str(stride{1}),' ',''),lower(mode{1}),lower(bo),...
+                ifelse_(isempty(dir),'',['_' lower(dir)]));
+            rng(seed_(name),'twister');
+            layer = tansacnet.lsun.lsunIntermediateRotation2dLayer(...
+                'Stride',stride{1},'NumberOfBlocks',nBlocks,'Mode',mode{1},...
+                'BoundaryOperation',bo,'Direction',dir,'Device','cpu');
+            nAngles = size(layer.Angles,1);
+            pa = floor(prod(stride{1})/2);
+            angles = pi*(2*rand(nAngles,prod(nBlocks))-1);
+            mus = sign(randn(pa,prod(nBlocks)));
+            mus(mus==0) = 1;
+            layer.Angles = angles;
+            layer.Mus = mus;
+            X = randn([prod(stride{1}) nBlocks nSamples]);
+            Z = layer.predict(X);
+            dLdZ = randn(size(Z));
+            [dLdX,dLdW] = layer.backward(X,[],dLdZ,[]);
+            s = struct('meta_stride',stride{1},'meta_mode',mode{1},...
+                'meta_boundary_operation',bo,'meta_direction',dir,...
+                'meta_number_of_blocks',nBlocks,...
+                'x',X,'z',Z,'angles',angles,'mus',mus,...
+                'dldz',dLdZ,'dldx',dLdX,'dldw',dLdW);
+            save(fullfile(folder,[name '.mat']),'-struct','s','-v7');
+            fprintf('  %s\n',name);
+        end
+    end
+end
+end
+
+function gennetworks_(folder)
+if ~isfolder(folder), mkdir(folder); end
+import tansacnet.lsun.*
+nSamples = 2;
+% stride, overlapping factor, input size (non-square)
+combos = {
+    [2 2], [3 3], [12 16]
+    [2 2], [5 3], [12 16]
+    [4 4], [3 5], [24 32]
+    };
+for iCombo = 1:size(combos,1)
+    [stride,ovlp,szIn] = combos{iCombo,:};
+    for bo = {'Circular','Termination'}
+        name = sprintf('Lsun2d_str%d%d_ovlp%d%d_sz%dx%d_%s',stride,ovlp,szIn,lower(bo{1}));
+        rng(seed_(name),'twister');
+        args = {'InputSize',szIn,'Stride',stride,'OverlappingFactor',ovlp,...
+            'NumberOfLevels',1,'NumberOfVanishingMoments',[1 1],...
+            'BoundaryOperation',bo{1},'Device','cpu','DType','double'};
+        analysislgraph = fcn_createlsunlgraph2d([],args{:},'Mode','Analyzer');
+        synthesislgraph = fcn_createlsunlgraph2d([],args{:},'Mode','Synthesizer'); %#ok<NASGU> used in evalc
+        % Random angles and mus of every rotation layer
+        for iLayer = 1:numel(analysislgraph.Layers)
+            layer = analysislgraph.Layers(iLayer);
+            if isprop(layer,'Angles')
+                layer.Angles = pi*(2*rand(size(layer.Angles))-1);
+                if ~isa(layer,'tansacnet.lsun.lsunInitialRotation2dLayer')
+                    mus = sign(randn(size(layer.Mus)));
+                    mus(mus==0) = 1;
+                    layer.Mus = mus;
+                end
+                analysislgraph = analysislgraph.replaceLayer(layer.Name,layer);
+            end
+        end
+        [~,synthesislgraph] = evalc('fcn_cpparamsana2syn(synthesislgraph,analysislgraph)');
+        % dlnetwork casts the learnables to single; cast them back to double
+        analysisnet = dlupdate(@double,dlnetwork(analysislgraph));
+        synthesisnet = dlupdate(@double,dlnetwork(synthesislgraph));
+        X = randn([szIn 1 nSamples]);
+        c = cell(1,2);
+        [c{1:2}] = analysisnet.predict(dlarray(X,'SSCB')); % {AC, DC}
+        % Synthesis of random coefficients (not of the analysis output, so
+        % that a wrong synthesizer cannot pass by the perfect reconstruction)
+        sAc = randn(size(c{1}));
+        sDc = randn(size(c{2}));
+        Y = synthesisnet.predict(dlarray(sAc,'SSCB'),dlarray(sDc,'SSCB'));
+        s = struct('meta_stride',stride,'meta_overlapping_factor',ovlp,...
+            'meta_input_size',szIn,'meta_boundary_operation',bo{1},...
+            'x',X,'ac',double(extractdata(c{1})),'dc',double(extractdata(c{2})),...
+            's_ac',sAc,'s_dc',sDc,'y',double(extractdata(Y)));
+        % Parameters of the analyzer as stored in the network (in double)
+        alayers = layerGraph(analysisnet).Layers;
+        names = {};
+        for iLayer = 1:numel(alayers)
+            layer = alayers(iLayer);
+            if isprop(layer,'Angles')
+                key = matlab.lang.makeValidName(layer.Name);
+                s.(['angles_' key]) = double(layer.Angles);
+                s.(['mus_' key]) = double(layer.Mus);
+                names{end+1} = layer.Name; %#ok<AGROW>
+            end
+        end
+        s.meta_layer_names = strjoin(names,',');
+        save(fullfile(folder,[name '.mat']),'-struct','s','-v7');
+        fprintf('  %s\n',name);
+    end
+end
+end
+
+function v = seed_(name)
+% Seed derived from the case name
+v = mod(sum(double(name).*(1:numel(name))),2^31-1);
+end
+
+function v = ifelse_(cond,a,b)
+if cond, v = a; else, v = b; end
+end

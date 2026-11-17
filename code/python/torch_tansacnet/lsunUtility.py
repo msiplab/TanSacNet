@@ -340,6 +340,26 @@ class OrthonormalMatrixGenerationSystem:
         self.mus = self.mus.to(dtype=self.dtype,device=self.device)
         return self
 
+def copy_mus(dst, src):
+    """
+    Copy the mus of the rotation layers of the network SRC to those of DST.
+
+    The layers are matched by name ignoring '~' (e.g., 'Lv1_Vh1' and
+    'Lv1_Vh~1', 'Lv1_V0' and 'Lv1_V0~') and a prefix. The mus are not
+    included in the state dictionary, so that the adjoint networks created
+    by the property T copy them with this function, as MATLAB
+    fcn_cpparamsana2syn and fcn_cpparamssyn2ana copy Mus.
+    """
+    def rotation_layers(net):
+        return { name.replace('~',''): m
+            for stage in net.layers for name, m in stage.named_children()
+            if isinstance(getattr(type(m),'mus',None),property) }
+    src_layers = rotation_layers(src)
+    for key, layer in rotation_layers(dst).items():
+        matches = [ m for k, m in src_layers.items() if k == key or k.endswith(key) or key.endswith(k) ]
+        if len(matches) == 1:
+            layer.mus = matches[0].mus.clone()
+
 def dctmtx(n,dtype=None,device=None):
     """
     Orthonormal DCT-II matrix, equivalent to MATLAB dctmtx(n)
