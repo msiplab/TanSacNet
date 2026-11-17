@@ -22,6 +22,8 @@ classdef lsunIntermediateRotation3dLayer < nnet.layer.Layer %#codegen
         NumberOfBlocks
         Device
         DType
+        BoundaryOperation % 'Circular' or 'Termination'
+        Direction         % 'Vertical', 'Horizontal' or 'Depth' (boundary for 'Termination')
     end
     
     properties (Dependent)
@@ -56,7 +58,20 @@ classdef lsunIntermediateRotation3dLayer < nnet.layer.Layer %#codegen
             addParameter(p,'NumberOfBlocks',[1 1 1])
             addParameter(p,'DType','double')
             addParameter(p,'Device','cuda')
+            addParameter(p,'BoundaryOperation','Circular')
+            addParameter(p,'Direction','')
             parse(p,varargin{:})
+
+            % Boundary operation
+            % 'Termination' fixes the rotation matrices of the boundary
+            % blocks (first row for 'Vertical', first column for
+            % 'Horizontal', first layer for 'Depth') to -I. See
+            % S. Muramatsu et al., IEEE Trans. Image Process., vol. 21,
+            % no. 4, pp. 2314-2318, 2012.
+            % Each value is validated by its set method.
+            layer.BoundaryOperation = p.Results.BoundaryOperation;
+            layer.Direction = p.Results.Direction;
+            layer.validateDirection_();
             
             % Layer constructor function goes here.
             layer.Stride = p.Results.Stride;
@@ -232,6 +247,10 @@ classdef lsunIntermediateRotation3dLayer < nnet.layer.Layer %#codegen
                     end
                 end
             end
+            % The boundary blocks fixed to -I have no angle gradients
+            if strcmp(layer.BoundaryOperation,'Termination')
+                dLdW(:,layer.boundaryBlocks_()) = 0;
+            end
         end
 
         function angles = get.Angles(layer)
@@ -279,10 +298,73 @@ classdef lsunIntermediateRotation3dLayer < nnet.layer.Layer %#codegen
                 musU = musU.';
             end
             fcn_orthmtxgen = tansacnet.lsun.get_fcn_orthmtxgen(anglesU);
-            layer.Un = fcn_orthmtxgen(anglesU,musU);
+            Un_ = fcn_orthmtxgen(anglesU,musU);
+            % Fix the boundary blocks to -I for 'Termination'
+            if strcmp(layer.BoundaryOperation,'Termination')
+                bblks = layer.boundaryBlocks_();
+                pa = layer.PrivateNumberOfChannels(2);
+                Un_(:,:,bblks) = repmat(-eye(pa,'like',Un_),[1 1 numel(bblks)]);
+            end
+            layer.Un = Un_;
             layer.isUpdateRequested = false;
         end
         
+    end
+
+    methods
+
+        function layer = set.BoundaryOperation(layer,boundaryOperation)
+            if ~any(strcmp(boundaryOperation,{'Circular','Termination'}))
+                throw(MException('LsunLayer:InvalidBoundaryOperation',...
+                    '%s : BoundaryOperation should be either of Circular or Termination',...
+                    boundaryOperation))
+            end
+            layer.BoundaryOperation = boundaryOperation;
+            layer.isUpdateRequested = true; %#ok<MCSUP>
+        end
+
+        function layer = set.Direction(layer,direction)
+            % Empty Direction is allowed only for 'Circular'
+            if ~isempty(direction) ...
+                    && ~any(strcmp(direction,{'Vertical','Horizontal','Depth'}))
+                throw(MException('LsunLayer:InvalidDirection',...
+                    '%s : Direction should be either of Vertical, Horizontal or Depth',...
+                    direction))
+            end
+            layer.Direction = direction;
+            layer.isUpdateRequested = true; %#ok<MCSUP>
+        end
+
+    end
+
+    methods (Access = private)
+
+        function validateDirection_(layer)
+            % 'Termination' requires Direction
+            if strcmp(layer.BoundaryOperation,'Termination') ...
+                    && ~any(strcmp(layer.Direction,{'Vertical','Horizontal','Depth'}))
+                throw(MException('LsunLayer:InvalidDirection',...
+                    'Direction should be either of Vertical, Horizontal or Depth for Termination'))
+            end
+        end
+
+        function bblks = boundaryBlocks_(layer)
+            % Indices of the boundary blocks in column-major block order
+            % of nRows x nCols x nLays
+            layer.validateDirection_();
+            nrows = layer.NumberOfBlocks(1);
+            ncols = layer.NumberOfBlocks(2);
+            nlays = layer.NumberOfBlocks(3);
+            [iRow,iCol,iLay] = ndgrid(1:nrows,1:ncols,1:nlays);
+            if strcmp(layer.Direction,'Vertical')
+                bblks = find(iRow(:) == 1).';  % first row
+            elseif strcmp(layer.Direction,'Horizontal')
+                bblks = find(iCol(:) == 1).';  % first column
+            else % 'Depth'
+                bblks = find(iLay(:) == 1).';  % first layer
+            end
+        end
+
     end
 
 end
