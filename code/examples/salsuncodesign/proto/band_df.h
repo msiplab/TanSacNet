@@ -6,7 +6,7 @@
 // analysis, coefficient mask and synthesis, as salsun2d_hls_band.m
 // computes them. The estimator of each analysis stage runs as a layer
 // pipeline over groups of NB blocks of a column (est_df.cpp), between a
-// task that gathers the standardized neighbor features and a task that
+// task that gathers the neighbor coefficients (its state) and a task that
 // rotates the coefficients of the column. The angles, rounded to QBITS
 // bits, are kept on chip (qmem, URAM) for the synthesis, as offsets of
 // QOFS bits from a center per angle (prm), saturated (QOFS = QBITS: the
@@ -95,7 +95,8 @@ constexpr int P_CVH = 0, P_MASK = 256, P_V0W = 272, P_V0U = 280, P_V0TW = 288, P
 constexpr int P_MUS = 304, P_SYNMUS = 336, P_CTR = 368;
 constexpr int NPRM = P_CTR + (NSTAGES + 1) * NROT + NROT_LAST;   // 515
 
-// Statistics: mu, sigma (stats_in) and the sums (stats_out), NEST x NDEC each
+// Statistics ports of the earlier estimators (stats_in is not read,
+// stats_out is cleared), NEST x NDEC values twice each
 constexpr int NSTATS = NEST * NDEC;
 
 struct blk_t {                    // the coefficients of a block

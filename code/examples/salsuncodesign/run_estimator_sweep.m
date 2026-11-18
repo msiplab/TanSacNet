@@ -11,6 +11,13 @@ function run_estimator_sweep(configs,seeds,options)
 %   skipped, so the sweep can be split over machines and resumed.
 %   TeacherFile and DistillWeight (see train_salsun2d_variants) train with
 %   distillation; the folder name then ends with _D<weight>.
+%   StandardizationScope 'neighborhood' (statistics of the neighbor
+%   blocks), 'layer' (layer normalization of the state) or 'none' (with
+%   StandardizationEpsilon) replace the standardization with the image
+%   statistics; the folder name then gets _L<epsilon>, _LN<epsilon> or
+%   _S0 before _D; ResidualLayerNorm false (no layer normalization in
+%   the residual blocks) adds _NoRLN, Activation 'tanh' _Tanh and
+%   OutputMapping 'asintanh' _Asin.
 %   summarize_estimator_sweep collects them.
 %
 % Requirements: MATLAB R2026b, Deep Learning Toolbox, a GPU
@@ -34,6 +41,11 @@ arguments
     options.MiniBatchSize (1,1) double = 8
     options.TeacherFile {mustBeTextScalar} = ''
     options.DistillWeight (1,1) double = 20
+    options.StandardizationScope {mustBeMember(options.StandardizationScope,{'image','neighborhood','layer','none'})} = 'image'
+    options.StandardizationEpsilon (1,1) double = 1e-8
+    options.ResidualLayerNorm (1,1) logical = true
+    options.Activation {mustBeMember(options.Activation,{'gelu','tanh'})} = 'gelu'
+    options.OutputMapping {mustBeMember(options.OutputMapping,{'linear','asintanh','atan2'})} = 'linear'
 end
 for iSeed = 1:numel(seeds)
     for iCfg = 1:size(configs,1)
@@ -56,6 +68,25 @@ for iSeed = 1:numel(seeds)
         if pb > 0
             name = sprintf('%s_P%d',name,pb);
         end
+        switch options.StandardizationScope
+            case 'neighborhood'
+                name = sprintf('%s_L%g',name,options.StandardizationEpsilon);
+            case 'layer'
+                name = sprintf('%s_LN%g',name,options.StandardizationEpsilon);
+            case 'none'
+                name = sprintf('%s_S0',name);
+        end
+        if ~options.ResidualLayerNorm
+            name = sprintf('%s_NoRLN',name);
+        end
+        if strcmp(options.Activation,'tanh')
+            name = sprintf('%s_Tanh',name);
+        end
+        if strcmp(options.OutputMapping,'asintanh')
+            name = sprintf('%s_Asin',name);
+        elseif strcmp(options.OutputMapping,'atan2')
+            name = sprintf('%s_Atan2',name);
+        end
         if ~isempty(options.TeacherFile)
             name = sprintf('%s_D%g',name,options.DistillWeight);
         end
@@ -68,7 +99,10 @@ for iSeed = 1:numel(seeds)
         train_salsun2d_variants(Variants={'none'},StatsModes={'image'}, ...
             NumResidualBlocks=r,Width=w,NeighborBlocks=nb,BottleneckSize=pb,Seed=seeds(iSeed),OutputDir=outDir, ...
             MaxEpochs=options.MaxEpochs,MiniBatchSize=options.MiniBatchSize, ...
-            TeacherFile=options.TeacherFile,DistillWeight=options.DistillWeight);
+            TeacherFile=options.TeacherFile,DistillWeight=options.DistillWeight, ...
+            StandardizationScope=options.StandardizationScope,StandardizationEpsilon=options.StandardizationEpsilon, ...
+            ResidualLayerNorm=options.ResidualLayerNorm,Activation=options.Activation, ...
+            OutputMapping=options.OutputMapping);
     end
 end
 end

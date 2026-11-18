@@ -15,7 +15,11 @@ function [y,info] = salsun2d_band_df_u250(u,params,target,options)
 %   consecutive frames run at the same time, one per compute unit;
 %   otherwise the bands of a frame are split among the units.
 %
-%   params as from salsun2d_extract_params, 3 residual blocks of width 1.
+%   params as from salsun2d_extract_params, with the estimators of
+%   proto/est_df.h (input layer normalization, tanh, asin(tanh) outputs),
+%   which take no statistics of the frame: the frames then go to the card
+%   one per compute unit and call, and the statistics options are not
+%   used.
 %   Xclbin gives the path of another xclbin. AngleCenters gives the
 %   centers of the angles for a kernel that stores them as offsets
 %   (QOFS < QBITS; salsun2d_angle_centers).
@@ -87,6 +91,20 @@ else
     setenv('EMCONFIG_PATH',buildDir)
 end
 
+if isfield(params.V0.Estimator,'StdScope') && strcmp(params.V0.Estimator.StdScope,'layer')
+    % Estimators that normalize their state themselves take no statistics
+    % of the frame: the frames go to the card as they are, one per
+    % compute unit and call (the statistics ports are not used)
+    nFrames = size(u,3);
+    y = zeros(size(u),'single');
+    for t = 1:options.ComputeUnits:nFrames
+        idx = t:min(t+options.ComputeUnits-1,nFrames);
+        y(:,:,idx) = salsun2d_band_df_mex(xclbinPath,u(:,:,idx),prm,W,b,LN, ...
+            zeros(16,L.NEst,2,numel(idx),'single'),options.BandRows,options.Halo);
+    end
+    info = struct('Statistics','none');
+    return
+end
 nBlocks = single(prod(frameSize./L.Stride));
     function [yf,muMeas,sigmaMeas] = frameOnCard(x,mu,sigma)
         % x: one frame, or one per compute unit (mu, sigma: NDec x NEst x n)

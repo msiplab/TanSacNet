@@ -20,7 +20,8 @@ function params = salsun2d_extract_params(net)
 %                   Shift, Target, Mus, Estimator (analysis side) and
 %                   SynShift, SynTarget, SynMus (synthesis side)
 %   Each Estimator has Channels, Neighbor, Epsilon, ResBlocks (Gamma,
-%   Beta, W1, B1, W2, B2) and Wo, Bo, NumberOfZeroPadAngles.
+%   Beta, W1, B1, W2, B2; Gamma and Beta empty without layer
+%   normalization) and Wo, Bo, NumberOfZeroPadAngles.
 %
 % Requirements: MATLAB R2026b, Deep Learning Toolbox
 %
@@ -142,6 +143,29 @@ est.Channels = double(ext.Channels(:));
 est.Neighbor = double(ext.NumberOfNeighborBlocks);
 std_ = getLayer([prefix 'Std']);
 est.Epsilon = single(std_.Epsilon);
+% Standardization scope: 'image', 'neighborhood' (statistics of every
+% channel over the neighbor blocks of a block), 'layer' (layer
+% normalization of the state of a block, with StdGamma and StdBeta) or 'none'
+if isprop(std_,'Scope')
+    est.StdScope = char(std_.Scope);
+else
+    est.StdScope = 'image';
+end
+% Activation of the residual blocks and mapping of the output layer
+blk1 = getLayer([prefix 'ResBlk1']);
+est.Activation = 'gelu';
+if ~isempty(blk1) && isprop(blk1,'Activation')
+    est.Activation = char(blk1.Activation);
+end
+outl = getLayer([prefix 'Theta']);
+est.OutputMapping = 'linear';
+if isprop(outl,'OutputMapping')
+    est.OutputMapping = char(outl.OutputMapping);
+end
+if strcmp(est.StdScope,'layer')
+    est.StdGamma = toSingle(std_.Gamma);
+    est.StdBeta = toSingle(std_.Beta);
+end
 % Optional bottleneck projection of the standardized state (empty if none)
 proj = getLayer([prefix 'Proj']);
 if isempty(proj)
@@ -158,8 +182,13 @@ while true
     if isempty(blk)
         break
     end
-    resBlocks(iBlk).Gamma = toSingle(blk.Gamma);
-    resBlocks(iBlk).Beta = toSingle(blk.Beta);
+    if isprop(blk,'LayerNorm') && ~blk.LayerNorm   % no layer normalization: empty
+        resBlocks(iBlk).Gamma = zeros(0,1,'single');
+        resBlocks(iBlk).Beta = zeros(0,1,'single');
+    else
+        resBlocks(iBlk).Gamma = toSingle(blk.Gamma);
+        resBlocks(iBlk).Beta = toSingle(blk.Beta);
+    end
     resBlocks(iBlk).W1 = toSingle(blk.W1);
     resBlocks(iBlk).B1 = toSingle(blk.B1);
     resBlocks(iBlk).W2 = toSingle(blk.W2);

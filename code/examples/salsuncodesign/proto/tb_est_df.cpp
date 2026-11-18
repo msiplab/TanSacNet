@@ -38,9 +38,9 @@ static std::vector<double> readBin(const std::string &name)
 int main()
 {
     const std::vector<double> w = readBin("wmem.bin"), b = readBin("bmem.bin"), l = readBin("ln.bin");
-    if ((int)w.size() != NWORDS * P || (int)b.size() != NBIAS || (int)l.size() != 2 * NLN) {
+    if ((int)w.size() != NWORDS * PH || (int)b.size() != NBIAS || (int)l.size() != 2 * NLN) {
         std::printf("unexpected sizes: %zu %zu %zu (expected %d %d %d)\n", w.size(), b.size(), l.size(),
-                    NWORDS * P, NBIAS, 2 * NLN);
+                    NWORDS * PH, NBIAS, 2 * NLN);
         return 1;
     }
     static wraw_t wmem[NWORDS];
@@ -48,8 +48,8 @@ int main()
     static float lnmem[2 * NLN];
     for (int i = 0; i < NWORDS; i++) {
         wmem[i] = 0;
-        for (int p = 0; p < P; p++) {
-            const wgt_t v = w[i * P + p];
+        for (int p = 0; p < PH; p++) {
+            const wgt_t v = w[i * PH + p];
             wmem[i].range(18 * p + 17, 18 * p) = v.range(17, 0);
         }
     }

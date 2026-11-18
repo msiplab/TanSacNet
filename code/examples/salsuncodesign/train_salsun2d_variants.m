@@ -29,7 +29,14 @@ function results = train_salsun2d_variants(options)
 %   salsun2d_hls_layout (3 and 2), NeighborBlocks ([3 3]) of the local
 %   state of the estimators, and BottleneckSize (0: none; otherwise the
 %   size of a learned projection of the local state, on which the
-%   residual blocks operate).
+%   residual blocks operate). StandardizationScope ('image', default;
+%   'neighborhood': statistics of every channel over the neighbor blocks
+%   of a block; 'layer': layer normalization of the state of a block;
+%   'none') and StandardizationEpsilon (1e-8) set the
+%   standardization of the local state (salsunStateStandardization2dLayer);
+%   ResidualLayerNorm (true) the layer normalization in the residual blocks,
+%   Activation ('gelu' or 'tanh') their activation and OutputMapping
+%   ('linear' or 'asintanh': theta = asin(tanh(z))) the output layer.
 %
 %   Distillation: TeacherFile (a results .mat with params of a trained
 %   network, default '' for none) adds DistillWeight times the mean
@@ -75,6 +82,11 @@ arguments
     options.TeacherFile {mustBeTextScalar} = ''
     options.DistillWeight (1,1) double {mustBeNonnegative} = 20
     options.DistillFraction (1,1) double {mustBePositive} = 0.7
+    options.StandardizationScope {mustBeMember(options.StandardizationScope,{'image','neighborhood','layer','none'})} = 'image'
+    options.StandardizationEpsilon (1,1) double {mustBePositive} = 1e-8
+    options.ResidualLayerNorm (1,1) logical = true
+    options.Activation {mustBeMember(options.Activation,{'gelu','tanh'})} = 'gelu'
+    options.OutputMapping {mustBeMember(options.OutputMapping,{'linear','asintanh','atan2'})} = 'linear'
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -185,7 +197,9 @@ nChsTotal = numel(coefMask);
 analysislgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',[szy szx],'Stride',[4 4],'OverlappingFactor',[3 3], ...
     'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',options.NeighborBlocks, ...
-    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize,'Mode','Analyzer');
+    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize, ...
+    'EstimatorOptions',{'StandardizationScope',options.StandardizationScope,'StandardizationEpsilon',options.StandardizationEpsilon,'ResidualLayerNorm',options.ResidualLayerNorm, ...
+    'Activation',options.Activation,'OutputMapping',options.OutputMapping},'Mode','Analyzer');
 trainlgraph = analysislgraph.replaceLayer('Lv1_AcOut', ...
     maskLayer('Name','Lv1_AcMask','Mask',coefMask(2:end),'NumberOfChannels',nChsTotal-1));
 trainlgraph = trainlgraph.addLayers(lsunChannelConcatenation2dLayer('Name','Lv1_Cmp1_Cn'));
@@ -308,7 +322,9 @@ nChsTotal = numel(coefMask);
 wholelgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',inputSize,'Stride',[4 4],'OverlappingFactor',[3 3], ...
     'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',options.NeighborBlocks, ...
-    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize,'Mode','Whole','ThetaMode','Reuse', ...
+    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize, ...
+    'EstimatorOptions',{'StandardizationScope',options.StandardizationScope,'StandardizationEpsilon',options.StandardizationEpsilon,'ResidualLayerNorm',options.ResidualLayerNorm, ...
+    'Activation',options.Activation,'OutputMapping',options.OutputMapping},'Mode','Whole','ThetaMode','Reuse', ...
     'Device','cpu');
 wholelgraph = wholelgraph.disconnectLayers('Lv1_AcOut','Lv1_AcIn');
 wholelgraph = wholelgraph.addLayers(maskLayer('Name','Lv1_AcMask', ...

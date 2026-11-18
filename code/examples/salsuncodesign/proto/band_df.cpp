@@ -261,30 +261,21 @@ struct group_blk_t {              // the NB blocks of a group
     blk_t b[NB];
 };
 
-// Gathers the standardized features of every group of the band for the
-// estimator of stage s (one row of NB lanes per cycle), forwards the
-// blocks themselves to the rotation, and adds the channel sums of the
-// rows sumFirst..sumLast for the statistics of the next frame
-void gather(const blk_t Y[NBLK], const float stats_in[2 * NSTATS], int s, int sumFirst, int sumLast,
-            hls::stream<row_t> &features, hls::stream<blk_t> &blocks, float sums[2][NDEC])
+// Gathers the state of every group of the band for the estimator of
+// stage s (one row of NB lanes per cycle): the coefficients of the
+// neighbors times 2^LN_SCALE_BITS, rounded to the signal format (the
+// estimator normalizes them, est_df.h); forwards the blocks themselves to
+// the rotation
+sig_t toState(float v)
+{
+    const ap_fixed<18, 7 - LN_SCALE_BITS, AP_RND, AP_SAT> t = v;
+    sig_t f;
+    f.range(17, 0) = t.range(17, 0);
+    return f;
+}
+void gather(const blk_t Y[NBLK], int s, hls::stream<row_t> &features, hls::stream<blk_t> &blocks)
 {
     const int ch0 = CH0[s], nCh = NCH[s];
-    float mu[NDEC], invSigma[NDEC];
-#pragma HLS ARRAY_PARTITION variable = mu type = complete
-#pragma HLS ARRAY_PARTITION variable = invSigma type = complete
-    for (int j = 0; j < NDEC; j++) {
-#pragma HLS PIPELINE II = 1
-        mu[j] = stats_in[s * NDEC + j];
-        invSigma[j] = 1.0f / stats_in[NSTATS + s * NDEC + j];
-    }
-    float s1[NB][NDEC], s2[NB][NDEC];
-#pragma HLS ARRAY_PARTITION variable = s1 type = complete dim = 0
-#pragma HLS ARRAY_PARTITION variable = s2 type = complete dim = 0
-    for (int b = 0; b < NB; b++)
-        for (int j = 0; j < NDEC; j++) {
-            s1[b][j] = 0.0f;
-            s2[b][j] = 0.0f;
-        }
     blk_t nb[NB], nx[NB];   // the blocks of a neighbor, and of the next
 #pragma HLS ARRAY_PARTITION variable = nb type = complete
 #pragma HLS ARRAY_PARTITION variable = nx type = complete
@@ -297,18 +288,6 @@ columns:
             for (int b = 0; b < NB; b++) {
                 own.b[b] = Y[c * SUBROWS + g * NB + b];
                 blocks.write(own.b[b]);
-            }
-        sums_loop:
-            for (int j = 0; j < NDEC; j++) {
-#pragma HLS PIPELINE II = 1
-                for (int b = 0; b < NB; b++) {
-                    const int r = g * NB + b;
-                    if (r >= sumFirst && r <= sumLast && j >= ch0) {
-                        const float v = own.b[b].v[j];
-                        s1[b][j] += v;
-                        s2[b][j] += v * v;
-                    }
-                }
             }
             // The neighbors (iv, ih) with ih fastest, one feature row per
             // cycle over all of them: the blocks of the next neighbor are
@@ -326,7 +305,7 @@ columns:
                 }
                 row_t f;
                 for (int b = 0; b < NB; b++) {
-                    f.v[b] = (nb[b].v[ch0 + j] - mu[ch0 + j]) * invSigma[ch0 + j];
+                    f.v[b] = toState(nb[b].v[ch0 + j]);
                 }
                 features.write(f);
                 if (j == nCh - 1) {
@@ -344,15 +323,6 @@ columns:
                 }
             }
         }
-    }
-    for (int j = 0; j < NDEC; j++) {
-        float a1 = 0.0f, a2 = 0.0f;
-        for (int b = 0; b < NB; b++) {
-            a1 += s1[b][j];
-            a2 += s2[b][j];
-        }
-        sums[0][j] = a1;
-        sums[1][j] = a2;
     }
 }
 
@@ -508,8 +478,7 @@ columns:
 // One analysis stage: features -> estimator -> rotations, as a dataflow
 void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM],
                    const wraw_t *wmem, const braw_t *bmem, const float *lnmem,
-                   const float stats_in[2 * NSTATS], qword_t qmem[NQMEM], int s, int sumFirst, int sumLast,
-                   bool load, float sums[2][NDEC])
+                   qword_t qmem[NQMEM], int s, bool load)
 {
 #pragma HLS DATAFLOW
     hls::stream<row_t, FIFO> features;
@@ -517,7 +486,7 @@ void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM
     // rotation works on the previous column; the blocks one column more
     hls::stream<arow_t, NG * NAMAX> angles;
     hls::stream<blk_t, (2 * NG + 24) * NB> blocks;  // the groups the estimator holds, and two columns
-    gather(Yin, stats_in, s, sumFirst, sumLast, features, blocks, sums);
+    gather(Yin, s, features, blocks);
     est_engine(features, angles, wmem, bmem, lnmem, s, NCOLS * NG, load);
     rotate(angles, blocks, prm, s, Yout, qmem);
 }
@@ -642,41 +611,25 @@ extern "C" void salsun2d_band_df(hls::burst_maxi<float> src, const float *prm, c
     // the angles of the band for the synthesis (URAM), written by the analysis
     static qword_t qmem[NQMEM];
 #pragma HLS BIND_STORAGE variable = qmem type = ram_t2p impl = uram latency = 3
-    // the small parameters and the statistics, read once (the tasks of a
-    // dataflow region cannot share their memory interface)
-    float prmL[NPRM], stL[2 * NSTATS];
+    // the small parameters, read once (the tasks of a dataflow region
+    // cannot share their memory interface)
+    float prmL[NPRM];
     for (int i = 0; i < NPRM; i++) {
 #pragma HLS PIPELINE II = 1
         prmL[i] = prm[i];
     }
-    for (int i = 0; i < 2 * NSTATS; i++) {
-#pragma HLS PIPELINE II = 1
-        stL[i] = stats_in[i];
-    }
-    float acc[2][NEST][NDEC];
-    for (int i = 0; i < 2 * NSTATS; i++) acc[i / NSTATS][(i % NSTATS) / NDEC][i % NDEC] = 0.0f;
     bool load = true;                          // the estimator parameters, once per call
-    int prevStart = -BAND;
 bands:
     for (int k = 0; k < NBANDS; k++) {
         int r0 = k * BAND;
         if (r0 + BAND > NROWS) r0 = NROWS - BAND;          // move the last band up
-        const int repeated = (prevStart + BAND > r0) ? (prevStart + BAND - r0) : 0;
-        prevStart = r0;
         if (k < first_band || k >= first_band + num_bands) continue;
-        const int sumFirst = HALO + repeated, sumLast = HALO + BAND - 1;
 
         blockDct(src, prmL, r0, A);
-        float sums[2][NDEC];
         for (int s = 0; s <= NSTAGES; s++) {
             if (s > 0) atomExtension(B, A, SHIFT[s - 1][0], SHIFT[s - 1][1], TARGET[s - 1]);
-            analysisStage(A, B, prmL, wmem, bmem, lnmem, stL, qmem, s, sumFirst, sumLast, load,
-                          sums);
+            analysisStage(A, B, prmL, wmem, bmem, lnmem, qmem, s, load);
             load = false;
-            for (int j = 0; j < NDEC; j++) {
-                acc[0][s][j] += sums[0][j];
-                acc[1][s][j] += sums[1][j];
-            }
         }
         for (int s = NSTAGES; s >= 1; s--) {
             synthesisRotation(B, A, prmL, s, qmem);
@@ -685,5 +638,10 @@ bands:
         synthesisRotation(B, A, prmL, 0, qmem);
         blockIdct(A, prmL, r0, dst);
     }
-    for (int i = 0; i < 2 * NSTATS; i++) stats_out[i] = acc[i / NSTATS][(i % NSTATS) / NDEC][i % NDEC];
+    // the estimators take no statistics of the frame: stats_in is not read,
+    // and stats_out is cleared (ports kept for the host programs)
+    for (int i = 0; i < 2 * NSTATS; i++) {
+#pragma HLS PIPELINE II = 1
+        stats_out[i] = 0.0f;
+    }
 }

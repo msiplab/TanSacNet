@@ -26,6 +26,11 @@ function [paramsQ,q] = salsun2d_band_fixed_model(params,options)
 %   [-2^(b-1), 2^(b-1)-1] (proto/band_df.cpp with QOFS=b). The centers and
 %   offsets are an idea of Shogo Muramatsu.
 %
+%   [...] = salsun2d_band_fixed_model(params,InputScaleBits=s) sets the
+%   scale 2^s of the state of estimators with layer normalization at their
+%   input (StdScope 'layer'): the hardware reads the state times 2^s in
+%   L.FixSignal and normalizes it (with epsilon times 4^s), tag 'input'.
+%
 % Requirements: MATLAB R2026b
 %
 % Copyright (c) 2026, Shogo MURAMATSU
@@ -44,6 +49,7 @@ arguments
     options.AngleBits (1,1) double {mustBeInteger,mustBeInRange(options.AngleBits,2,18)} = 18
     options.AngleCenters (:,1) double {mustBeInteger} = []
     options.OffsetBits (1,1) double {mustBeInteger,mustBePositive} = 18
+    options.InputScaleBits (1,1) double {mustBeInteger} = 6
 end
 if ~isempty(options.AngleCenters)
     assert(numel(options.AngleCenters) == 147,'147 centers (salsun2d_angle_centers)')
@@ -60,6 +66,9 @@ for k = 1:L.NEst
     for tag = {'features','ln','act'}
         formats(sprintf('%s:%d',tag{1},k)) = L.FixSignal;
     end
+    % the state of an estimator with layer normalization at its input: read
+    % times 2^InputScaleBits in the signal format
+    formats(sprintf('input:%d',k)) = L.FixSignal + [0 options.InputScaleBits];
 end
 qs = salsun2d_static_quantizer(formats);
 q = @(v,tag) roundAngles(qs(v,tag),tag,options.AngleBits,options.AngleCenters,options.OffsetBits);

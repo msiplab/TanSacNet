@@ -28,13 +28,15 @@ export LIBRARY_PATH := /usr/lib/x86_64-linux-gnu$(if $(LIBRARY_PATH),:$(LIBRARY_
 VPP_FLAGS := -t $(TARGET) --platform $(PLATFORM) --save-temps \
              --temp_dir $(BUILD_DIR)/$(NAME)/_x --log_dir $(BUILD_DIR)/$(NAME)/logs \
              --report_dir $(BUILD_DIR)/$(NAME)/reports
-DEFS := -DSZY=$(SZY) -DSZX=$(SZX) -DBAND=$(BAND) -DHALO=$(HALO)
+# estimator options (est_df.h), e.g. EST_DEFS="-DEST_NRES=2 -DEST_OPAR_R=2"
+EST_DEFS ?=
+DEFS := -DSZY=$(SZY) -DSZX=$(SZX) -DBAND=$(BAND) -DHALO=$(HALO) $(EST_DEFS)
 
 .PHONY: xo xclbin emconfig
 xo: $(XO)
 xclbin: $(XCLBIN)
 
-$(XO): band_df.cpp band_df.h est_df.cpp est_df.h gelu_table.h sin_table.h
+$(XO): band_df.cpp band_df.h est_df.cpp est_df.h act_table.h sin_table.h
 	mkdir -p $(BUILD_DIR)
 	$(VPP) -c $(VPP_FLAGS) -k $(KERNEL) -I $(CURDIR) $(DEFS) -o $@ band_df.cpp est_df.cpp
 

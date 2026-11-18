@@ -262,7 +262,24 @@ F = reshape(F,[],nBlks);
 mu = mean(F,2);
 v = sum((F-mu).^2,2)/(nBlks-1);
 measured = struct('Mu',mu,'Sigma',sqrt(v)+est.Epsilon);
-if isempty(given)
+if isfield(est,'StdScope') && strcmp(est.StdScope,'neighborhood')
+    % Statistics of every channel over the neighbor blocks of each block
+    % (the given statistics are not used)
+    nNb = nv*nh;
+    Fr = reshape(F,nCh,nNb,nBlks);
+    muL = mean(Fr,2);
+    vL = sum((Fr-muL).^2,2)/(nNb-1);
+    F = reshape((Fr-muL)./sqrt(vL+est.Epsilon),[],nBlks);
+elseif isfield(est,'StdScope') && strcmp(est.StdScope,'layer')
+    % Layer normalization of the state of every block ('input': the
+    % state as fixed-point hardware reads it)
+    F = q(F,'input');
+    muL = mean(F,1);
+    vL = mean((F-muL).^2,1);
+    F = est.StdGamma.*((F-muL)./sqrt(vL+est.Epsilon)) + est.StdBeta;
+elseif isfield(est,'StdScope') && strcmp(est.StdScope,'none')
+    % no standardization
+elseif isempty(given)
     F = (F-measured.Mu)./measured.Sigma;
 else
     F = (F-given.Mu)./given.Sigma;
@@ -277,14 +294,29 @@ end
 % Residual estimator blocks: LayerNorm, FC, GELU (tanh), FC, skip
 for iRes = 1:numel(est.ResBlocks)
     r = est.ResBlocks(iRes);
-    mu = mean(F,1);
-    v = mean((F-mu).^2,1);
-    ln = q(r.Gamma.*((F-mu)./sqrt(v+1e-5)) + r.Beta,'ln');
+    if isempty(r.Gamma)          % no layer normalization
+        ln = F;
+    else
+        mu = mean(F,1);
+        v = mean((F-mu).^2,1);
+        ln = q(r.Gamma.*((F-mu)./sqrt(v+1e-5)) + r.Beta,'ln');
+    end
     z1 = q(r.W1*ln + r.B1,'z1');
-    a = q(0.5.*z1.*(1+tanh(sqrt(2/pi).*(z1+0.044715.*z1.^3))),'act');
+    if isfield(est,'Activation') && strcmp(est.Activation,'tanh')
+        a = q(tanh(z1),'act');
+    else
+        a = q(0.5.*z1.*(1+tanh(sqrt(2/pi).*(z1+0.044715.*z1.^3))),'act');
+    end
     F = q(F + r.W2*a + r.B2,'features');
 end
 
 % Output: angles, with zero-padded leading angles for no-DC-leakage
-theta = q([zeros(est.NumberOfZeroPadAngles,nBlks,'like',F); est.Wo*F + est.Bo],'angles');
+z = est.Wo*F + est.Bo;
+if isfield(est,'OutputMapping') && strcmp(est.OutputMapping,'asintanh')
+    z = 2*atan(tanh(z/2));       % asin(tanh(z)): sin(theta) = tanh(z)
+elseif isfield(est,'OutputMapping') && strcmp(est.OutputMapping,'atan2')
+    nA = size(z,1)/2;            % (s;c) per angle: theta = atan2(s,c)
+    z = atan2(z(1:nA,:),z(nA+1:end,:));
+end
+theta = q([zeros(est.NumberOfZeroPadAngles,nBlks,'like',F); z],'angles');
 end

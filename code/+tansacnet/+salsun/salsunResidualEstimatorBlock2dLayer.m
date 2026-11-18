@@ -20,6 +20,8 @@ classdef salsunResidualEstimatorBlock2dLayer < nnet.layer.Layer
     properties
         InputSize % nFeat
         Width     % expansion factor d (hidden = round(Width*InputSize))
+        LayerNorm = true % false: no layer normalization (Gamma, Beta unused)
+        Activation = 'gelu' % 'gelu' (tanh approximation) or 'tanh'
     end
 
     properties (Learnable)
@@ -37,11 +39,15 @@ classdef salsunResidualEstimatorBlock2dLayer < nnet.layer.Layer
             addParameter(p,'Name','')
             addParameter(p,'InputSize',[])
             addParameter(p,'Width',2)
+            addParameter(p,'LayerNorm',true)
+            addParameter(p,'Activation','gelu')
             parse(p,varargin{:})
 
             layer.Name = p.Results.Name;
             layer.InputSize = p.Results.InputSize;
             layer.Width = p.Results.Width;
+            layer.LayerNorm = logical(p.Results.LayerNorm);
+            layer.Activation = validatestring(p.Results.Activation,{'gelu','tanh'});
 
             nFeat = layer.InputSize;
             hidden = round(layer.Width*nFeat);
@@ -63,16 +69,24 @@ classdef salsunResidualEstimatorBlock2dLayer < nnet.layer.Layer
             nCols = size(X,3);
             nSamples = size(X,4);
 
-            % Layer normalization over the feature dimension
-            mu = mean(X,1);
-            v = mean((X-mu).^2,1);
-            xhat = (X-mu)./sqrt(v+1e-5);
-            ln = layer.Gamma.*xhat + layer.Beta;
+            % Layer normalization over the feature dimension (optional)
+            if layer.LayerNorm
+                mu = mean(X,1);
+                v = mean((X-mu).^2,1);
+                xhat = (X-mu)./sqrt(v+1e-5);
+                ln = layer.Gamma.*xhat + layer.Beta;
+            else
+                ln = X;
+            end
 
             % First fully-connected layer (expand) + GELU
             lnFlat = reshape(ln,nFeat,nRows*nCols*nSamples);
             z1 = layer.W1*lnFlat + layer.B1;
-            a = 0.5.*z1.*(1+tanh(sqrt(2/pi).*(z1+0.044715.*z1.^3)));
+            if strcmp(layer.Activation,'tanh')
+                a = tanh(z1);
+            else
+                a = 0.5.*z1.*(1+tanh(sqrt(2/pi).*(z1+0.044715.*z1.^3)));
+            end
 
             % Second fully-connected layer (contract) + residual add
             z2 = layer.W2*a + layer.B2;

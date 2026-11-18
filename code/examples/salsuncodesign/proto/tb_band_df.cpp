@@ -39,9 +39,9 @@ int main()
 {
     const auto x = readBin("x.bin"), prm = readBin("prm.bin"), w = readBin("wmem.bin"),
                b = readBin("bmem.bin"), l = readBin("ln.bin"), st = readBin("stats.bin"),
-               yref = readBin("yref.bin"), sref = readBin("sums.bin");
-    if ((int)x.size() != SZY * SZX || (int)w.size() != NWORDS * P) {
-        std::printf("unexpected sizes: x %zu (%d), w %zu (%d)\n", x.size(), SZY * SZX, w.size(), NWORDS * P);
+               yref = readBin("yref.bin");
+    if ((int)x.size() != SZY * SZX || (int)w.size() != NWORDS * PH) {
+        std::printf("unexpected sizes: x %zu (%d), w %zu (%d)\n", x.size(), SZY * SZX, w.size(), NWORDS * PH);
         return 1;
     }
     static float src[SZY * SZX], dst[SZY * SZX], fprm[NPRM], sin_[2 * NSTATS], sout[2 * NSTATS];
@@ -52,8 +52,8 @@ int main()
     for (int i = 0; i < NPRM; i++) fprm[i] = (float)prm[i];
     for (int i = 0; i < NWORDS; i++) {
         wmem[i] = 0;
-        for (int p = 0; p < P; p++) {
-            const wgt_t v = w[i * P + p];
+        for (int p = 0; p < PH; p++) {
+            const wgt_t v = w[i * PH + p];
             wmem[i].range(18 * p + 17, 18 * p) = v.range(17, 0);
         }
     }
@@ -71,22 +71,8 @@ int main()
         ey = std::fmax(ey, std::fabs(dst[i] - yref[i]));
         ymax = std::fmax(ymax, std::fabs(yref[i]));
     }
-    double es = 0;
-    for (int i = 0; i < 2 * NSTATS; i++) {
-        if (sref[i] != 0) es = std::fmax(es, std::fabs(sout[i] - sref[i]) / (std::fabs(sref[i]) + 1e-3));
-    }
-    for (int k = 0; k < NEST; k++) {
-        double e1 = 0, m1 = 0;
-        for (int j = 0; j < NDEC; j++) {
-            e1 = std::fmax(e1, std::fabs(sout[k * NDEC + j] - sref[k * NDEC + j]));
-            m1 = std::fmax(m1, std::fabs(sref[k * NDEC + j]));
-        }
-        std::printf("estimator %d inputs: max|sum - model| = %.3g (max|sum| %.3g); ch %d: %.6g vs %.6g\n", k + 1, e1,
-                    m1, k == 0 ? 1 : 8, sout[k * NDEC + (k == 0 ? 1 : 8)], sref[k * NDEC + (k == 0 ? 1 : 8)]);
-    }
-    std::printf("%dx%d, %d bands of %d rows (halo %d): max|y - fixed model| = %.3g (max|y| %.3g), "
-                "max rel. error of the sums = %.3g\n",
-                SZY, SZX, NBANDS, BAND, HALO, ey, ymax, es);
+    std::printf("%dx%d, %d bands of %d rows (halo %d): max|y - fixed model| = %.3g (max|y| %.3g)\n",
+                SZY, SZX, NBANDS, BAND, HALO, ey, ymax);
     // With coarse angles (QBITS bits) an angle of the kernel and of the
     // model may round to neighboring steps, so samples differ by more; the
     // reconstruction errors must agree

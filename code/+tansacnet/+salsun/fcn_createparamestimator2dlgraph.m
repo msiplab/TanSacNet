@@ -46,6 +46,19 @@ addParameter(p,'NumberOfResidualBlocks',3)
 addParameter(p,'Width',2)
 addParameter(p,'BottleneckSize',0)
 addParameter(p,'NoDcLeakage',false)
+% Standardization of the local state (salsunStateStandardization2dLayer):
+% 'image' (statistics over the image), 'neighborhood' (statistics of
+% every channel over the neighbor blocks), 'layer' (a layer normalization
+% of the state of a block, salsunStateLayerNormalization2dLayer) or
+% 'none', and its Epsilon
+addParameter(p,'StandardizationScope','image')
+addParameter(p,'StandardizationEpsilon',1e-8)
+% Layer normalization at the input of the branch of every residual block
+addParameter(p,'ResidualLayerNorm',true)
+% Activation of the residual blocks ('gelu' or 'tanh') and the mapping of
+% the output layer ('linear' or 'asintanh': theta = asin(tanh(z)))
+addParameter(p,'Activation','gelu')
+addParameter(p,'OutputMapping','linear')
 % Context passed by fcn_createsalsunlgraph2d to every estimator (unused)
 addParameter(p,'NumberOfBlocks',[])
 addParameter(p,'Stride',[])
@@ -76,10 +89,18 @@ end
 nAnglesPredicted = nAnglesFull-nZeroPad;
 nFeat = numel(channels)*prod(nNeighbor);
 
+if strcmp(p.Results.StandardizationScope,'layer')
+    stdLayer = salsunStateLayerNormalization2dLayer('Name',[prefix 'Std'], ...
+        'InputSize',nFeat,'Epsilon',p.Results.StandardizationEpsilon);
+else
+    stdLayer = salsunStateStandardization2dLayer('Name',[prefix 'Std'], ...
+        'Scope',p.Results.StandardizationScope,'Epsilon',p.Results.StandardizationEpsilon, ...
+        'NumberOfChannels',numel(channels));
+end
 layers = [
     salsunLocalStateExtraction2dLayer('Name',[prefix 'Ext'],...
         'NumberOfNeighborBlocks',nNeighbor,'Channels',channels)
-    salsunStateStandardization2dLayer('Name',[prefix 'Std'])
+    stdLayer
     ];
 % Optional bottleneck: a learned linear projection of the standardized
 % local state to BottleneckSize features, on which the residual blocks
@@ -97,13 +118,14 @@ end
 for iBlock = 1:nResBlocks
     layers = [layers %#ok<AGROW>
         salsunResidualEstimatorBlock2dLayer('Name',[prefix 'ResBlk' num2str(iBlock)],...
-            'InputSize',nInner,'Width',width)
+            'InputSize',nInner,'Width',width,'LayerNorm',p.Results.ResidualLayerNorm, ...
+            'Activation',p.Results.Activation)
         ];
 end
 layers = [layers
     salsunAngleEstimatorOutput2dLayer('Name',[prefix 'Theta'],...
         'InputSize',nInner,'NumberOfAngles',nAnglesPredicted,...
-        'NumberOfZeroPadAngles',nZeroPad)
+        'NumberOfZeroPadAngles',nZeroPad,'OutputMapping',p.Results.OutputMapping)
     ];
 
 lgraph = lgraph.addLayers(layers);

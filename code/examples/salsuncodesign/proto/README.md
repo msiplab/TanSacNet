@@ -107,3 +107,66 @@ ratio 1.0000 (10 bits) and 1.0006 (offsets). Four units do not fit: the
 fourth (SLR1) has 128 URAM sites, so two units would have to share an
 SLR (288 URAM of 320 for the DDR version, too many with the angles on
 chip).
+
+### Simplified estimators (LayerNorm, FC, tanh, skip, asin)
+
+The estimators above standardized their state with statistics of the
+frame (from the host) and had a LayerNorm in every residual block. The
+kernel now runs a simpler estimator, which takes nothing from the host:
+
+    state -> LayerNorm (over the features of a block) -> NRES x (FC, tanh, FC, skip) -> FC -> asin(tanh(z))
+
+(`train_salsun2d_variants` with `StandardizationScope='layer'`,
+`ResidualLayerNorm=false`, `Activation='tanh'`,
+`OutputMapping='asintanh'`). The composition of simple layers (LN, CONV,
+SKIP, TANH, SIN) and the mapping of the outputs to angles by an inverse
+trigonometric function are ideas of Shogo Muramatsu. tanh and
+asin(tanh(z)) = 2 atan(tanh(z/2)) are tables of 1025 points
+(`act_table.h`, written by `pack_est_df.m`); the state is read times 2^6
+(`LN_SCALE_BITS`). The statistics ports of the kernel are kept for the
+host but not used.
+
+The residual blocks may be narrower than their input (`EST_NH0`,
+`EST_NH1`: hidden units of estimator 0 and of the others; `EST_NRES`:
+residual blocks), so the FC layers are no longer square: with width 0.5
+(68 and 36 hidden units) the first FC layer of a block takes 6 x 68 = 408
+cycles per group of 5 blocks and the second 3 x 135 = 405, against 810
+with width 1, with the same multipliers.
+
+Reconstruction MSE relative to the earlier estimator (R3 W1, 800 epochs,
+distilled alike; held-out frames 551..700, and two independent
+simulations A and B; in floating point):
+
+| Estimator | held-out | A | B |
+|---|---|---|---|
+| earlier R3 W1 (seeds 0..2) | 1.00..1.01 | 1.00..1.02 | 1.00..1.02 |
+| R3 W1 (seeds 0..2) | 0.68..0.69 | 0.60..0.61 | 0.69..0.70 |
+| R3 W0.5 | 0.716 | 0.611 | 0.713 |
+| R2 W1 | 0.733 | 0.638 | 0.749 |
+| R2 W0.5 | 0.750 | 0.649 | 0.787 |
+| R1 W1 | 0.843 | 0.714 | 0.852 |
+| R1 W0.5 | 0.929 | 0.782 | 0.944 |
+
+With angles of 10 bits the fixed-point model is within 0.6% of the
+floating-point MSE (R3 W1 and R3 W0.5). The C simulation of the
+estimator (`tb_est_df.cpp`) equals the fixed-point model exactly for
+both widths.
+
+On the card (Full HD, 3 units, 10-bit angles on chip; `build_fhd3_v2.sh`,
+`build_fhd3_w05.sh`). The time per frame is that of the calls of the
+MEX function (three frames per call, one per unit) in a stream of 60
+frames; `salsun2d_band_df_u250` adds about 0.02 s per frame on the host.
+
+| | earlier R3 W1 | R3 W1 | R3 W0.5 |
+|---|---|---|---|
+| Clock | 300 MHz | 293.2 MHz | 297.6 MHz |
+| LUT per unit | 154 k | 104 k | 113 k |
+| Registers per unit | 189 k | 157 k | 160 k |
+| DSP / BRAM / URAM per unit | 1262 / 141 / 259 | 1202 / 207 / 259 | 1199 / 165 / 259 |
+| s/frame (card and transfers) | 0.128 | 0.133 | 0.098 |
+| Board power under load | 61.9 W | 59.5 W | 58.3 W |
+| MSE of the card output (test frames) | 9.46e-6 | 3.60e-6 | 4.08e-6 |
+| MSE card / fixed-point model | 1.001 | 1.0001 | 1.0000 |
+
+`tb_band_fhd.cpp` and `tb_band_split.cpp` are not yet updated to these
+estimators.

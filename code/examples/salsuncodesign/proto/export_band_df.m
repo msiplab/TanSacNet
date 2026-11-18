@@ -4,11 +4,10 @@ function export_band_df(outDir,options)
 %   export_band_df(outDir) writes, as little-endian doubles, a frame
 %   (x.bin, FrameSize, column-major), the small parameters (prm.bin, the
 %   layout of band_df.h), the estimator parameters (wmem.bin, bmem.bin,
-%   ln.bin, pack_est_df), the statistics of the estimator inputs measured
-%   on the frame itself (stats.bin: mu then sigma, NDec x NEst each), and
-%   the reconstruction of the fixed-point model with those statistics
-%   (yref.bin) with the channel sums of the estimator inputs
-%   (sums.bin: sums then sums of squares, NDec x NEst each). It also writes
+%   ln.bin, pack_est_df) of a network (ParamsFile, by default
+%   results/c_tanh_asin_800ep_seed0.mat), and the reconstruction of the
+%   fixed-point model (yref.bin); stats.bin and sums.bin are zeros (the
+%   estimators take no statistics of the frame). It also writes
 %   sin_table.h for band_df.cpp.
 %
 %   export_band_df(...,AngleBits=n) rounds the angles of the model to n
@@ -38,11 +37,15 @@ arguments
     options.FrameSize (1,2) double = [40 40]
     options.AngleBits (1,1) double {mustBeInteger} = 18
     options.OffsetBits (1,1) double {mustBeInteger} = 18
+    options.ParamsFile {mustBeTextScalar} = ''
 end
 here = fileparts(fileparts(mfilename('fullpath')));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
 if ~isfolder(outDir), mkdir(outDir); end
-R = load(fullfile(here,'results','r3w1_800ep_seed0.mat'),'params'); P = R.params;
+if isempty(options.ParamsFile)
+    options.ParamsFile = fullfile(here,'results','c_tanh_asin_800ep_seed0.mat');
+end
+R = load(options.ParamsFile,'params'); P = R.params;
 L = salsun2d_hls_layout();
 
 % Frame: a corner of a wave frame, or a frame of a larger simulation
@@ -78,20 +81,15 @@ writeBin(fullfile(outDir,'wmem.bin'),w.');
 writeBin(fullfile(outDir,'bmem.bin'),b);
 writeBin(fullfile(outDir,'ln.bin'),ln.');
 
-% Statistics of the frame itself, and the fixed-point model with them
-[~,~,~,mu,sg] = salsun2d_infer_fast(x,P,[],[]);
-writeBin(fullfile(outDir,'stats.bin'),[mu(:); sg(:)]);
+% The fixed-point model (the estimators take no statistics of the frame;
+% stats.bin and sums.bin are zeros, for the ports of the kernel)
+writeBin(fullfile(outDir,'stats.bin'),zeros(2*L.NEst*16,1));
+writeBin(fullfile(outDir,'sums.bin'),zeros(2*L.NEst*16,1));
 [pQ,q] = salsun2d_band_fixed_model(P,AngleBits=options.AngleBits,AngleCenters=ctr,OffsetBits=options.OffsetBits);
-ests = [P.V0.Estimator, P.Stages.Estimator];
-st = struct('Mu',cell(L.NEst,1),'Sigma',cell(L.NEst,1));
-for k = 1:L.NEst
-    ch = ests(k).Channels; nn = prod(ests(k).Neighbor);
-    st(k).Mu = repmat(mu(ch,k),nn,1); st(k).Sigma = repmat(sg(ch,k),nn,1);
-end
-yRef = salsun2d_infer(x,pQ,Statistics=st,Quantizer=q,EstimatorTags=true);
+yRef = salsun2d_infer(x,pQ,Quantizer=q,EstimatorTags=true);
 writeBin(fullfile(outDir,'yref.bin'),yRef);
-[~,s1,s2] = salsun2d_infer_fast(x,P,mu,sg);
-writeBin(fullfile(outDir,'sums.bin'),[s1(:); s2(:)]);
+fprintf('MSE of the fixed-point model %.4g, of the floating-point network %.4g\n', ...
+    mean((yRef-x).^2,'all'),mean((salsun2d_infer(x,P)-x).^2,'all'));
 
 % sin(pi i/1024), i = 0..2048, rounded to [20 18]
 T = floor(sin(pi*(0:2048)/1024)*2^18 + 0.5)/2^18;
