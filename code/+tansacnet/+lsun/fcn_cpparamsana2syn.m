@@ -28,7 +28,8 @@ for iLayer = 1:nLayers
         slayer = synthesislgraph.Layers({synthesislgraph.Layers.Name} == alayerName + "~");
         slayer.Angles = alayer.Angles;
         slayer.Mus = alayer.Mus;
-        if isa(alayer,'tansacnet.lsun.lsunInitialRotation2dLayer')
+        if isa(alayer,'tansacnet.lsun.lsunInitialRotation2dLayer') ...
+                || isa(alayer,'tansacnet.lsun.lsunInitialRotation3dLayer')
             slayer.NoDcLeakage = alayer.NoDcLeakage;
         end
         if isprop(alayer,'BoundaryOperation')
