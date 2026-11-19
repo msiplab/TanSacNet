@@ -389,6 +389,36 @@ def block_dct_matrix_2d(stride,dtype=None,device=None):
     Ceo = torch.kron(Cho,Cve)
     return torch.cat((Cee,Coo,Coe,Ceo),dim=0)
 
+def block_dct_matrix_3d(stride,dtype=None,device=None):
+    """
+    3-D block DCT matrix, equivalent to Cvhd in MATLAB lsunBlockDct3dLayer
+
+    Rows are grouped by the parity (even/odd) of the vertical, horizontal
+    and depth frequencies as [ Ceee; Ceoo; Cooe; Coeo; Ceeo; Ceoe; Cooo;
+    Coee ] (Cyxz), where the first four groups are the symmetric and the
+    last four the antisymmetric channels. In each group, the depth frequency
+    varies fastest and the vertical one slowest. Columns correspond to the
+    pixels of a decV x decH x decD block in column-major order
+    (v + decV*h + decV*decH*d).
+    """
+    decV = stride[Direction.VERTICAL]
+    decH = stride[Direction.HORIZONTAL]
+    decD = stride[Direction.DEPTH]
+    Cv = dctmtx(decV,dtype=dtype,device=device)
+    Ch = dctmtx(decH,dtype=dtype,device=device)
+    Cd = dctmtx(decD,dtype=dtype,device=device)
+    # (vertical, horizontal, depth) parities of the groups
+    parities = ((0,0,0),(0,1,1),(1,1,0),(1,0,1),(0,0,1),(0,1,0),(1,1,1),(1,0,0))
+    groups = []
+    for py, px, pz in parities:
+        Cy, Cx, Cz = Cv[py::2,:], Ch[px::2,:], Cd[pz::2,:]
+        if Cy.size(0)*Cx.size(0)*Cz.size(0) == 0:
+            continue
+        # rows: (y,x,z) with z fastest, columns: (d,h,v) with v fastest
+        groups.append(torch.einsum('yv,xh,zd->yxzdhv',Cy,Cx,Cz)\
+            .reshape(-1,decD*decH*decV))
+    return torch.cat(groups,dim=0)
+
 """
 def block_butterfly(X,nchs):
     ps = nchs[0]

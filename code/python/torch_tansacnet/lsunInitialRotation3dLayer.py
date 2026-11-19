@@ -1,0 +1,153 @@
+import torch
+import torch.nn as nn
+import math
+from .lsunUtility import Direction
+from .lsunLayerExceptions import InvalidNumberOfBlocks, InvalidStride
+from .orthonormalTransform import SetOfOrthonormalTransforms
+
+class LsunInitialRotation3dLayer(nn.Module):
+    """
+    LSUNINITIALROTATION3DLAYER
+
+        コンポーネント別に入力(nComponents):
+            nSamples x nRows x nCols x nLays x nChs
+
+        コンポーネント別に出力(nComponents):
+            nSamples x nRows x nCols x nLays x nChs
+
+        The angles and mus are those of the blocks in row-major order of
+        nRows x nCols x nLays.
+
+    Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
+
+    Copyright (c) 2026, Shogo MURAMATSU
+
+    All rights reserved.
+
+    Contact address: Shogo MURAMATSU,
+        Faculty of Engineering, Niigata University,
+        8050 2-no-cho Ikarashi, Nishi-ku,
+        Niigata, 950-2181, JAPAN
+
+    https://www.eng.niigata-u.ac.jp/~msiplab/
+    """
+
+    def __init__(self,
+                 dtype=torch.get_default_dtype(),
+                 device=torch.get_default_device(),
+                 stride=None,
+                 mus=None,
+                 number_of_blocks=None,
+                 no_dc_leakage=False,
+                 name=''):
+        super(LsunInitialRotation3dLayer, self).__init__()
+        self.dtype = dtype
+        self.device = device
+        self.name = name
+
+        # Stride
+        if stride is None:
+            raise InvalidStride("The stride must be specified.")
+        self.stride = stride
+
+        # Number of blocks
+        if number_of_blocks is None:
+            raise InvalidNumberOfBlocks("The number of blocks must be specified.")
+        self.number_of_blocks = number_of_blocks
+        self.__no_dc_leakage = no_dc_leakage
+
+        # Number of channels
+        ps = math.ceil(math.prod(self.stride)/2.0)
+        pa = math.floor(math.prod(self.stride)/2.0)
+
+        # Description
+        self.description = "LSUN initial rotation " \
+                + "(ps,pa) = (" \
+                + str(ps) + "," \
+                + str(pa) + "), "  \
+                + "(mv,mh,md) = (" \
+                + str(self.stride[Direction.VERTICAL]) + "," \
+                + str(self.stride[Direction.HORIZONTAL]) + "," \
+                + str(self.stride[Direction.DEPTH]) + ")"
+
+        # Orthonormal matrix generation systems
+        nblks = math.prod(self.number_of_blocks)
+        self.orthTransW0 = SetOfOrthonormalTransforms(name=self.name+"_W0",nblks=nblks,n=ps,mode='Analysis',device=self.device,dtype=self.dtype)
+        self.orthTransU0 = SetOfOrthonormalTransforms(name=self.name+"_U0",nblks=nblks,n=pa,mode='Analysis',device=self.device,dtype=self.dtype)
+        self.orthTransW0.angles = nn.init.zeros_(self.orthTransW0.angles)
+        self.orthTransU0.angles = nn.init.zeros_(self.orthTransU0.angles)
+
+        # Update parameters
+        self.mus = mus
+
+    def forward(self,X):
+        nSamples = X.size(dim=0)
+        nrows = X.size(dim=1)
+        ncols = X.size(dim=2)
+        nlays = X.size(dim=3)
+        nDecs = math.prod(self.stride)
+        ps = math.ceil(nDecs/2.0)
+        pa = math.floor(nDecs/2.0)
+
+        if self.__no_dc_leakage:
+            # Avoid in-place modification of mus, which is saved for backward
+            if not torch.all(self.orthTransW0.mus[:,0] == 1.0):
+                mus_ = self.orthTransW0.mus.clone()
+                mus_[:,0] = 1.0
+                self.orthTransW0.mus = mus_
+            #
+            with torch.no_grad():
+                angles_ = self.orthTransW0.angles
+                angles_[:,:(ps-1)] = 0.0
+                self.orthTransW0.angles = angles_
+
+        # Process
+        # nSamples x nRows x nCols x nLays x nChs
+        #   -> (nRows x nCols x nLays) x nChs x nSamples
+        Y = X.permute(1,2,3,4,0).reshape(nrows*ncols*nlays,ps+pa,nSamples)
+        Zs = self.orthTransW0(Y[:,:ps,:])
+        Za = self.orthTransU0(Y[:,ps:,:])
+        Z = torch.cat((Zs,Za),dim=1).reshape(nrows,ncols,nlays,ps+pa,nSamples).permute(4,0,1,2,3)
+        return Z
+
+    @property
+    def no_dc_leakage(self):
+        return self.__no_dc_leakage
+
+    @property
+    def angles(self):
+        return torch.cat((self.orthTransW0.angles,self.orthTransU0.angles),dim=1)
+
+    @angles.setter
+    def angles(self, angles):
+        ps = math.ceil(math.prod(self.stride)/2.0)
+        nAnglesW = ps*(ps-1)//2
+        with torch.no_grad():
+            self.orthTransW0.angles = angles[:,:nAnglesW]
+            self.orthTransU0.angles = angles[:,nAnglesW:]
+
+    @property
+    def mus(self):
+        return torch.cat((self.orthTransW0.mus,self.orthTransU0.mus),dim=1)
+
+    @mus.setter
+    def mus(self, mus):
+        nBlocks = math.prod(self.number_of_blocks)
+        nDecs = math.prod(self.stride)
+        if mus is None:
+            mus = torch.ones(nBlocks,nDecs,dtype=self.dtype)
+        elif isinstance(mus, int) or isinstance(mus, float):
+            mus = mus*torch.ones(nBlocks,nDecs,dtype=self.dtype)
+        ps = math.ceil(nDecs/2.0)
+        self.orthTransW0.mus = mus[:,:ps]
+        self.orthTransU0.mus = mus[:,ps:]
+
+    def to(self, device=None, dtype=None,*args, **kwargs):
+        if device is not None:
+            self.device = device
+        if dtype is not None:
+            self.dtype = dtype
+        super(LsunInitialRotation3dLayer, self).to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        for m in (self.orthTransW0, self.orthTransU0):
+            m.to(device=self.device,dtype=self.dtype,*args, **kwargs)
+        return self

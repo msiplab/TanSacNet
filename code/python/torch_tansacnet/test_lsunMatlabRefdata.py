@@ -5,6 +5,8 @@ code/python/tools/matlab/gen_refdata.m:
     layers/   : lsunIntermediateRotation2dLayer with BoundaryOperation
                 'Circular' and 'Termination'
     networks/ : the analyzer and synthesizer of fcn_createlsunlgraph2d
+and their 3-D counterparts (BlockDct3d_*, IntermediateRotation3d_* and
+Lsun3d_*).
 
 Conversions from MATLAB to PyTorch:
     coefficients : nChs x nRows x nCols x nSamples -> nSamples x nRows x nCols x nChs
@@ -12,6 +14,12 @@ Conversions from MATLAB to PyTorch:
     subbands     : nRows x nCols x C x nSamples     -> nSamples x nRows x nCols x C
     angles, mus  : n x nBlocks (column-major)       -> nBlocks x n (row-major)
     layer names  : 'Lv1_Cmp1_Vh1'                   -> 'Lv1_Vh1'
+
+Conversions from MATLAB to PyTorch (3-D):
+    coefficients : nChs x nRows x nCols x nLays x nSamples -> nSamples x nRows x nCols x nLays x nChs
+    volumes      : H x W x D x 1 x nSamples (SSSCB)         -> nSamples x 1 x H x W x D
+    subbands     : nRows x nCols x nLays x C x nSamples     -> nSamples x nRows x nCols x nLays x C
+    angles, mus  : n x nBlocks (column-major)               -> nBlocks x n (row-major)
 
 Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
@@ -34,7 +42,11 @@ import pytest
 import torch
 
 from torch_tansacnet.lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
+from torch_tansacnet.lsunAnalysis3dNetwork import LsunAnalysis3dNetwork
+from torch_tansacnet.lsunBlockDct3dLayer import LsunBlockDct3dLayer
+from torch_tansacnet.lsunBlockIdct3dLayer import LsunBlockIdct3dLayer
 from torch_tansacnet.lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
+from torch_tansacnet.lsunIntermediateRotation3dLayer import LsunIntermediateRotation3dLayer
 
 scipy_io = pytest.importorskip("scipy.io")
 
@@ -44,11 +56,20 @@ CPU = torch.device("cpu")
 RTOL, ATOL = 1e-9, 1e-10
 
 
-def _files(group):
-    files = sorted((REFDATA / group).glob("*.mat"))
-    if not files:
-        pytest.skip(f"No reference data in {REFDATA / group}; run gen_refdata.m")
-    return files
+def _files(group, pattern="*.mat"):
+    return sorted((REFDATA / group).glob(pattern))
+
+
+def test_refdata_exist():
+    # The parametrized tests below silently collect nothing without the data
+    for group, pattern in (
+        ("layers", "IntermediateRotation2d_*.mat"),
+        ("networks", "Lsun2d_*.mat"),
+        ("layers", "BlockDct3d_*.mat"),
+        ("layers", "IntermediateRotation3d_*.mat"),
+        ("networks", "Lsun3d_*.mat"),
+    ):
+        assert _files(group, pattern), f"No {pattern} in {REFDATA / group}; run gen_refdata.m"
 
 
 def _load(path):
@@ -105,7 +126,7 @@ def _blockwise(a, nblocks):
 # --- Layers -------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("path", _files("layers") if (REFDATA / "layers").is_dir() else [], ids=lambda p: p.stem)
+@pytest.mark.parametrize("path", _files("layers", "IntermediateRotation2d_*.mat"), ids=lambda p: p.stem)
 def test_intermediate_rotation_layer(path):
     m = _load(path)
     stride = _ints(m, "meta_stride")
@@ -159,9 +180,7 @@ def _analyzer(m):
     return net
 
 
-@pytest.mark.parametrize(
-    "path", _files("networks") if (REFDATA / "networks").is_dir() else [], ids=lambda p: p.stem
-)
+@pytest.mark.parametrize("path", _files("networks", "Lsun2d_*.mat"), ids=lambda p: p.stem)
 def test_network(path):
     m = _load(path)
     analyzer = _analyzer(m)
@@ -172,3 +191,132 @@ def test_network(path):
         torch.testing.assert_close(dc, _sscb(m["dc"]), rtol=RTOL, atol=ATOL)
         Y = synthesizer((_sscb(m["s_dc"]), _sscb(m["s_ac"])))
         torch.testing.assert_close(Y, _image(m["y"]), rtol=RTOL, atol=ATOL)
+
+
+# --- 3-D ----------------------------------------------------------------------
+
+
+def _coefs3d(a):
+    """nChs x nRows x nCols x nLays x nSamples -> nSamples x nRows x nCols x nLays x nChs"""
+    a = np.asarray(a, dtype=np.float64)
+    while a.ndim < 5:
+        a = a[..., np.newaxis]
+    return torch.from_numpy(np.ascontiguousarray(a.transpose(4, 1, 2, 3, 0)))
+
+
+def _ssscb(a):
+    """nRows x nCols x nLays x C x nSamples (SSSCB) -> nSamples x nRows x nCols x nLays x C"""
+    a = np.asarray(a, dtype=np.float64)
+    while a.ndim < 5:
+        a = a[..., np.newaxis]
+    return torch.from_numpy(np.ascontiguousarray(a.transpose(4, 0, 1, 2, 3)))
+
+
+def _volume(a):
+    """H x W x D x 1 x nSamples -> nSamples x 1 x H x W x D"""
+    a = np.asarray(a, dtype=np.float64)
+    while a.ndim < 5:
+        a = a[..., np.newaxis]
+    return torch.from_numpy(np.ascontiguousarray(a.transpose(4, 3, 0, 1, 2)))
+
+
+def _blockwise3d(a, nblocks):
+    """n x (nRows*nCols*nLays) in column-major block order ->
+    (nRows*nCols*nLays) x n in row-major block order. A single column is
+    repeated for all blocks."""
+    nrows, ncols, nlays = nblocks
+    nblks = nrows * ncols * nlays
+    a = np.asarray(a, dtype=np.float64)
+    if a.ndim == 1:
+        a = a[:, np.newaxis]
+    if a.shape[1] == 1:
+        a = np.repeat(a, nblks, axis=1)
+    # a[:, r + c*nrows + l*nrows*ncols] -> b[(r*ncols + c)*nlays + l, :]
+    b = a.reshape(a.shape[0], nlays, ncols, nrows).transpose(3, 2, 1, 0).reshape(nblks, a.shape[0])
+    return torch.from_numpy(np.ascontiguousarray(b))
+
+
+@pytest.mark.parametrize("path", _files("layers", "BlockDct3d_*.mat"), ids=lambda p: p.stem)
+def test_block_dct_3d_layer(path):
+    m = _load(path)
+    stride = _ints(m, "meta_stride")
+    X = _volume(m["x"])
+    Z = LsunBlockDct3dLayer(stride=stride)(X)
+    torch.testing.assert_close(Z, _coefs3d(m["z"]), rtol=RTOL, atol=ATOL)
+    # The IDCT layer is the inverse
+    torch.testing.assert_close(LsunBlockIdct3dLayer(stride=stride)(_coefs3d(m["z"])), X, rtol=RTOL, atol=ATOL)
+
+
+@pytest.mark.parametrize("path", _files("layers", "IntermediateRotation3d_*.mat"), ids=lambda p: p.stem)
+def test_intermediate_rotation_3d_layer(path):
+    m = _load(path)
+    stride = _ints(m, "meta_stride")
+    nblocks = _ints(m, "meta_number_of_blocks")
+    direction = _text(m, "meta_direction") or None
+    layer = LsunIntermediateRotation3dLayer(
+        stride=stride,
+        number_of_blocks=nblocks,
+        mode=_text(m, "meta_mode"),
+        boundary_operation=_text(m, "meta_boundary_operation"),
+        direction=direction,
+        dtype=DT,
+        device=CPU,
+    )
+    layer.angles = _blockwise3d(m["angles"], nblocks)
+    layer.mus = _blockwise3d(m["mus"], nblocks)
+
+    X = _coefs3d(m["x"]).requires_grad_(True)
+    Z = layer(X)
+    torch.testing.assert_close(Z, _coefs3d(m["z"]), rtol=RTOL, atol=ATOL)
+
+    (Z * _coefs3d(m["dldz"])).sum().backward()
+    torch.testing.assert_close(X.grad, _coefs3d(m["dldx"]), rtol=RTOL, atol=ATOL)
+    dLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
+    torch.testing.assert_close(dLdW, _blockwise3d(m["dldw"], nblocks), rtol=1e-8, atol=1e-9)
+
+
+def _analyzer3d(m):
+    stride = _ints(m, "meta_stride")
+    szIn = _ints(m, "meta_input_size")
+    nlevels = _ints(m, "meta_number_of_levels")[0]
+    net = LsunAnalysis3dNetwork(
+        input_size=szIn,
+        stride=stride,
+        overlapping_factor=_ints(m, "meta_overlapping_factor"),
+        no_dc_leakage=True,
+        number_of_levels=nlevels,
+        boundary_operation=_text(m, "meta_boundary_operation"),
+        dtype=DT,
+        device=CPU,
+    )
+    layers = net.rotation_layers()
+    names = _text(m, "meta_layer_names").split(",")
+    assert sorted(name.replace("Cmp1_", "") for name in names) == sorted(layers)
+    for name in names:
+        ilevel = int(name[2 : name.index("_")])
+        nblocks = [sz // dec**ilevel for sz, dec in zip(szIn, stride)]
+        layer = layers[name.replace("Cmp1_", "")]
+        assert list(layer.number_of_blocks) == nblocks
+        layer.angles = _blockwise3d(m["angles_" + name], nblocks)
+        layer.mus = _blockwise3d(m["mus_" + name], nblocks)
+    return net, nlevels
+
+
+@pytest.mark.parametrize("path", _files("networks", "Lsun3d_*.mat"), ids=lambda p: p.stem)
+def test_network_3d(path):
+    m = _load(path)
+    analyzer, nlevels = _analyzer3d(m)
+    synthesizer = analyzer.T
+    # MATLAB: AC of level 1, ..., AC of level L, DC of level L
+    assert _text(m, "meta_output_names") == ",".join(
+        [f"Lv{lv}_AcOut" for lv in range(1, nlevels + 1)] + [f"Lv{nlevels}_DcOut"]
+    )
+    with torch.no_grad():
+        # PyTorch: DC of level L, AC of level L, ..., AC of level 1
+        coefs = analyzer(_volume(m["x"]))
+        assert len(coefs) == nlevels + 1
+        torch.testing.assert_close(coefs[0], _ssscb(m["dc"]), rtol=RTOL, atol=ATOL)
+        for lv in range(1, nlevels + 1):
+            torch.testing.assert_close(coefs[nlevels - lv + 1], _ssscb(m[f"ac{lv}"]), rtol=RTOL, atol=ATOL)
+        s = (_ssscb(m["s_dc"]),) + tuple(_ssscb(m[f"s_ac{lv}"]) for lv in range(nlevels, 0, -1))
+        torch.testing.assert_close(synthesizer(s), _volume(m["y"]), rtol=RTOL, atol=ATOL)
