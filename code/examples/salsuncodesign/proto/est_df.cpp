@@ -39,7 +39,7 @@ void fc(hls::stream<row_t> &in, hls::stream<arow_t> &out, hls::stream<wword_t> &
         bool load)
 {
     constexpr int NOUTMAX = nOutK(KIND, 0);
-    constexpr int NJ = (NOUTMAX + OPAR - 1) / OPAR;
+    constexpr int NJ = passLen(NOUTMAX, OPAR);
     constexpr int NWQ = bankWordOffset(KIND, OPAR, NEST);
     constexpr int NBQ = bankRowOffset(KIND, OPAR, NEST);
     static wword_t W[OPAR][NWQ];        // weights of this layer, on chip (kept between calls)
@@ -103,7 +103,7 @@ void fc(hls::stream<row_t> &in, hls::stream<arow_t> &out, hls::stream<wword_t> &
     sig_t xr[P][NB], xn[P][NB];
 #pragma HLS ARRAY_PARTITION variable = xr type = complete dim = 0
 #pragma HLS ARRAY_PARTITION variable = xn type = complete dim = 0
-    const int npass = (nOut + OPAR - 1) / OPAR;
+    const int npass = passLen(nOut, OPAR);  // cycles of a pass (idle beyond the outputs)
 first:
     for (int p = 0; p < P; p++) {       // the first inputs of the first group of blocks
 #pragma HLS PIPELINE II = 1

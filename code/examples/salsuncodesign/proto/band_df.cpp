@@ -40,17 +40,21 @@ float flip(bool neg, float v)
     return neg ? -v : v;
 }
 
-// Givens rotation of channels t and bt of the PA values of a block,
-// [c -s; s c] or its transpose; all channels are read and written, so
-// that every channel memory has one read and one write per cycle
-void givens(float v[PA], int t, int bt, float c, float s, bool transposed)
+// Givens rotation of channels t and bt of a half (h: the antisymmetric
+// one) of a block, [c -s; s c] or its transpose. Every channel is read
+// once, and written (if en) only where it changes, so that every channel
+// memory has one read and one write per cycle
+void givens(float v[NDEC], bool h, int t, int bt, float c, float s, bool transposed, bool en)
 {
-    float x[PA];
-    for (int j = 0; j < PA; j++) x[j] = v[j];
-    const float vt = x[t], vb = x[bt];
+    const int it = (h ? PS : 0) + t, ib = (h ? PS : 0) + bt;
+    float x[NDEC];
+    for (int j = 0; j < NDEC; j++) x[j] = v[j];
+    const float vt = x[it], vb = x[ib];
     const float nt = transposed ? c * vt + s * vb : c * vt - s * vb;
     const float nb = transposed ? c * vb - s * vt : s * vt + c * vb;
-    for (int j = 0; j < PA; j++) v[j] = (j == t) ? nt : ((j == bt) ? nb : x[j]);
+    for (int j = 0; j < NDEC; j++) {
+        if (en && (j == it || j == ib)) v[j] = (j == it) ? nt : nb;
+    }
 }
 
 int wrap(int i, int n)
@@ -185,8 +189,11 @@ columns:
     }
 }
 
-// Inverse block DCT of the band rows (without halo) -> dst
-void blockIdct(const blk_t Y[NBLK], const float prm[NPRM], int r0, float *dst)
+// Inverse block DCT of the band rows (without halo) -> dst, as two tasks:
+// the pixels of a column are transformed while those of the previous one
+// are stored. The transform sends the pixels in the order of the frame
+// (pixel column ih, then the rows), reading a block once per pixel column
+void idctTransform(const blk_t Y[NBLK], const float prm[NPRM], hls::stream<float> &pixels)
 {
     float cvh[NDEC][NDEC];
 #pragma HLS ARRAY_PARTITION variable = cvh type = complete dim = 1
@@ -194,31 +201,54 @@ void blockIdct(const blk_t Y[NBLK], const float prm[NPRM], int r0, float *dst)
 #pragma HLS PIPELINE II = 1
         cvh[i % NDEC][i / NDEC] = prm[P_CVH + i];
     }
-    float px[MX][BAND * MY];
-#pragma HLS ARRAY_PARTITION variable = px type = complete dim = 1
+    int c = 0, ih = 0, rr = 0, iv = 0;
+pixels:
+    for (int i = 0; i < NCOLS * MX * BAND * MY; i++) {
+#pragma HLS PIPELINE II = 1
+        const blk_t y = Y[c * SUBROWS + HALO + rr];
+        const int n = ih * MY + iv;
+        float acc = 0.0f;
+        for (int k = 0; k < NDEC; k++) {
+            acc += cvh[k][n] * y.v[k];
+        }
+        pixels.write(acc);
+        if (iv == MY - 1) {
+            iv = 0;
+            if (rr == BAND - 1) {
+                rr = 0;
+                if (ih == MX - 1) {
+                    ih = 0;
+                    c++;
+                } else {
+                    ih++;
+                }
+            } else {
+                rr++;
+            }
+        } else {
+            iv++;
+        }
+    }
+}
+void idctStore(hls::stream<float> &pixels, int r0, float *dst)
+{
 columns:
     for (int c = 0; c < NCOLS; c++) {
-    blocks:
-        for (int rr = 0; rr < BAND; rr++) {
-            const int r = HALO + rr;
-            const blk_t y = Y[c * SUBROWS + r];
-            for (int n = 0; n < NDEC; n++) {
-#pragma HLS PIPELINE II = 1
-                float acc = 0.0f;
-                for (int k = 0; k < NDEC; k++) {
-                    acc += cvh[k][n] * y.v[k];
-                }
-                px[n / MY][rr * MY + n % MY] = acc;
-            }
-        }
     store:
         for (int ih = 0; ih < MX; ih++) {
             for (int i = 0; i < BAND * MY; i++) {
 #pragma HLS PIPELINE II = 1
-                dst[(c * MX + ih) * SZY + r0 * MY + i] = px[ih][i];
+                dst[(c * MX + ih) * SZY + r0 * MY + i] = pixels.read();
             }
         }
     }
+}
+void blockIdct(const blk_t Y[NBLK], const float prm[NPRM], int r0, float *dst)
+{
+#pragma HLS DATAFLOW
+    hls::stream<float, 2 * MX * BAND * MY> pixels;     // two columns
+    idctTransform(Y, prm, pixels);
+    idctStore(pixels, r0, dst);
 }
 
 //---------------------------------------------------------------------------
@@ -339,16 +369,61 @@ q_t angleOf(const qword_t &w, int k, int b, qctr_t c)
     return a;
 }
 
-// Rotations of the blocks of a column by the angles of stage s: stage 0
-// rotates the symmetric (W) and antisymmetric (U) halves, the others the
-// antisymmetric half (in the last stage only the first PA-1 rotations; the
-// outputs but channel PS are zero as the mask would make them). Then the
-// sign flips (mus), and in the last stage the coefficient mask. Writes the
-// angles to qmem for the synthesis.
+// The rotations of the blocks of a tile, NLANE columns of the band at a
+// time, one block of every column per cycle: of the antisymmetric half
+// (U), after those of the symmetric half (W) in stage 0; in the last stage
+// only the first PA-1 rotations. The angles are those of the groups as in
+// qmem (per column the words of W, then of U), ctr their centers (W, U).
+// The same block comes again SUBROWS cycles later (the latency of a
+// rotation is below it for the bands of a frame)
+void rotateTile(float v[NLANE][SUBROWS][NDEC], const qword_t qa[NLANE][2 * NQ5 * NG],
+                const qctr_t ctr[2][NROT], int s, int nc, bool transposed)
+{
+#pragma HLS INLINE
+    const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
+    const int n = ((s == 0) ? 2 : 1) * nRot * SUBROWS;
+    int kk = 0, g = 0, b = 0;
+    bool h = (s != 0);
+rotations:
+    for (int i = 0; i < n; i++) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT max = 2 * NROT * SUBROWS
+#pragma HLS DEPENDENCE variable = v type = inter direction = RAW dependent = true distance = SUBROWS
+        const int k = transposed ? nRot - 1 - kk : kk;   // transposes in reverse order
+        const int t = GTOP[k], bt = GBTM[k];
+        const qctr_t ck = ctr[h][k];
+        const int wk = ((h ? NQ5 : 0) + (k + NQPAD) / NQR) * NG + g;
+        for (int l = 0; l < NLANE; l++) {
+#pragma HLS UNROLL
+            const q_t qk = angleOf(qa[l][wk], k, b, ck);
+            givens(v[l][g * NB + b], h, t, bt, cospi(qk), sinpi(qk), transposed, l < nc);
+        }
+        if (b == NB - 1) {
+            b = 0;
+            if (g == NG - 1) {
+                g = 0;
+                if (kk == nRot - 1) {
+                    kk = 0;
+                    h = true;
+                } else {
+                    kk++;
+                }
+            } else {
+                g++;
+            }
+        } else {
+            b++;
+        }
+    }
+}
+
+// Rotations of the blocks of the band by the angles of stage s (rotateTile,
+// NLANE columns at a time). Then the sign flips (mus), and in the last
+// stage the coefficient mask (the outputs but channel PS are zero as the
+// mask would make them). Writes the angles to qmem for the synthesis.
 void rotate(hls::stream<arow_t> &angles, hls::stream<blk_t> &blocks, const float prm[NPRM], int s,
             blk_t Y[NBLK], qword_t qmem[NQMEM])
 {
-    const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
     const int nA = NAK[s];
     bool negW[PS], negU[PA], drop[NDEC];
 #pragma HLS ARRAY_PARTITION variable = negW type = complete
@@ -360,116 +435,101 @@ void rotate(hls::stream<arow_t> &angles, hls::stream<blk_t> &blocks, const float
         negU[j] = ((s == 0) ? prm[P_V0U + j] : prm[P_MUS + (s - 1) * PA + j]) < 0;
     }
     for (int j = 0; j < NDEC; j++) drop[j] = (s == NSTAGES) && prm[P_MASK + j] == 0.0f;
-    qctr_t ctrW[NROT], ctrU[NROT];
-    loadCenters(prm, s, ctrW, ctrU);
-    qword_t qw[NQ5 * NG], qu[NQ5 * NG];   // the angles of the groups, as in qmem
-    float vs[NG][NB][PS], va[NG][NB][PA];
-#pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
-#pragma HLS ARRAY_PARTITION variable = va type = complete dim = 3
+    qctr_t ctr[2][NROT];
+    loadCenters(prm, s, ctr[0], ctr[1]);
+    qword_t qa[NLANE][2 * NQ5 * NG];      // the angles of the groups of a column, as in qmem
+#pragma HLS ARRAY_PARTITION variable = qa type = complete dim = 1
+    float v[NLANE][SUBROWS][NDEC];
+#pragma HLS ARRAY_PARTITION variable = v type = complete dim = 1
+#pragma HLS ARRAY_PARTITION variable = v type = complete dim = 3
     // The blocks are read one per cycle, the angles one row of the NB
-    // blocks per cycle, put together NQR rows to a word; the symmetric
-    // half kept in vs in every stage
-columns:
-    for (int c = 0; c < NCOLS; c++) {
+    // blocks per cycle, put together NQR rows to a word
+tiles:
+    for (int c0 = 0; c0 < NCOLS; c0 += NLANE) {
+        const int nc = (NCOLS - c0 < NLANE) ? NCOLS - c0 : NLANE;
     read:
-        for (int g = 0; g < NG; g++) {
-            for (int b = 0; b < NB; b++) {
+        for (int l = 0; l < nc; l++) {
+#pragma HLS LOOP_TRIPCOUNT max = NLANE
+            for (int g = 0; g < NG; g++) {
+                for (int b = 0; b < NB; b++) {
 #pragma HLS PIPELINE II = 1
-                const blk_t y = blocks.read();
-                for (int j = 0; j < PS; j++) {
-                    vs[g][b][j] = y.v[j];
-                    va[g][b][j] = y.v[PS + j];
+                    const blk_t y = blocks.read();
+                    for (int j = 0; j < NDEC; j++) v[l][g * NB + b][j] = y.v[j];
                 }
-            }
-            // The rows go in at the top of a word and down one place per
-            // row, so that a word is complete after its last place (the
-            // leading zero angles of W: the first word, the first places
-            // of the second, as acc starts from zero)
-            qw[g] = 0;
-            ap_uint<NQB * NB * NQR> acc = 0;
-            bool toW = (s == 0);
-            int i = toW ? (NZ0 + NQPAD) % NQR : NQPAD, w = toW ? (NZ0 + NQPAD) / NQR : 0;
-        read_angles:
-            for (int a = 0; a < nA; a++) {
+                // The rows go in at the top of a word and down one place per
+                // row, so that a word is complete after its last place (the
+                // leading zero angles of W: the first word, the first places
+                // of the second, as acc starts from zero)
+                qa[l][g] = 0;
+                ap_uint<NQB * NB * NQR> acc = 0;
+                bool toW = (s == 0);
+                int i = toW ? (NZ0 + NQPAD) % NQR : NQPAD, w = toW ? (NZ0 + NQPAD) / NQR : 0;
+            read_angles:
+                for (int a = 0; a < nA; a++) {
 #pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = 49
-                const arow_t z = angles.read();
-                const int k = w * NQR + i - NQPAD;
-                const qctr_t ck = toW ? ctrW[k] : ctrU[k];
-                ap_uint<NQB * NB> row;
-                for (int b = 0; b < NB; b++) row.range(NQB * b + NQB - 1, NQB * b) = encodeAngle(toAngle(z.v[b]), ck);
-                acc = (acc >> (NQB * NB)) | (ap_uint<NQB * NB * NQR>(row) << (NQB * NB * (NQR - 1)));
-                if (i == NQR - 1) {
-                    if (toW) {
-                        qw[w * NG + g] = acc;
+                    const arow_t z = angles.read();
+                    const int k = w * NQR + i - NQPAD;
+                    const qctr_t ck = ctr[toW ? 0 : 1][k];
+                    ap_uint<NQB * NB> row;
+                    for (int b = 0; b < NB; b++) row.range(NQB * b + NQB - 1, NQB * b) = encodeAngle(toAngle(z.v[b]), ck);
+                    acc = (acc >> (NQB * NB)) | (ap_uint<NQB * NB * NQR>(row) << (NQB * NB * (NQR - 1)));
+                    if (i == NQR - 1) {
+                        qa[l][((toW ? 0 : NQ5) + w) * NG + g] = acc;
+                        acc = 0;
+                    }
+                    if (i == NQR - 1 && toW && w == NQ5 - 1) {   // W done: U from its first angle
+                        toW = false;
+                        i = NQPAD;
+                        w = 0;
+                    } else if (i == NQR - 1) {
+                        i = 0;
+                        w++;
                     } else {
-                        qu[w * NG + g] = acc;
-                    }
-                    acc = 0;
-                }
-                if (i == NQR - 1 && w == NQ5 - 1) {   // W done: U from its first angle
-                    toW = false;
-                    i = NQPAD;
-                    w = 0;
-                } else if (i == NQR - 1) {
-                    i = 0;
-                    w++;
-                } else {
-                    i++;
-                }
-            }
-        }
-    rotations:
-        for (int k = 0; k < nRot; k++) {
-            for (int g = 0; g < NG; g++) {
-                const int t = GTOP[k], bt = GBTM[k];
-                for (int b = 0; b < NB; b++) {       // one block per cycle
-#pragma HLS PIPELINE II = 1
-#pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
-#pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
-                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b, ctrU[k]);
-                    givens(va[g][b], t, bt, cospi(qk), sinpi(qk), false);
-                    if (s == 0) {
-                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b, ctrW[k]);
-                        givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), false);
+                        i++;
                     }
                 }
             }
         }
+        rotateTile(v, qa, ctr, s, nc, false);
     write:
-        for (int g = 0; g < NG; g++) {
-            for (int b = 0; b < NB; b++) {
+        for (int l = 0; l < nc; l++) {
+#pragma HLS LOOP_TRIPCOUNT max = NLANE
+            for (int r = 0; r < SUBROWS; r++) {
 #pragma HLS PIPELINE II = 1
                 blk_t o;
                 for (int j = 0; j < PA; j++) {
-                    o.v[j] = (s == 0) ? flip(negW[j], vs[g][b][j]) : vs[g][b][j];
+                    o.v[j] = (s == 0) ? flip(negW[j], v[l][r][j]) : v[l][r][j];
                     if (s == NSTAGES && j > 0) {
                         o.v[PS + j] = 0.0f;
                     } else {
-                        o.v[PS + j] = flip(negU[j], va[g][b][j]);
+                        o.v[PS + j] = flip(negU[j], v[l][r][PS + j]);
                     }
                 }
                 for (int j = 0; j < NDEC; j++) {
                     if (drop[j]) o.v[j] = 0.0f;
                 }
-                Y[c * SUBROWS + g * NB + b] = o;
+                Y[(c0 + l) * SUBROWS + r] = o;
             }
         }
         // the words of the groups of a column, one per cycle
-        const int qbase = qgAddr(s, c * NG), nw = qgWords(s);
-        int g = 0, w = 0;
-    store_angles:
-        for (int i = 0; i < NG * nw; i++) {
+        const int nw = qgWords(s), w0 = (s == 0) ? 0 : NQ5;
+    store_columns:
+        for (int l = 0; l < nc; l++) {
+#pragma HLS LOOP_TRIPCOUNT max = NLANE
+            const int qbase = qgAddr(s, (c0 + l) * NG);
+            int g = 0, w = 0;
+        store_angles:
+            for (int i = 0; i < NG * nw; i++) {
 #pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = NG * 2 * NQ5
-            const bool isW = (s == 0 && w < NQ5);
-            const int wu = (s == 0) ? w - NQ5 : w;
-            qmem[qbase + i] = isW ? qw[w * NG + g] : qu[wu * NG + g];
-            if (w == nw - 1) {
-                w = 0;
-                g++;
-            } else {
-                w++;
+                qmem[qbase + i] = qa[l][(w0 + w) * NG + g];
+                if (w == nw - 1) {
+                    w = 0;
+                    g++;
+                } else {
+                    w++;
+                }
             }
         }
     }
@@ -494,10 +554,10 @@ void analysisStage(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM
 //---------------------------------------------------------------------------
 // Synthesis: the transposed rotations of stage s (s = 0: the final
 // rotation, W and U), after the sign flips, from the angles in qmem
+// (rotateTile, NLANE columns at a time)
 void synthesisRotation(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[NPRM], int s,
                        const qword_t qmem[NQMEM])
 {
-    const int nRot = (s == NSTAGES) ? NROT_LAST : NROT;
     bool negW[PS], negU[PA];
 #pragma HLS ARRAY_PARTITION variable = negW type = complete
 #pragma HLS ARRAY_PARTITION variable = negU type = complete
@@ -506,73 +566,57 @@ void synthesisRotation(const blk_t Yin[NBLK], blk_t Yout[NBLK], const float prm[
         negW[j] = prm[P_V0TW + j] < 0;
         negU[j] = ((s == 0) ? prm[P_V0TU + j] : prm[P_SYNMUS + (s - 1) * PA + j]) < 0;
     }
-    qctr_t ctrW[NROT], ctrU[NROT];
-    loadCenters(prm, s, ctrW, ctrU);
-    qword_t qw[NQ5 * NG], qu[NQ5 * NG];   // the angles of the groups, as in qmem
-    float vs[NG][NB][PS], va[NG][NB][PA];
-#pragma HLS ARRAY_PARTITION variable = vs type = complete dim = 3
-#pragma HLS ARRAY_PARTITION variable = va type = complete dim = 3
-columns:
-    for (int c = 0; c < NCOLS; c++) {
+    qctr_t ctr[2][NROT];
+    loadCenters(prm, s, ctr[0], ctr[1]);
+    qword_t qa[NLANE][2 * NQ5 * NG];      // the angles of the groups of a column, as in qmem
+#pragma HLS ARRAY_PARTITION variable = qa type = complete dim = 1
+    float v[NLANE][SUBROWS][NDEC];
+#pragma HLS ARRAY_PARTITION variable = v type = complete dim = 1
+#pragma HLS ARRAY_PARTITION variable = v type = complete dim = 3
+tiles:
+    for (int c0 = 0; c0 < NCOLS; c0 += NLANE) {
+        const int nc = (NCOLS - c0 < NLANE) ? NCOLS - c0 : NLANE;
     read:
-        for (int g = 0; g < NG; g++) {
-            for (int b = 0; b < NB; b++) {
+        for (int l = 0; l < nc; l++) {
+#pragma HLS LOOP_TRIPCOUNT max = NLANE
+            for (int r = 0; r < SUBROWS; r++) {
 #pragma HLS PIPELINE II = 1
-                const blk_t y = Yin[c * SUBROWS + g * NB + b];
+                const blk_t y = Yin[(c0 + l) * SUBROWS + r];
                 for (int j = 0; j < PS; j++) {
-                    vs[g][b][j] = (s == 0) ? flip(negW[j], y.v[j]) : y.v[j];
-                    va[g][b][j] = flip(negU[j], y.v[PS + j]);
+                    v[l][r][j] = (s == 0) ? flip(negW[j], y.v[j]) : y.v[j];
+                    v[l][r][PS + j] = flip(negU[j], y.v[PS + j]);
                 }
             }
         }
         // the words of the groups of a column, one per cycle
-        const int qbase = qgAddr(s, c * NG), nw = qgWords(s);
-        int g = 0, w = 0;
-    read_angles:
-        for (int i = 0; i < NG * nw; i++) {
+        const int nw = qgWords(s), w0 = (s == 0) ? 0 : NQ5;
+    read_columns:
+        for (int l = 0; l < nc; l++) {
+#pragma HLS LOOP_TRIPCOUNT max = NLANE
+            const int qbase = qgAddr(s, (c0 + l) * NG);
+            int g = 0, w = 0;
+        read_angles:
+            for (int i = 0; i < NG * nw; i++) {
 #pragma HLS PIPELINE II = 1
 #pragma HLS LOOP_TRIPCOUNT max = NG * 2 * NQ5
-            const qword_t q = qmem[qbase + i];
-            if (s == 0 && w < NQ5) {
-                qw[w * NG + g] = q;
-            } else {
-                qu[((s == 0) ? w - NQ5 : w) * NG + g] = q;
-            }
-            if (w == nw - 1) {
-                w = 0;
-                g++;
-            } else {
-                w++;
-            }
-        }
-    rotations:
-        for (int kk = 0; kk < nRot; kk++) {
-            const int k = nRot - 1 - kk;               // transposes in reverse order
-            for (int g = 0; g < NG; g++) {
-                const int t = GTOP[k], bt = GBTM[k];
-                for (int b = 0; b < NB; b++) {       // one block per cycle
-#pragma HLS PIPELINE II = 1
-#pragma HLS DEPENDENCE variable = vs type = inter direction = RAW dependent = true distance = NG * NB
-#pragma HLS DEPENDENCE variable = va type = inter direction = RAW dependent = true distance = NG * NB
-                    const q_t qk = angleOf(qu[(k + NQPAD) / NQR * NG + g], k, b, ctrU[k]);
-                    givens(va[g][b], t, bt, cospi(qk), sinpi(qk), true);
-                    if (s == 0) {
-                        const q_t qwk = angleOf(qw[(k + NQPAD) / NQR * NG + g], k, b, ctrW[k]);
-                        givens(vs[g][b], t, bt, cospi(qwk), sinpi(qwk), true);
-                    }
+                qa[l][(w0 + w) * NG + g] = qmem[qbase + i];
+                if (w == nw - 1) {
+                    w = 0;
+                    g++;
+                } else {
+                    w++;
                 }
             }
         }
+        rotateTile(v, qa, ctr, s, nc, true);
     write:
-        for (int g = 0; g < NG; g++) {
-            for (int b = 0; b < NB; b++) {
+        for (int l = 0; l < nc; l++) {
+#pragma HLS LOOP_TRIPCOUNT max = NLANE
+            for (int r = 0; r < SUBROWS; r++) {
 #pragma HLS PIPELINE II = 1
                 blk_t o;
-                for (int j = 0; j < PA; j++) {
-                    o.v[j] = vs[g][b][j];
-                    o.v[PS + j] = va[g][b][j];
-                }
-                Yout[c * SUBROWS + g * NB + b] = o;
+                for (int j = 0; j < NDEC; j++) o.v[j] = v[l][r][j];
+                Yout[(c0 + l) * SUBROWS + r] = o;
             }
         }
     }

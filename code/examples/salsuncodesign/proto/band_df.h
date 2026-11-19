@@ -47,6 +47,9 @@
 #ifndef QOFS
 #define QOFS QBITS                // bits of a stored angle (offset from its center)
 #endif
+#ifndef ROT_L
+#define ROT_L 5                   // columns of the band rotated at a time
+#endif
 
 namespace bdf {
 
@@ -58,6 +61,7 @@ constexpr int SUBROWS = BAND + 2 * HALO;              // block rows of a band wi
 constexpr int NG = SUBROWS / NB;                      // groups of NB rows in a column
 constexpr int NBANDS = (NROWS + BAND - 1) / BAND;
 constexpr int NBLK = NCOLS * SUBROWS;                // blocks of a band (column by column)
+constexpr int NLANE = ROT_L;                          // columns rotated at a time (a rotation unit each)
 static_assert(SUBROWS % NB == 0, "the band rows with halo must be a multiple of NB");
 static_assert(HALO > 0 || BAND == NROWS, "a band without halo must be the whole frame height");
 

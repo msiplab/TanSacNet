@@ -157,16 +157,38 @@ On the card (Full HD, 3 units, 10-bit angles on chip; `build_fhd3_v2.sh`,
 MEX function (three frames per call, one per unit) in a stream of 60
 frames; `salsun2d_band_df_u250` adds about 0.02 s per frame on the host.
 
-| | earlier R3 W1 | R3 W1 | R3 W0.5 |
-|---|---|---|---|
-| Clock | 300 MHz | 293.2 MHz | 297.6 MHz |
-| LUT per unit | 154 k | 104 k | 113 k |
-| Registers per unit | 189 k | 157 k | 160 k |
-| DSP / BRAM / URAM per unit | 1262 / 141 / 259 | 1202 / 207 / 259 | 1199 / 165 / 259 |
-| s/frame (card and transfers) | 0.128 | 0.133 | 0.098 |
-| Board power under load | 61.9 W | 59.5 W | 58.3 W |
-| MSE of the card output (test frames) | 9.46e-6 | 3.60e-6 | 4.08e-6 |
-| MSE card / fixed-point model | 1.001 | 1.0001 | 1.0000 |
+| | earlier R3 W1 | R3 W1 | R3 W0.5 | R3 W0.5, faster rotations |
+|---|---|---|---|---|
+| Clock | 300 MHz | 293.2 MHz | 297.6 MHz | 290.9 MHz |
+| LUT per unit | 154 k | 104 k | 113 k | 149 k |
+| Registers per unit | 189 k | 157 k | 160 k | 183 k |
+| DSP / BRAM / URAM per unit | 1262 / 141 / 259 | 1202 / 207 / 259 | 1199 / 165 / 259 | 1401 / 262 / 259 |
+| s/frame (card and transfers) | 0.128 | 0.133 | 0.098 | 0.069 |
+| Board power under load | 61.9 W | 59.5 W | 58.3 W | 62.9 W |
+| MSE of the card output (test frames) | 9.46e-6 | 3.60e-6 | 4.08e-6 | 4.08e-6 |
+| MSE card / fixed-point model | 1.001 | 1.0001 | 1.0000 | 1.0000 |
+
+With the FC layers of width 0.5 the rotations took about 60% of the
+cycles of a band (by the reports of the HLS: 9.3 M cycles, of which the
+rotations of the synthesis 3.0 M, and the analysis stages 1 to 3, paced by
+their rotations, 2.6 M). In the last column (`build_fhd3_rot.sh`)
+
+- the rotations work on `ROT_L` = 5 columns of the band at a time, one
+  block of each per cycle (a rotation unit per column, which rotates W and
+  then U in stage 0), in the analysis and in the synthesis;
+- the inverse DCT is two tasks, the transform of a column and the storing
+  of the previous one.
+
+The outputs are those of the earlier kernel bit by bit in the C
+simulation; a band is about 6.2 M cycles by the reports. The analysis
+stages are now paced by the FC layers (stage 0: 1.77 M cycles, stages 1 to
+4: 0.62 M each).
+
+An FC layer may now compute more outputs per cycle than its pass has
+inputs to read (`EST_OPAR_R=2` with 36 hidden units: the pass idles up to
+`P` cycles). Two outputs per cycle in all FC layers
+(`build_fhd3_rot_o2.sh`; a band about 4.8 M cycles, 2230 DSP per unit by
+the HLS) did not route with three units (congestion).
 
 `tb_band_fhd.cpp` and `tb_band_split.cpp` are not yet updated to these
 estimators.

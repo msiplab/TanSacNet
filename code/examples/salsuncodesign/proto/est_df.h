@@ -78,12 +78,13 @@ constexpr int hwords(int n) { return (n + PH - 1) / PH; }  // host words of a ro
 constexpr int words(int n) { return SPLIT * hwords(n); }   // on-chip words of a row
 static_assert(SPLIT * P == PH, "an on-chip word is a whole part of a host word");
 static_assert(NRES >= 1 && NRES <= 3, "1 to 3 residual blocks");
-// a pass of an FC layer over its outputs must cover the reading of P
-// inputs, and its passes the sending of the outputs (one per cycle)
+// a pass of an FC layer over its outputs covers the reading of P inputs
+// (it idles after the outputs, if they take less than P cycles), and its
+// passes must cover the sending of the outputs (one per cycle)
+constexpr int passLen(int nOut, int opar) { return (nOut + opar - 1) / opar >= P ? (nOut + opar - 1) / opar : P; }
 constexpr bool fcFits(int kind, int k)
 {
-    return (nOutK(kind, k) + OPARK[kind] - 1) / OPARK[kind] >= P && nInK(kind, k) >= P &&
-           words(nInK(kind, k)) * ((nOutK(kind, k) + OPARK[kind] - 1) / OPARK[kind]) >= nOutK(kind, k);
+    return nInK(kind, k) >= P && words(nInK(kind, k)) * passLen(nOutK(kind, k), OPARK[kind]) >= nOutK(kind, k);
 }
 constexpr bool fcFitAll(int kind = 0, int k = 0)
 {
