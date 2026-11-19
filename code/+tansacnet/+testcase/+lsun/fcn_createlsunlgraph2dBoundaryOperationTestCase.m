@@ -53,6 +53,8 @@ classdef fcn_createlsunlgraph2dBoundaryOperationTestCase < matlab.unittest.TestC
         ovlpFactor = { [3 3], [5 5], [1 3], [3 1] };
         boundaryOperation = { 'Circular', 'Termination' };
         usegpu = struct( 'true', true, 'false', false);
+        isLegacy = struct( 'true', true, 'false', false);
+        dim = { 1, 2 };
     end
 
     methods (Test)
@@ -113,6 +115,169 @@ classdef fcn_createlsunlgraph2dBoundaryOperationTestCase < matlab.unittest.TestC
             testCase.verifyError(@() testCase.createLgraph_([2 2],[3 3],'Whole',false,...
                 'BoundaryOperation','InvalidBoundaryOperation'),...
                 'LsunLayer:InvalidBoundaryOperation');
+        end
+
+        function testNumberOfBlocksMultiLevel(testCase, boundaryOperation, isLegacy)
+            % The rotation layers of level n have InputSize./(Stride.^n)
+            % blocks. With 'LegacyNumberOfBlocks', all the levels have
+            % those of level 1
+
+            import tansacnet.lsun.*
+            stride_ = [2 2];
+            nLevels = 3;
+            szInput = [32 48];
+            lgraph = fcn_createlsunlgraph2d([],...
+                'InputSize',szInput,'Stride',stride_,...
+                'OverlappingFactor',[3 3],'NumberOfLevels',nLevels,...
+                'BoundaryOperation',boundaryOperation,...
+                'LegacyNumberOfBlocks',isLegacy,...
+                'Device','cpu','DType','double');
+
+            % Evaluation
+            isTarget = arrayfun(@(x) isprop(x,'NumberOfBlocks'),lgraph.Layers);
+            layers = lgraph.Layers(isTarget);
+            testCase.verifyNumElements(layers,nLevels*2*(1+4));
+            for iLayer = 1:numel(layers)
+                layer = layers(iLayer);
+                iLv = str2double(regexp(layer.Name,'^Lv(\d+)_','tokens','once'));
+                if isLegacy
+                    expctdNumberOfBlocks = szInput./stride_;
+                else
+                    expctdNumberOfBlocks = szInput./(stride_.^iLv);
+                end
+                testCase.verifyEqual(layer.NumberOfBlocks,...
+                    expctdNumberOfBlocks,layer.Name);
+                testCase.verifySize(layer.Angles,...
+                    [size(layer.Angles,1) prod(expctdNumberOfBlocks)],layer.Name);
+            end
+        end
+
+        function testLegacyNumberOfBlocksSingleLevel(testCase, stride, ovlpFactor)
+            % 'LegacyNumberOfBlocks' makes no difference for a single level
+
+            lgraph = testCase.createLgraph_(stride,ovlpFactor,'Whole',false);
+            legacy = testCase.createLgraph_(stride,ovlpFactor,'Whole',false,...
+                'LegacyNumberOfBlocks',true);
+
+            % Evaluation
+            testCase.verifyEqual({legacy.Layers.Name},{lgraph.Layers.Name});
+            isTarget = arrayfun(@(x) isprop(x,'NumberOfBlocks'),lgraph.Layers);
+            testCase.verifyEqual(...
+                arrayfun(@(x) x.NumberOfBlocks,legacy.Layers(isTarget),'UniformOutput',false),...
+                arrayfun(@(x) x.NumberOfBlocks,lgraph.Layers(isTarget),'UniformOutput',false));
+        end
+
+        function testInvalidInputSizeMultiLevel(testCase)
+            % The input size should be a multiple of Stride.^NumberOfLevels
+            import tansacnet.lsun.*
+            testCase.verifyError(@() fcn_createlsunlgraph2d([],...
+                'InputSize',[12 12],'Stride',[2 2],'NumberOfLevels',3),?MException);
+        end
+
+        function testPerfectReconstructionMultiLevel(testCase, ...
+                usegpu, boundaryOperation)
+            % The perfect reconstruction and the energy preservation hold
+            % for multiple tree levels
+
+            testCase.assumeFp64Gpu_(usegpu);
+            import matlab.unittest.constraints.IsEqualTo
+            import matlab.unittest.constraints.AbsoluteTolerance
+            tolObj = AbsoluteTolerance(testCase.TOL);
+            nLevels = 2;
+            stride_ = [2 2];
+            szInput = [16 24];
+
+            % Instantiation of target
+            [analysisnet,synthesisnet] = testCase.createNetworks_(...
+                stride_,[3 3],boundaryOperation,boundaryOperation,usegpu,...
+                'InputSize',szInput,'NumberOfLevels',nLevels);
+
+            % Evaluation
+            X = randn(szInput);
+            if usegpu
+                X = gpuArray(X);
+            end
+            s = cell(1,nLevels+1);
+            [s{:}] = analysisnet.predict(dlarray(X,'SSCB'));
+            if usegpu
+                testCase.verifyClass(extractdata(s{1}),'gpuArray');
+            end
+            X = gather(X);
+            energy = sum(cellfun(@(x) gather(sum(extractdata(x).^2,'all')),s));
+            testCase.verifyEqual(energy,sum(X.^2,'all'),'RelTol',testCase.TOL);
+            actualY = gather(extractdata(synthesisnet.predict(s{:})));
+            testCase.verifyClass(actualY,'double');
+            testCase.verifyThat(actualY,IsEqualTo(X,'Within',tolObj));
+        end
+
+        function testNoWrapAroundTerminationMultiLevel(testCase, usegpu, dim)
+            % With 'Termination', an input on the first (last) edge never
+            % reaches the coefficients of the last (first) edge blocks in
+            % any tree level
+
+            testCase.assumeFp64Gpu_(usegpu);
+            nLevels = 2;
+            stride_ = [2 2];
+            szInput = [32 32];
+            analysisnet = testCase.createNetworks_(...
+                stride_,[3 3],'Termination','Termination',usegpu,...
+                'InputSize',szInput,'NumberOfLevels',nLevels);
+            edgeWidth = stride_(dim)^nLevels;
+            edges = {'last','first'};
+            ranges = {1:edgeWidth, szInput(dim)-edgeWidth+1:szInput(dim)};
+            for iEdge = 1:2
+                X = zeros(szInput);
+                idx = {':',':'};
+                idx{dim} = ranges{iEdge};
+                X(idx{:}) = randn(size(X(idx{:})));
+                if usegpu
+                    X = gpuArray(X);
+                end
+                s = cell(1,nLevels+1);
+                [s{:}] = analysisnet.predict(dlarray(X,'SSCB'));
+                for iCoef = 1:nLevels+1
+                    coefs = gather(extractdata(s{iCoef}));
+                    idx = {':',':',':',':'};
+                    if strcmp(edges{iEdge},'first')
+                        idx{dim} = 1;
+                    else
+                        idx{dim} = size(coefs,dim);
+                    end
+                    testCase.verifyEqual(max(abs(coefs(idx{:})),[],'all'),0,...
+                        'AbsTol',testCase.TOL,...
+                        sprintf('Wrap-around to the %s edge in output %d.',...
+                        edges{iEdge},iCoef));
+                end
+            end
+        end
+
+        function testBackwardMultiLevel(testCase, usegpu, boundaryOperation)
+            % The gradients with respect to the angles of all the levels
+            % are available
+
+            testCase.assumeFp64Gpu_(usegpu);
+            nLevels = 2;
+            analysisnet = testCase.createNetworks_(...
+                [2 2],[3 3],boundaryOperation,boundaryOperation,usegpu,...
+                'InputSize',[16 16],'NumberOfLevels',nLevels);
+            X = randn(16,16);
+            if usegpu
+                X = gpuArray(X);
+            end
+            X = dlarray(X,'SSCB');
+
+            % Evaluation
+            grads = dlfeval(@testCase.gradients_,analysisnet,X);
+            isAngles = grads.Parameter == "Angles";
+            testCase.verifyEqual(...
+                cellfun(@(x) size(x,2),grads.Value(isAngles)),...
+                cellfun(@(x) size(x,2),analysisnet.Learnables.Value(isAngles)));
+            for iLv = 1:nLevels
+                isLv = isAngles & startsWith(grads.Layer,"Lv"+iLv+"_");
+                testCase.verifyTrue(any(cellfun(...
+                    @(x) gather(any(extractdata(x) ~= 0,'all')),grads.Value(isLv))),...
+                    sprintf('No gradient in level %d.',iLv));
+            end
         end
 
         function testPerfectReconstruction(testCase, ...
@@ -262,14 +427,16 @@ classdef fcn_createlsunlgraph2dBoundaryOperationTestCase < matlab.unittest.TestC
         end
 
         function [analysisnet,synthesisnet] = createNetworks_(testCase,...
-                stride,ovlpFactor,anaOperation,synOperation,usegpu)
+                stride,ovlpFactor,anaOperation,synOperation,usegpu,varargin)
             % Analyzer with random angles and the synthesizer with the
             % angles (and the boundary operation) copied from the analyzer
             import tansacnet.lsun.*
             analysislgraph = testCase.createLgraph_(stride,ovlpFactor,...
-                'Analyzer',usegpu,'BoundaryOperation',anaOperation);
+                'Analyzer',usegpu,'BoundaryOperation',anaOperation,...
+                varargin{:});
             synthesislgraph = testCase.createLgraph_(stride,ovlpFactor,...
-                'Synthesizer',usegpu,'BoundaryOperation',synOperation); %#ok<NASGU> used in evalc
+                'Synthesizer',usegpu,'BoundaryOperation',synOperation,...
+                varargin{:}); %#ok<NASGU> used in evalc
             % Random angles in single, since dlnetwork casts learnables to single
             analysisnet = dlnetwork(analysislgraph);
             isAngles = analysisnet.Learnables.Parameter == "Angles";
@@ -332,6 +499,17 @@ classdef fcn_createlsunlgraph2dBoundaryOperationTestCase < matlab.unittest.TestC
     end
 
     methods (Static, Access = private)
+
+        function grads = gradients_(analysisnet,X)
+            % Gradients of the l1-norm of all the outputs
+            s = cell(1,numel(analysisnet.OutputNames));
+            [s{:}] = analysisnet.forward(X);
+            loss = 0;
+            for iCoef = 1:numel(s)
+                loss = loss + sum(abs(s{iCoef}),'all');
+            end
+            grads = dlgradient(loss,analysisnet.Learnables);
+        end
 
         function [Y,X] = reconstruct_(analysisnet,synthesisnet,szInput,usegpu)
             % Analysis followed by synthesis of a random input in double

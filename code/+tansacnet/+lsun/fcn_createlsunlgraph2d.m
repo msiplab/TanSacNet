@@ -2,6 +2,18 @@ function lsunLgraph = ...
     fcn_createlsunlgraph2d(lsunLgraph,varargin)
 %FCN_CREATELSUNLGRAPHS2D
 %
+%   'LegacyNumberOfBlocks' (default: false)
+%
+%   The number of blocks given to the rotation layers of tree level n is
+%   InputSize./(Stride.^n). Up to the release of November 2026, the value
+%   of level 1, InputSize./Stride, was given to all the levels, so that
+%   for NumberOfLevels > 1 the layers of level n > 1 had extra parameters,
+%   'Termination' did not work properly and the backward functions of the
+%   intermediate rotation layers threw errors. Set 'LegacyNumberOfBlocks'
+%   to true only for reproducing such networks, e.g., for loading design
+%   parameters saved with them. It makes no difference for
+%   NumberOfLevels = 1.
+%
 % Requirements: MATLAB R2022a
 %
 % Copyright (c) 2022-2024, Shogo MURAMATSU
@@ -31,6 +43,7 @@ addParameter(p,'Mode','Whole');
 addParameter(p,'Prefix','');
 addParameter(p,'AppendInOutLayers',true);
 addParameter(p,'BoundaryOperation','Circular');
+addParameter(p,'LegacyNumberOfBlocks',false);
 %
 if canUseGPU
     addParameter(p,'Device','cuda');
@@ -58,6 +71,7 @@ end
 mode = p.Results.Mode;
 prefix = p.Results.Prefix;
 isapndinout = p.Results.AppendInOutLayers;
+isLegacyNumberOfBlocks = p.Results.LegacyNumberOfBlocks;
 
 % Boundary operation of the odd-order intermediate rotation layers,
 % i.e., those right after the shift of the difference channels.
@@ -101,9 +115,14 @@ if ~all(mod(ovlpFactor,2))
 end
 
 %%
-nBlocks = inputSize(1:2)./stride;
-if any(mod(nBlocks,1))
-    error('[%d %d] : Input size should be multiple of stride.')
+if isLegacyNumberOfBlocks
+    nLevelsToCheck = 1;
+else
+    nLevelsToCheck = nLevels;
+end
+if any(mod(inputSize(1:2)./(stride.^nLevelsToCheck),1))
+    error('[%d %d] : Input size should be multiple of stride^%d.',...
+        inputSize(1),inputSize(2),nLevelsToCheck)
 end
 
 %%
@@ -113,6 +132,13 @@ blockIdctLayers = cell(nLevels);
 synthesisLayers = cell(nLevels,nComponents);
 for iLv = 1:nLevels
     strLv = sprintf('Lv%0d_',iLv);
+    
+    % Number of blocks of the level
+    if isLegacyNumberOfBlocks
+        nBlocks = inputSize(1:2)./stride; % The same as level 1
+    else
+        nBlocks = inputSize(1:2)./(stride.^iLv);
+    end
     
     % Initial blocks
     blockDctLayers{iLv} = lsunBlockDct2dLayer('Name',[prefix strLv 'E0'],...
