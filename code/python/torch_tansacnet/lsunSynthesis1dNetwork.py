@@ -1,3 +1,4 @@
+import warnings
 import torch
 import torch.nn as nn
 from .lsunBlockIdct1dLayer import LsunBlockIdct1dLayer
@@ -17,6 +18,13 @@ class LsunSynthesis1dNetwork(nn.Module):
 
         input_size (sequence length), stride and overlapping_factor are
         integers.
+
+        NOTE: A stride of 2 gives one symmetric and one antisymmetric
+        channel, i.e., (ps,pa) = (1,1), so that the rotation layers have
+        no angles. The network then always realizes the block DCT (Haar
+        transform) regardless of overlapping_factor. Use a stride of 4 or
+        larger for a trainable overlapped transform. A UserWarning is
+        issued for a stride of 2 with overlapping_factor greater than 1.
 
         Input (number_of_levels = 0):
             nSamples x nBlks x nDecs
@@ -94,6 +102,15 @@ class LsunSynthesis1dNetwork(nn.Module):
                 '%s : Currently, an odd overlapping factor is only supported.'\
                 % str(overlapping_factor))
         self.overlapping_factor = overlapping_factor
+
+        # (ps,pa) = (1,1): No angles in the rotation layers
+        if stride == 2 and overlapping_factor > 1:
+            warnings.warn(
+                'Stride 2 has no angles in the rotation layers. '
+                'The network is always the block DCT (Haar transform) '
+                'regardless of overlapping_factor %d. '
+                'Use a stride of 4 or larger for an overlapped transform.'
+                % overlapping_factor, UserWarning, stacklevel=2)
 
         # No DC leakage
         if not isinstance(no_dc_leakage, bool):
@@ -188,18 +205,21 @@ class LsunSynthesis1dNetwork(nn.Module):
         from .lsunAnalysis1dNetwork import LsunAnalysis1dNetwork
 
         # Create analyzer as the adjoint of SELF
-        analyzer = LsunAnalysis1dNetwork(
-            input_size=self.input_size,
-            number_of_components=self.number_of_components,
-            stride=self.stride,
-            overlapping_factor=self.overlapping_factor,
-            no_dc_leakage=self.no_dc_leakage,
-            number_of_levels=self.number_of_levels,
-            prefix=self.prefix,
-            dtype=self.dtype,
-            device=self.device,
-            boundary_operation=self.boundary_operation
-            )
+        # (the warning on stride 2 was already issued for SELF)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            analyzer = LsunAnalysis1dNetwork(
+                input_size=self.input_size,
+                number_of_components=self.number_of_components,
+                stride=self.stride,
+                overlapping_factor=self.overlapping_factor,
+                no_dc_leakage=self.no_dc_leakage,
+                number_of_levels=self.number_of_levels,
+                prefix=self.prefix,
+                dtype=self.dtype,
+                device=self.device,
+                boundary_operation=self.boundary_operation
+                )
         return self._copy_parameters_to(analyzer)
 
     def rotation_layers(self):

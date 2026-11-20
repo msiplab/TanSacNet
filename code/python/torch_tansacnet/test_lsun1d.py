@@ -27,6 +27,7 @@ https://www.eng.niigata-u.ac.jp/~msiplab/
 """
 
 import math
+import warnings
 
 import pytest
 import torch
@@ -51,6 +52,9 @@ from torch_tansacnet.lsunLayerExceptions import (
 )
 from torch_tansacnet.lsunUtility import block_dct_matrix_1d, dctmtx
 from torch_tansacnet.orthonormalTransform import OrthonormalTransform
+
+# Stride 2 with overlap is tested on purpose
+pytestmark = pytest.mark.filterwarnings("ignore:Stride 2 has no angles:UserWarning")
 
 DT = torch.float64
 CPU = torch.device("cpu")
@@ -429,6 +433,22 @@ def test_network_is_block_dct_by_default(stride, ovlp, boundary_operation):
     X = torch.randn(2, 1, size, dtype=DT)
     with torch.no_grad():
         torch.testing.assert_close(analyzer(X), LsunBlockDct1dLayer(stride=stride)(X), **TOL)
+
+
+@pytest.mark.parametrize("cls", [LsunAnalysis1dNetwork, LsunSynthesis1dNetwork])
+def test_network_stride_2_warning(cls):
+    # A stride of 2 with overlap warns that it has no angles
+    opts = dict(input_size=16, dtype=DT, device=CPU)
+    with pytest.warns(UserWarning, match="Stride 2 has no angles"):
+        cls(stride=2, overlapping_factor=3, **opts)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        cls(stride=2, overlapping_factor=1, **opts)
+        cls(stride=4, overlapping_factor=3, **opts)
+    # The adjoint does not repeat the warning
+    with pytest.warns(UserWarning) as record:
+        cls(stride=2, overlapping_factor=3, **opts).T
+    assert len(record) == 1
 
 
 def test_network_stride_2_is_always_block_dct():

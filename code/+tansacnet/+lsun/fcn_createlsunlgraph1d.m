@@ -9,6 +9,14 @@ function lsunLgraph = ...
 %   InputSize (sequence length), Stride and OverlappingFactor are scalars.
 %   The sequences are arranged as 1 x InputSize x 1 x nSamples (SSCB).
 %
+%   NOTE: Stride 2 gives one symmetric and one antisymmetric channel,
+%   i.e., (ps,pa) = (1,1), so that the rotation layers have no angles.
+%   The network then always realizes the block DCT (Haar transform)
+%   regardless of OverlappingFactor. Use Stride 4 or larger for a
+%   trainable overlapped transform. A warning
+%   'LsunLayer:NoAngles' is issued for Stride 2 with OverlappingFactor
+%   greater than 1.
+%
 %   Outputs of the analyzer at each level:
 %      AC: 1 x nBlks x (Stride-1) x nSamples
 %      DC: 1 x nBlks x 1 x nSamples
@@ -111,6 +119,14 @@ nChannels = [ceil(nDecs/2) floor(nDecs/2)];
 if nChannels(1) ~= nChannels(2)
     throw(MException('LsunLayer:InvalidStride',...
         '%d : Stride should be even.',stride))
+end
+if stride == 2 && ovlpFactor > 1
+    % (ps,pa) = (1,1): No angles in the rotation layers
+    warning('LsunLayer:NoAngles',...
+        ['Stride 2 has no angles in the rotation layers. ' ...
+        'The network is always the block DCT (Haar transform) ' ...
+        'regardless of OverlappingFactor %d. ' ...
+        'Use Stride 4 or larger for an overlapped transform.'],ovlpFactor)
 end
 if ~all(mod(ovlpFactor,2))
     throw(MException('LsunLayer:InvalidOverlappingFactor',...

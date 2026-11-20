@@ -130,8 +130,14 @@ print(torch.dist(x, y))  # perfect reconstruction
 ```
 
 With `number_of_levels=0`, the output is a single tensor of
-`N x (L/4) x 4`. Only a single component (`C = 1`) is supported. A stride of
-2 has no angles and is always the block DCT (Haar transform).
+`N x (L/4) x 4`. Only a single component (`C = 1`) is supported.
+
+> **Note**
+> A stride of 2 gives one symmetric and one antisymmetric channel, so the
+> rotation layers have no angles. The network then always realizes the block
+> DCT (Haar transform) regardless of `overlapping_factor`. Use a stride of 4
+> or larger for a trainable overlapped transform. A `UserWarning` is issued
+> for a stride of 2 with `overlapping_factor` greater than 1.
 
 ## Examples
 

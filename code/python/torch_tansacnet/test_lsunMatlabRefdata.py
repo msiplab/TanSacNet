@@ -439,6 +439,7 @@ def _analyzer1d(m):
     return net, nlevels
 
 
+@pytest.mark.filterwarnings("ignore:Stride 2 has no angles:UserWarning")
 @pytest.mark.parametrize("path", _files("networks", "Lsun1d_*.mat"), ids=lambda p: p.stem)
 def test_network_1d(path):
     m = _load(path)

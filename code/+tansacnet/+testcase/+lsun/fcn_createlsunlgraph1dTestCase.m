@@ -52,7 +52,33 @@ classdef fcn_createlsunlgraph1dTestCase < matlab.unittest.TestCase
         nLevels = { 1, 2, 3 };
     end
 
+    methods (TestMethodSetup)
+
+        function suppressNoAnglesWarning(testCase)
+            % Stride 2 with overlap warns that it has no angles
+            import matlab.unittest.fixtures.SuppressedWarningsFixture
+            testCase.applyFixture(...
+                SuppressedWarningsFixture('LsunLayer:NoAngles'));
+        end
+
+    end
+
     methods (Test)
+
+        function testWarningNoAngles(testCase, ovlpFactor)
+            % Stride 2 with OverlappingFactor > 1 issues a warning, since
+            % it is always the block DCT
+            % (the fixture restores the suppressed state after the test)
+            warning('on','LsunLayer:NoAngles');
+            fcn = @() testCase.createLgraph_(2,ovlpFactor,'Whole',false);
+            if ovlpFactor > 1
+                testCase.verifyWarning(fcn,'LsunLayer:NoAngles');
+            else
+                testCase.verifyWarningFree(fcn);
+            end
+            testCase.verifyWarningFree(...
+                @() testCase.createLgraph_(4,ovlpFactor,'Whole',false));
+        end
 
         function testDefaultBoundaryOperation(testCase, stride, ovlpFactor)
             % All intermediate rotation layers are 'Circular' by default

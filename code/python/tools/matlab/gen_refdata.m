@@ -348,6 +348,9 @@ end
 
 function gennetworks1d_(folder)
 if ~isfolder(folder), mkdir(folder); end
+% Stride 2 with overlap is included on purpose
+ws = warning('off','LsunLayer:NoAngles');
+restoreWarning = onCleanup(@() warning(ws));
 import tansacnet.lsun.*
 nSamples = 2;
 % stride, overlapping factor, input size, number of levels
