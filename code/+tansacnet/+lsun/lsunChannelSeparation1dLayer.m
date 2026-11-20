@@ -5,8 +5,12 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
     %      nChsTotal x 1 x nBlks x nSamples
     %
     %   ２コンポーネント出力(nComponents=2のみサポート):
-    %      1 x 1 x nBlks x nSamples
     %      (nChsTotal-1) x 1 x nBlks x nSamples
+    %      1 x 1 x nBlks x nSamples
+    %
+    %   'ChannelDimension' が 3 のとき(2-D/3-D のレイヤーと同じ配置):
+    %      1 x nBlks x (nChsTotal-1) x nSamples
+    %      1 x nBlks x 1 x nSamples
     %
     % Requirements: MATLAB R2022b
     %
@@ -22,9 +26,8 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties
-        % (Optional) Layer properties.
-        
-        % Layer properties go here.
+        % Dimension of the channels of AC and DC, 1 (default) or 3
+        ChannelDimension
     end
     
     methods
@@ -33,8 +36,17 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             % This function must have the same name as the class.
             p = inputParser;
             addParameter(p,'Name','')
+            addParameter(p,'ChannelDimension',1)
             parse(p,varargin{:})
-            
+
+            % Dimension of the channels of AC and DC, 1 (default) or 3
+            layer.ChannelDimension = p.Results.ChannelDimension;
+            if ~isscalar(layer.ChannelDimension) ...
+                    || ~any(layer.ChannelDimension == [1 3])
+                throw(MException('LsunLayer:InvalidChannelDimension',...
+                    'ChannelDimension should be either of 1 or 3'))
+            end
+
             % Layer constructor function goes here.
             layer.Name = p.Results.Name;
             layer.Description =  "Channel separation";
@@ -43,7 +55,7 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             layer.OutputNames = { 'ac', 'dc' };            
         end
         
-        function [Zac,Zdc] = predict(~, X)
+        function [Zac,Zdc] = predict(layer, X)
             % Forward input data through the layer at prediction time and
             % output the result.
             %
@@ -57,6 +69,10 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             % Layer forward function for prediction goes here.
             Zac = X(2:end,:,:,:);
             Zdc = X(1,:,:,:);
+            if layer.ChannelDimension == 3
+                Zac = permute(Zac,[2 3 1 4]);
+                Zdc = permute(Zdc,[2 3 1 4]);
+            end
             
             if isdlarray(X)
                 Zac = dlarray(Zac,'SSCB');
@@ -65,7 +81,7 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
 
         end
         
-        function dLdX = backward(~, ~, ~, ~, dLdZac,dLdZdc,~)
+        function dLdX = backward(layer, ~, ~, ~, dLdZac,dLdZdc,~)
             % (Optional) Backward propagate the derivative of the loss  
             % function through the layer.
             %
@@ -82,7 +98,11 @@ classdef lsunChannelSeparation1dLayer < nnet.layer.Layer %#codegen
             %                             learnable parameter
             
             % Layer forward function for prediction goes here.
-            dLdX = cat(1,dLdZdc,dLdZac);
+            if layer.ChannelDimension == 3
+                dLdX = ipermute(cat(3,dLdZdc,dLdZac),[2 3 1 4]);
+            else
+                dLdX = cat(1,dLdZdc,dLdZac);
+            end
         end
     end
     

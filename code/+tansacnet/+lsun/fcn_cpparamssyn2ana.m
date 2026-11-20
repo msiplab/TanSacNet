@@ -29,11 +29,14 @@ for iLayer = 1:nLayers
         alayer.Angles = slayer.Angles;
         alayer.Mus = slayer.Mus;
         if isa(alayer,'tansacnet.lsun.lsunInitialRotation2dLayer') ...
-                || isa(alayer,'tansacnet.lsun.lsunInitialRotation3dLayer')
+                || isa(alayer,'tansacnet.lsun.lsunInitialRotation3dLayer') ...
+                || isa(alayer,'tansacnet.lsun.lsunInitialRotation1dLayer')
             alayer.NoDcLeakage = slayer.NoDcLeakage;
         end
         if isprop(slayer,'BoundaryOperation')
-            alayer.Direction = slayer.Direction;
+            if isprop(slayer,'Direction') % not in the 1-D layer
+                alayer.Direction = slayer.Direction;
+            end
             alayer.BoundaryOperation = slayer.BoundaryOperation;
         end
         analysislgraph = analysislgraph.replaceLayer(alayerName,alayer);

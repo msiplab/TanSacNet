@@ -5,6 +5,10 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
     %      1 x 1 x nBlks x nSamples 
     %      (nChsTotal-1) x 1 x nBlks x nSamples
     %
+    %   'ChannelDimension' が 3 のとき(2-D/3-D のレイヤーと同じ配置):
+    %      1 x nBlks x (nChsTotal-1) x nSamples
+    %      1 x nBlks x 1 x nSamples
+    %
     %   １コンポーネント入力(nComponents=1のみサポート):
     %      nChsTotal x 1 x nBlks x nSamples
     %
@@ -22,9 +26,8 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
     % http://msiplab.eng.niigata-u.ac.jp/
     
     properties
-        % (Optional) Layer properties.
-        
-        % Layer properties go here.
+        % Dimension of the channels of AC and DC, 1 (default) or 3
+        ChannelDimension
     end
     
     methods
@@ -33,8 +36,17 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
             % This function must have the same name as the class.
             p = inputParser;
             addParameter(p,'Name','')
+            addParameter(p,'ChannelDimension',1)
             parse(p,varargin{:})
-            
+
+            % Dimension of the channels of AC and DC, 1 (default) or 3
+            layer.ChannelDimension = p.Results.ChannelDimension;
+            if ~isscalar(layer.ChannelDimension) ...
+                    || ~any(layer.ChannelDimension == [1 3])
+                throw(MException('LsunLayer:InvalidChannelDimension',...
+                    'ChannelDimension should be either of 1 or 3'))
+            end
+
             % Layer constructor function goes here.
             layer.Name = p.Results.Name;
             layer.Description =  "Channel concatenation";
@@ -44,7 +56,7 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
             
         end
         
-        function Z = predict(~, Xac,Xdc)
+        function Z = predict(layer, Xac,Xdc)
             % Forward input data through the layer at prediction time and
             % output the result.
             %
@@ -64,10 +76,14 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
             end                                    
             
             % Layer forward function for prediction goes here.
-            Z = cat(1,Xdc,Xac);
+            if layer.ChannelDimension == 3
+                Z = permute(cat(3,Xdc,Xac),[3 1 2 4]);
+            else
+                Z = cat(1,Xdc,Xac);
+            end
         end
         
-        function [dLdXac,dLdXdc] = backward(~,~, ~, ~, dLdZ, ~)
+        function [dLdXac,dLdXdc] = backward(layer,~, ~, ~, dLdZ, ~)
             % (Optional) Backward propagate the derivative of the loss  
             % function through the layer.
             %
@@ -86,6 +102,10 @@ classdef lsunChannelConcatenation1dLayer < nnet.layer.Layer %#codegen
             % Layer forward function for prediction goes here.
             dLdXac = dLdZ(2:end,:,:,:);
             dLdXdc = dLdZ(1,:,:,:);
+            if layer.ChannelDimension == 3
+                dLdXac = ipermute(dLdXac,[3 1 2 4]);
+                dLdXdc = ipermute(dLdXdc,[3 1 2 4]);
+            end
         end
     end
     

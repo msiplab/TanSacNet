@@ -128,8 +128,76 @@ classdef lsunChannelSeparation1dLayerTestCase < matlab.unittest.TestCase
                 IsEqualTo(expctddLdX,'Within',tolObj));
             
         end
-        
-    end
-    
-end
 
+        function testDefaultChannelDimension(testCase)
+            import tansacnet.lsun.*
+            layer = lsunChannelSeparation1dLayer();
+            testCase.verifyEqual(layer.ChannelDimension,1);
+        end
+
+        function testInvalidChannelDimension(testCase)
+            import tansacnet.lsun.*
+            testCase.verifyError(...
+                @() lsunChannelSeparation1dLayer('ChannelDimension',2),...
+                'LsunLayer:InvalidChannelDimension');
+        end
+
+        function testPredictChannelDimension3(testCase,nchs,nblks,batch,datatype)
+            % AC and DC are arranged as the 2-D/3-D layers do
+
+            % Parameters
+            % nChsTotal x 1 x nBlks x nSamples
+            X = randn(nchs,1,nblks,batch,datatype);
+
+            % Expected values
+            % 1 x nBlks x (nChsTotal-1) x nSamples
+            expctdZac = permute(X(2:end,:,:,:),[2 3 1 4]);
+            % 1 x nBlks x 1 x nSamples
+            expctdZdc = permute(X(1,:,:,:),[2 3 1 4]);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunChannelSeparation1dLayer('Name','Sp',...
+                'ChannelDimension',3);
+
+            % Actual values
+            [actualZac,actualZdc] = layer.predict(X);
+
+            % Evaluation
+            testCase.verifyInstanceOf(actualZdc,datatype);
+            testCase.verifyInstanceOf(actualZac,datatype);
+            testCase.verifySize(actualZac,[1 nblks nchs-1 batch]);
+            testCase.verifySize(actualZdc,[1 nblks 1 batch]);
+            testCase.verifyEqual(actualZdc,expctdZdc);
+            testCase.verifyEqual(actualZac,expctdZac);
+        end
+
+        function testBackwardChannelDimension3(testCase,nchs,nblks,batch,datatype)
+
+            % Parameters
+            % 1 x nBlks x (nChsTotal-1) x nSamples
+            dLdZac = randn(1,nblks,nchs-1,batch,datatype);
+            % 1 x nBlks x 1 x nSamples
+            dLdZdc = randn(1,nblks,1,batch,datatype);
+
+            % Expected values
+            % nChsTotal x 1 x nBlks x nSamples
+            expctddLdX = ipermute(cat(3,dLdZdc,dLdZac),[2 3 1 4]);
+
+            % Instantiation of target class
+            import tansacnet.lsun.*
+            layer = lsunChannelSeparation1dLayer('Name','Sp',...
+                'ChannelDimension',3);
+
+            % Actual values
+            actualdLdX = layer.backward([],[],[],dLdZac,dLdZdc,[]);
+
+            % Evaluation
+            testCase.verifyInstanceOf(actualdLdX,datatype);
+            testCase.verifySize(actualdLdX,[nchs 1 nblks batch]);
+            testCase.verifyEqual(actualdLdX,expctddLdX);
+        end
+
+    end
+
+end
