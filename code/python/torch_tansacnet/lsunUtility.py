@@ -370,6 +370,17 @@ def dctmtx(n,dtype=None,device=None):
     C[0,:] = C[0,:]/math.sqrt(2.)
     return C
 
+def block_dct_matrix_1d(stride,dtype=None,device=None):
+    """
+    1-D block DCT matrix, equivalent to C in MATLAB lsunBlockDct1dLayer
+
+    Rows are grouped by the parity (even/odd) of the frequency as
+    [ Ce; Co ], where the first group is the symmetric and the last the
+    antisymmetric channels.
+    """
+    C = dctmtx(stride,dtype=dtype,device=device)
+    return torch.cat((C[0::2,:],C[1::2,:]),dim=0)
+
 def block_dct_matrix_2d(stride,dtype=None,device=None):
     """
     2-D block DCT matrix, equivalent to Cvh in MATLAB lsunBlockDct2dLayer

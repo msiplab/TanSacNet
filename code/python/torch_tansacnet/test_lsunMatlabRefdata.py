@@ -6,7 +6,8 @@ code/python/tools/matlab/gen_refdata.m:
                 'Circular' and 'Termination'
     networks/ : the analyzer and synthesizer of fcn_createlsunlgraph2d
 and their 3-D counterparts (BlockDct3d_*, IntermediateRotation3d_* and
-Lsun3d_*).
+Lsun3d_*) and 1-D counterparts (BlockDct1d_*, IntermediateRotation1d_* and
+Lsun1d_*).
 
 Conversions from MATLAB to PyTorch:
     coefficients : nChs x nRows x nCols x nSamples -> nSamples x nRows x nCols x nChs
@@ -20,6 +21,12 @@ Conversions from MATLAB to PyTorch (3-D):
     volumes      : H x W x D x 1 x nSamples (SSSCB)         -> nSamples x 1 x H x W x D
     subbands     : nRows x nCols x nLays x C x nSamples     -> nSamples x nRows x nCols x nLays x C
     angles, mus  : n x nBlocks (column-major)               -> nBlocks x n (row-major)
+
+Conversions from MATLAB to PyTorch (1-D):
+    coefficients : nChs x 1 x nBlks x nSamples    -> nSamples x nBlks x nChs
+    sequences    : 1 x L x 1 x nSamples (SSCB)    -> nSamples x 1 x L
+    subbands     : 1 x nBlks x C x nSamples       -> nSamples x nBlks x C
+    angles, mus  : n x nBlocks                    -> nBlocks x n
 
 Requirements: Python 3.10-12.x, PyTorch 2.3/4.x
 
@@ -41,10 +48,14 @@ import numpy as np
 import pytest
 import torch
 
+from torch_tansacnet.lsunAnalysis1dNetwork import LsunAnalysis1dNetwork
 from torch_tansacnet.lsunAnalysis2dNetwork import LsunAnalysis2dNetwork
 from torch_tansacnet.lsunAnalysis3dNetwork import LsunAnalysis3dNetwork
+from torch_tansacnet.lsunBlockDct1dLayer import LsunBlockDct1dLayer
 from torch_tansacnet.lsunBlockDct3dLayer import LsunBlockDct3dLayer
+from torch_tansacnet.lsunBlockIdct1dLayer import LsunBlockIdct1dLayer
 from torch_tansacnet.lsunBlockIdct3dLayer import LsunBlockIdct3dLayer
+from torch_tansacnet.lsunIntermediateRotation1dLayer import LsunIntermediateRotation1dLayer
 from torch_tansacnet.lsunIntermediateRotation2dLayer import LsunIntermediateRotation2dLayer
 from torch_tansacnet.lsunIntermediateRotation3dLayer import LsunIntermediateRotation3dLayer
 
@@ -68,6 +79,9 @@ def test_refdata_exist():
         ("layers", "BlockDct3d_*.mat"),
         ("layers", "IntermediateRotation3d_*.mat"),
         ("networks", "Lsun3d_*.mat"),
+        ("layers", "BlockDct1d_*.mat"),
+        ("layers", "IntermediateRotation1d_*.mat"),
+        ("networks", "Lsun1d_*.mat"),
     ):
         assert _files(group, pattern), f"No {pattern} in {REFDATA / group}; run gen_refdata.m"
 
@@ -320,3 +334,126 @@ def test_network_3d(path):
             torch.testing.assert_close(coefs[nlevels - lv + 1], _ssscb(m[f"ac{lv}"]), rtol=RTOL, atol=ATOL)
         s = (_ssscb(m["s_dc"]),) + tuple(_ssscb(m[f"s_ac{lv}"]) for lv in range(nlevels, 0, -1))
         torch.testing.assert_close(synthesizer(s), _volume(m["y"]), rtol=RTOL, atol=ATOL)
+
+
+# --- 1-D ----------------------------------------------------------------------
+
+
+def _coefs1d(a):
+    """nChs x 1 x nBlks x nSamples -> nSamples x nBlks x nChs"""
+    a = np.asarray(a, dtype=np.float64)
+    while a.ndim < 4:
+        a = a[..., np.newaxis]
+    return torch.from_numpy(np.ascontiguousarray(a[:, 0, :, :].transpose(2, 1, 0)))
+
+
+def _sscb1d(a):
+    """1 x nBlks x C x nSamples (SSCB) -> nSamples x nBlks x C"""
+    a = np.asarray(a, dtype=np.float64)
+    while a.ndim < 4:
+        a = a[..., np.newaxis]
+    return torch.from_numpy(np.ascontiguousarray(a[0].transpose(2, 0, 1)))
+
+
+def _sequence(a):
+    """1 x L x 1 x nSamples -> nSamples x 1 x L"""
+    a = np.asarray(a, dtype=np.float64)
+    while a.ndim < 4:
+        a = a[..., np.newaxis]
+    return torch.from_numpy(np.ascontiguousarray(a[0].transpose(2, 1, 0)))
+
+
+def _blockwise1d(a, nblocks):
+    """n x nBlocks -> nBlocks x n. A single column is repeated for all blocks."""
+    a = np.asarray(a, dtype=np.float64)
+    if a.ndim == 1:
+        a = a[:, np.newaxis]
+    if a.shape[1] == 1:
+        a = np.repeat(a, nblocks, axis=1)
+    return torch.from_numpy(np.ascontiguousarray(a.T))
+
+
+@pytest.mark.parametrize("path", _files("layers", "BlockDct1d_*.mat"), ids=lambda p: p.stem)
+def test_block_dct_1d_layer(path):
+    m = _load(path)
+    stride = _ints(m, "meta_stride")[0]
+    X = _sequence(m["x"])
+    Z = LsunBlockDct1dLayer(stride=stride)(X)
+    torch.testing.assert_close(Z, _coefs1d(m["z"]), rtol=RTOL, atol=ATOL)
+    # The IDCT layer is the inverse
+    torch.testing.assert_close(LsunBlockIdct1dLayer(stride=stride)(_coefs1d(m["z"])), X, rtol=RTOL, atol=ATOL)
+
+
+@pytest.mark.parametrize("path", _files("layers", "IntermediateRotation1d_*.mat"), ids=lambda p: p.stem)
+def test_intermediate_rotation_1d_layer(path):
+    m = _load(path)
+    stride = _ints(m, "meta_stride")[0]
+    nblocks = _ints(m, "meta_number_of_blocks")[0]
+    layer = LsunIntermediateRotation1dLayer(
+        stride=stride,
+        number_of_blocks=nblocks,
+        mode=_text(m, "meta_mode"),
+        boundary_operation=_text(m, "meta_boundary_operation"),
+        dtype=DT,
+        device=CPU,
+    )
+    layer.angles = _blockwise1d(m["angles"], nblocks)
+    layer.mus = _blockwise1d(m["mus"], nblocks)
+
+    X = _coefs1d(m["x"]).requires_grad_(True)
+    Z = layer(X)
+    torch.testing.assert_close(Z, _coefs1d(m["z"]), rtol=RTOL, atol=ATOL)
+
+    (Z * _coefs1d(m["dldz"])).sum().backward()
+    torch.testing.assert_close(X.grad, _coefs1d(m["dldx"]), rtol=RTOL, atol=ATOL)
+    dLdW = layer.orthTransUnx.orthonormalTransforms.angles.grad
+    torch.testing.assert_close(dLdW, _blockwise1d(m["dldw"], nblocks), rtol=1e-8, atol=1e-9)
+
+
+def _analyzer1d(m):
+    stride = _ints(m, "meta_stride")[0]
+    szIn = _ints(m, "meta_input_size")[0]
+    nlevels = _ints(m, "meta_number_of_levels")[0]
+    net = LsunAnalysis1dNetwork(
+        input_size=szIn,
+        stride=stride,
+        overlapping_factor=_ints(m, "meta_overlapping_factor")[0],
+        no_dc_leakage=True,
+        number_of_levels=nlevels,
+        boundary_operation=_text(m, "meta_boundary_operation"),
+        dtype=DT,
+        device=CPU,
+    )
+    layers = net.rotation_layers()
+    names = _text(m, "meta_layer_names").split(",")
+    assert sorted(name.replace("Cmp1_", "") for name in names) == sorted(layers)
+    for name in names:
+        ilevel = int(name[2 : name.index("_")])
+        nblocks = szIn // stride**ilevel
+        layer = layers[name.replace("Cmp1_", "")]
+        assert layer.number_of_blocks == nblocks
+        angles = np.asarray(m["angles_" + name], dtype=np.float64)
+        if angles.size:  # no angles for (ps,pa) = (1,1)
+            layer.angles = _blockwise1d(angles, nblocks)
+        layer.mus = _blockwise1d(m["mus_" + name], nblocks)
+    return net, nlevels
+
+
+@pytest.mark.parametrize("path", _files("networks", "Lsun1d_*.mat"), ids=lambda p: p.stem)
+def test_network_1d(path):
+    m = _load(path)
+    analyzer, nlevels = _analyzer1d(m)
+    synthesizer = analyzer.T
+    # MATLAB: AC of level 1, ..., AC of level L, DC of level L
+    assert _text(m, "meta_output_names") == ",".join(
+        [f"Lv{lv}_AcOut" for lv in range(1, nlevels + 1)] + [f"Lv{nlevels}_DcOut"]
+    )
+    with torch.no_grad():
+        # PyTorch: DC of level L, AC of level L, ..., AC of level 1
+        coefs = analyzer(_sequence(m["x"]))
+        assert len(coefs) == nlevels + 1
+        torch.testing.assert_close(coefs[0], _sscb1d(m["dc"]), rtol=RTOL, atol=ATOL)
+        for lv in range(1, nlevels + 1):
+            torch.testing.assert_close(coefs[nlevels - lv + 1], _sscb1d(m[f"ac{lv}"]), rtol=RTOL, atol=ATOL)
+        s = (_sscb1d(m["s_dc"]),) + tuple(_sscb1d(m[f"s_ac{lv}"]) for lv in range(nlevels, 0, -1))
+        torch.testing.assert_close(synthesizer(s), _sequence(m["y"]), rtol=RTOL, atol=ATOL)
