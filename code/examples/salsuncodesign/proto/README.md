@@ -190,5 +190,29 @@ inputs to read (`EST_OPAR_R=2` with 36 hidden units: the pass idles up to
 (`build_fhd3_rot_o2.sh`; a band about 4.8 M cycles, 2230 DSP per unit by
 the HLS) did not route with three units (congestion).
 
+Narrower estimators shorten the passes of the FC layers instead. With
+width 1/3 (45 and 24 hidden units, the fewest that a pass of `P` = 24
+inputs takes) and two outputs per cycle in the output layer only
+(`build_fhd3_w033.sh`, `-DEST_NH0=45 -DEST_NH1=24 -DEST_OPAR_O=2`) the FC
+layers of estimator 0 take 270 cycles per group instead of 408, and the
+stages 1 to 4 are paced by the reading of the angles and the rotations.
+Networks of 800 epochs, MSE of held-out frames (floating point; angles of
+10 bits in fixed point add 0.6%):
+
+| Residual blocks, width | Hidden units | MSE | Ratio |
+|---|---|---|---|
+| 3, 0.5 | 68 / 36 | 5.13e-6 | 1.00 |
+| 3, 1/3 | 45 / 24 | 5.41e-6 | 1.06 |
+| 2, 0.5 | 68 / 36 | 5.63e-6 | 1.10 |
+| 3, 0.25 | 34 / 18 | 5.93e-6 | 1.16 |
+| 2, 1/3 | 45 / 24 | 6.06e-6 | 1.18 |
+| 1, 0.5 | 68 / 36 | 6.89e-6 | 1.34 |
+
+On the card, R3 W1/3 runs at 279.7 MHz in 0.059 s per frame (card and
+transfers; 0.069 s for R3 W0.5), with 60.4 W of board power under load;
+148 k LUT, 185 k registers, 1518 DSP, 263 BRAM and 265 URAM per unit. The
+MSE of the card output for the test frames is 4.22e-6 (4.08e-6 for R3
+W0.5), 1.0002 times that of the fixed-point model.
+
 `tb_band_fhd.cpp` and `tb_band_split.cpp` are not yet updated to these
 estimators.
