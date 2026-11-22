@@ -214,5 +214,16 @@ transfers; 0.069 s for R3 W0.5), with 60.4 W of board power under load;
 MSE of the card output for the test frames is 4.22e-6 (4.08e-6 for R3
 W0.5), 1.0002 times that of the fixed-point model.
 
+More residual blocks cost no cycles (the layers are tasks of a pipeline),
+and five blocks of width 1/3 have an MSE 0.98 times that of R3 W0.5 (0.97
+with another seed; R4 W0.5: 0.97), but with about 2000 DSP per unit three
+units did not route (congestion). The same gain comes from the training
+alone: R3 W1/3 distilled from that R5 W1/3 network instead of the earlier
+teacher (`TeacherFile` of `train_salsun2d_variants`, 800 epochs) has 0.98
+times the MSE of R3 W0.5 on the held-out frames (1.06 with the earlier
+teacher). On the card, with the same build: 0.059 s per frame, 59.6 W
+under load, MSE of the test frames 4.02e-6 (0.9998 times that of the
+fixed-point model), below the 4.08e-6 of R3 W0.5 at 0.069 s per frame.
+
 `tb_band_fhd.cpp` and `tb_band_split.cpp` are not yet updated to these
 estimators.
