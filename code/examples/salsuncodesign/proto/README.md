@@ -224,6 +224,10 @@ times the MSE of R3 W0.5 on the held-out frames (1.06 with the earlier
 teacher). On the card, with the same build: 0.059 s per frame, 59.6 W
 under load, MSE of the test frames 4.02e-6 (0.9998 times that of the
 fixed-point model), below the 4.08e-6 of R3 W0.5 at 0.069 s per frame.
+Longer training helps as well: 1600 epochs give 0.93 times the MSE of R3
+W0.5 with the earlier teacher and 0.89 with an R4 W0.5 teacher; with the
+latter the MSE of the card output for the test frames is 3.67e-6 (0.9999
+times that of the fixed-point model), with the same build.
 
 `tb_band_fhd.cpp` and `tb_band_split.cpp` are not yet updated to these
 estimators.
