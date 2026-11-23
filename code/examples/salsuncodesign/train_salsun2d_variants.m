@@ -38,6 +38,15 @@ function results = train_salsun2d_variants(options)
 %   Activation ('gelu' or 'tanh') their activation and OutputMapping
 %   ('linear' or 'asintanh': theta = asin(tanh(z))) the output layer.
 %
+%   BoundaryOperation ('Circular', default, or 'Termination', see
+%   fcn_createsalsunlgraph2d) sets the boundary operation of the network.
+%   EstimatorFunction (default fcn_createparamestimator2dlgraph) plugs in
+%   another estimator, which receives EstimatorOptions (default {}) only
+%   (the options of the default estimator above are not passed to it);
+%   EstimatorExtractor (see salsun2d_extract_params) extracts its
+%   parameters for salsun2d_infer. The default estimator receives
+%   EstimatorOptions after the options above.
+%
 %   Distillation: TeacherFile (a results .mat with params of a trained
 %   network, default '' for none) adds DistillWeight times the mean
 %   squared angle difference 4*sin^2((theta - thetaTeacher)/2) of the five
@@ -87,6 +96,10 @@ arguments
     options.ResidualLayerNorm (1,1) logical = true
     options.Activation {mustBeMember(options.Activation,{'gelu','tanh'})} = 'gelu'
     options.OutputMapping {mustBeMember(options.OutputMapping,{'linear','asintanh','atan2'})} = 'linear'
+    options.BoundaryOperation {mustBeMember(options.BoundaryOperation,{'Circular','Termination'})} = 'Circular'
+    options.EstimatorFunction (1,1) function_handle = @tansacnet.salsun.fcn_createparamestimator2dlgraph
+    options.EstimatorOptions cell = {}
+    options.EstimatorExtractor = []
 end
 here = fileparts(mfilename('fullpath'));
 addpath(here,fullfile(here,'..','..'),fullfile(here,'..','salsun'));
@@ -126,9 +139,10 @@ for iVariant = 1:numel(options.Variants)
 
     %% Reconstruction network on the CPU, parameters for the reference and the FPGA
     reconnet = reconstructionNetwork(trainnet,[szy szx],coefMask,options);
-    params = salsun2d_extract_params(reconnet);
+    params = salsun2d_extract_params(reconnet,EstimatorExtractor=options.EstimatorExtractor);
     if options.NumResidualBlocks == 3 && options.Width == 2 && isequal(options.NeighborBlocks,[3 3]) ...
-            && options.BottleneckSize == 0
+            && options.BottleneckSize == 0 && isDefaultEstimator(options) ...
+            && strcmp(options.BoundaryOperation,'Circular')
         w = salsun2d_pack_params(params);
     else
         w = [];   % the HLS layout is built for 3 residual blocks of width 2
@@ -194,12 +208,10 @@ function [trainnet,lossHistory] = trainAnalyzer(data,coefMask,options,teacher)
 import tansacnet.salsun.* tansacnet.lsun.*
 [szy,szx,szt] = size(data);
 nChsTotal = numel(coefMask);
+estArgs = estimatorArgs(options);
 analysislgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',[szy szx],'Stride',[4 4],'OverlappingFactor',[3 3], ...
-    'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',options.NeighborBlocks, ...
-    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize, ...
-    'EstimatorOptions',{'StandardizationScope',options.StandardizationScope,'StandardizationEpsilon',options.StandardizationEpsilon,'ResidualLayerNorm',options.ResidualLayerNorm, ...
-    'Activation',options.Activation,'OutputMapping',options.OutputMapping},'Mode','Analyzer');
+    estArgs{:},'Mode','Analyzer');
 trainlgraph = analysislgraph.replaceLayer('Lv1_AcOut', ...
     maskLayer('Name','Lv1_AcMask','Mask',coefMask(2:end),'NumberOfChannels',nChsTotal-1));
 trainlgraph = trainlgraph.addLayers(lsunChannelConcatenation2dLayer('Name','Lv1_Cmp1_Cn'));
@@ -224,6 +236,14 @@ if distill
     order = [find(contains(thetaNames,'V0_')), find(contains(thetaNames,'Vh1')), ...
         find(contains(thetaNames,'Vh2')), find(contains(thetaNames,'Vv1')), find(contains(thetaNames,'Vv2'))];
     thetaNames = thetaNames(order);
+    % with the boundary operation 'Termination': the angles after the
+    % termination, which the rotations take (and salsun2d_infer returns)
+    for k = 1:numel(thetaNames)
+        trm = [extractBefore(thetaNames{k},strlength(thetaNames{k})-4) 'Trm'];
+        if any(strcmp(names,trm))
+            thetaNames{k} = trm;
+        end
+    end
     assert(numel(thetaNames) == numel(teacher))
     outNames = [trainnet.OutputNames, thetaNames];
     if canUseGPU
@@ -319,12 +339,10 @@ end
 function reconnet = reconstructionNetwork(trainnet,inputSize,coefMask,options)
 import tansacnet.salsun.* tansacnet.lsun.*
 nChsTotal = numel(coefMask);
+estArgs = estimatorArgs(options);
 wholelgraph = fcn_createsalsunlgraph2d([], ...
     'InputSize',inputSize,'Stride',[4 4],'OverlappingFactor',[3 3], ...
-    'NumberOfVanishingMoments',true,'NumberOfNeighborBlocks',options.NeighborBlocks, ...
-    'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width,'BottleneckSize',options.BottleneckSize, ...
-    'EstimatorOptions',{'StandardizationScope',options.StandardizationScope,'StandardizationEpsilon',options.StandardizationEpsilon,'ResidualLayerNorm',options.ResidualLayerNorm, ...
-    'Activation',options.Activation,'OutputMapping',options.OutputMapping},'Mode','Whole','ThetaMode','Reuse', ...
+    estArgs{:},'Mode','Whole','ThetaMode','Reuse', ...
     'Device','cpu');
 wholelgraph = wholelgraph.disconnectLayers('Lv1_AcOut','Lv1_AcIn');
 wholelgraph = wholelgraph.addLayers(maskLayer('Name','Lv1_AcMask', ...
@@ -373,4 +391,26 @@ floorLevels(6) = median(d(far))/d(center(1),center(2));
 dy = abs(y1-y0);
 d = squeeze(max(max(reshape(dy,stride(1),nBlk(1),stride(2),nBlk(2)),[],1),[],3));
 floorLevels(7) = median(d(far))/d(center(1),center(2));
+end
+
+%% Options of fcn_createsalsunlgraph2d for the estimators and the boundary
+function args = estimatorArgs(options)
+args = {'NumberOfVanishingMoments',true,'BoundaryOperation',options.BoundaryOperation, ...
+    'EstimatorFunction',options.EstimatorFunction};
+if isDefaultEstimator(options)
+    args = [args {'NumberOfNeighborBlocks',options.NeighborBlocks, ...
+        'NumberOfResidualBlocks',options.NumResidualBlocks,'Width',options.Width, ...
+        'BottleneckSize',options.BottleneckSize, ...
+        'EstimatorOptions',[{'StandardizationScope',options.StandardizationScope, ...
+        'StandardizationEpsilon',options.StandardizationEpsilon, ...
+        'ResidualLayerNorm',options.ResidualLayerNorm, ...
+        'Activation',options.Activation,'OutputMapping',options.OutputMapping} ...
+        options.EstimatorOptions(:).']}];
+else
+    args = [args {'EstimatorOptions',options.EstimatorOptions}];
+end
+end
+
+function tf = isDefaultEstimator(options)
+tf = endsWith(func2str(options.EstimatorFunction),'fcn_createparamestimator2dlgraph');
 end

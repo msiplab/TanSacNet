@@ -44,6 +44,14 @@ function [y,coefs,thetas,stageInputs,stats] = salsun2d_infer(x,params,options)
 %   stage s), for fixed-point formats per estimator (see
 %   salsun2d_calibrate_formats and salsun2d_static_quantizer).
 %
+%   The estimators are those of salsun2d_extract_params: the default
+%   estimator (residual blocks), constant angles (Type 'constant'), or a
+%   plug-in estimator, whose function est.Function(Y,est,q) gives the
+%   angles. With params.BoundaryOperation 'Termination' the angles of the
+%   blocks at a boundary are zero in the stages with Termination (see
+%   fcn_createsalsunlgraph2d), and the default estimator takes zeros for
+%   the neighbor blocks beyond the boundary (Padding 'zero').
+%
 %   Only plain arithmetic is used (no Deep Learning Toolbox), as a
 %   reference for the HLS implementation. The synthesizer reuses the
 %   rotation angles estimated by the analyzer. The computation follows the
@@ -101,9 +109,21 @@ thetaStages = cell(nStages,1);
 for iStage = 1:nStages
     stage = params.Stages(iStage);
     Y = q(atomExtension(Y,stage.Shift,stage.Target),'coefs');
-    stageInputs{iStage+1} = Y;
-    [thetaStages{iStage},stats(iStage+1)] = estimateAngles(Y,stage.Estimator, ...
+    terminated = isfield(stage,'Termination') && ~isempty(stage.Termination);
+    Ye = Y;
+    if terminated
+        % boundary termination: the blocks that received the coefficients
+        % of the opposite boundary are zero for the estimator, and their
+        % rotation is -I (zero angles)
+        idx = terminatedBlocks(nRows,nCols,stage.Termination);
+        Ye(:,idx) = 0;
+    end
+    stageInputs{iStage+1} = Ye;
+    [thetaStages{iStage},stats(iStage+1)] = estimateAngles(Ye,stage.Estimator, ...
         givenStats(options.Statistics,iStage+1),qEst(iStage+1));
+    if terminated
+        thetaStages{iStage}(:,idx) = 0;
+    end
     Y = q(rotateIntermediate(Y,thetaStages{iStage},stage.Mus,false,q),'coefs');
 end
 
@@ -237,12 +257,49 @@ else
 end
 end
 
+%% Boundary termination
+function idx = terminatedBlocks(nRows,nCols,direction)
+% Blocks (column-major) that receive the coefficients of the opposite
+% boundary in an atom extension in direction
+m = false(nRows,nCols);
+switch direction
+    case 'Right', m(:,1) = true;
+    case 'Left',  m(:,end) = true;
+    case 'Down',  m(1,:) = true;
+    case 'Up',    m(end,:) = true;
+    otherwise
+        error('salsun2d_infer:termination','Unknown direction %s',direction)
+end
+idx = find(m(:)).';
+end
+
+function Z = zeroshift(X,vshift,hshift)
+% Shift of the block grid by [vshift hshift] with zeros coming in
+[~,nRows,nCols] = size(X);
+Z = zeros(size(X),'like',X);
+rd = max(1,1+vshift):min(nRows,nRows+vshift);
+cd = max(1,1+hshift):min(nCols,nCols+hshift);
+Z(:,rd,cd) = X(:,rd-vshift,cd-hshift);
+end
+
 %% Angle estimator (control path)
 function [theta,measured] = estimateAngles(Y,est,given,q)
 [~,nRows,nCols] = size(Y);
 nBlks = nRows*nCols;
+measured = struct('Mu',[],'Sigma',[]);
+if isfield(est,'Function')
+    % plug-in estimator (salsun2d_extract_params, EstimatorExtractor)
+    theta = est.Function(Y,est,q);
+    return
+elseif isfield(est,'Type') && strcmp(est.Type,'constant')
+    % constant angles per block
+    theta = q(cast(est.Angles,'like',Y),'angles');
+    return
+end
 
-% Local state extraction: neighbor blocks with circular boundary
+% Local state extraction: neighbor blocks with circular boundary (or
+% zeros beyond the boundary)
+zeroPad = isfield(est,'Padding') && strcmp(est.Padding,'zero');
 Xc = Y(est.Channels,:,:);
 nv = est.Neighbor(1);
 nh = est.Neighbor(2);
@@ -251,7 +308,11 @@ iF = 0;
 nCh = numel(est.Channels);
 for vshift = fix(nv/2):-1:-fix(nv/2)
     for hshift = fix(nh/2):-1:-fix(nh/2)
-        F(iF+(1:nCh),:,:) = circshift(Xc,[0 vshift hshift]);
+        if zeroPad
+            F(iF+(1:nCh),:,:) = zeroshift(Xc,vshift,hshift);
+        else
+            F(iF+(1:nCh),:,:) = circshift(Xc,[0 vshift hshift]);
+        end
         iF = iF + nCh;
     end
 end

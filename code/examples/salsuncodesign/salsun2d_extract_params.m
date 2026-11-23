@@ -1,4 +1,4 @@
-function params = salsun2d_extract_params(net)
+function params = salsun2d_extract_params(net,options)
 %SALSUN2D_EXTRACT_PARAMS Extract SA-LSUN parameters from a dlnetwork
 %
 %   params = salsun2d_extract_params(net) returns a struct holding every
@@ -19,9 +19,29 @@ function params = salsun2d_extract_params(net)
 %     Stages      - intermediate stages in analysis order, each with
 %                   Shift, Target, Mus, Estimator (analysis side) and
 %                   SynShift, SynTarget, SynMus (synthesis side)
-%   Each Estimator has Channels, Neighbor, Epsilon, ResBlocks (Gamma,
-%   Beta, W1, B1, W2, B2; Gamma and Beta empty without layer
-%   normalization) and Wo, Bo, NumberOfZeroPadAngles.
+%     BoundaryOperation - 'Circular' or 'Termination' (see
+%                   fcn_createsalsunlgraph2d); with 'Termination' every
+%                   stage has Termination, the direction of its atom
+%                   extension when its rotation is -I at the blocks of a
+%                   boundary ('' for the other stages)
+%   The estimators of the default estimator function
+%   (fcn_createparamestimator2dlgraph) have Channels, Neighbor, Padding
+%   ('circular' or 'zero'), Epsilon, ResBlocks (Gamma, Beta, W1, B1, W2,
+%   B2; Gamma and Beta empty without layer normalization) and Wo, Bo,
+%   NumberOfZeroPadAngles. Those of fcn_createconstestimatorlgraph have
+%   Type 'constant', Angles (with the zero-padded leading angles) and
+%   NumberOfZeroPadAngles.
+%
+%   params = salsun2d_extract_params(net,EstimatorExtractor=f) extracts
+%   the estimators of another estimator function (plug-in estimators):
+%   est = f(getLayer,prefix) with getLayer(name) the layer of net named
+%   name (empty if none) and prefix the prefix of the estimator (its
+%   layers [prefix 'Ext'] and [prefix 'Theta']). est must have a field
+%   Function, a handle theta = Function(Y,est,q) that salsun2d_infer calls
+%   with the coefficients Y (prod(Stride) x nRows x nCols) before the
+%   rotation and the quantizer q, and that returns the angles (nAngles x
+%   nRows*nCols, blocks in column-major order, the zero-padded leading
+%   angles included).
 %
 % Requirements: MATLAB R2026b, Deep Learning Toolbox
 %
@@ -38,7 +58,9 @@ function params = salsun2d_extract_params(net)
 %
 arguments
     net dlnetwork
+    options.EstimatorExtractor = []
 end
+extractor = options.EstimatorExtractor;
 
 prefix = 'Lv1_Cmp1_';
 names = {net.Layers.Name};
@@ -70,18 +92,20 @@ end
 ps = nDec/2;
 v0 = getLayer([prefix 'V0']);
 [params.V0.MusW,params.V0.MusU] = splitMus(v0.Mus,ps);
-params.V0.Estimator = extractEstimator(getLayer,[prefix 'V0_']);
+params.V0.Estimator = extractEstimator(getLayer,[prefix 'V0_'],extractor);
 v0t = getLayer([prefix 'V0~']);
 [params.V0t.MusW,params.V0t.MusU] = splitMus(v0t.Mus,ps);
 
 % Intermediate stages: follow the analysis chain from V0 to the separation
 src = string(net.Connections.Source);
 dst = extractBefore(string(net.Connections.Destination) + "/","/");
-% Data-path successor: skip the theta inputs and the estimator inputs
+% Data-path successor: skip the theta inputs and the estimator inputs (and
+% the termination of the state for an estimator)
 next = @(name) dst(src == name & ...
-    ~endsWith(string(net.Connections.Destination),"/theta") & ~endsWith(dst,"Ext"));
+    ~endsWith(string(net.Connections.Destination),"/theta") & ~endsWith(dst,"Ext") ...
+    & ~endsWith(dst,"TrmX"));
 stages = struct('Shift',{},'Target',{},'Mus',{},'Estimator',{}, ...
-    'SynShift',{},'SynTarget',{},'SynMus',{});
+    'SynShift',{},'SynTarget',{},'SynMus',{},'Termination',{});
 cur = string([prefix 'V0']);
 while true
     qName = next(cur);
@@ -98,14 +122,26 @@ while true
     stage.Shift = directionToShift(q.Direction);
     stage.Target = char(q.TargetChannels);
     stage.Mus = collapseMus(v.Mus);
-    stage.Estimator = extractEstimator(getLayer,char(vName));
+    stage.Estimator = extractEstimator(getLayer,char(vName),extractor);
     stage.SynShift = directionToShift(qt.Direction);
     stage.SynTarget = char(qt.TargetChannels);
     stage.SynMus = collapseMus(vt.Mus);
+    % boundary termination of the angles (fcn_createsalsunlgraph2d)
+    trm = getLayer(char(vName + "Trm"));
+    if isempty(trm)
+        stage.Termination = '';
+    else
+        stage.Termination = char(trm.Direction);
+    end
     stages(end+1) = stage; %#ok<AGROW>
     cur = vName;
 end
 params.Stages = stages;
+if any(arrayfun(@(st) ~isempty(st.Termination),stages))
+    params.BoundaryOperation = 'Termination';
+else
+    params.BoundaryOperation = 'Circular';
+end
 end
 
 function [muW,muU] = splitMus(mus,ps)
@@ -136,12 +172,36 @@ switch char(direction)
 end
 end
 
-function est = extractEstimator(getLayer,prefix)
+function est = extractEstimator(getLayer,prefix,extractor)
 toSingle = @(v) single(gather(extractdata(dlarray(v))));
+if ~isempty(extractor)                    % a plug-in estimator
+    est = extractor(getLayer,prefix);
+    assert(isfield(est,'Function') && isa(est.Function,'function_handle'), ...
+        'salsun2d_extract_params:extractor', ...
+        'The estimator of %s from EstimatorExtractor has no function handle Function.',prefix)
+    return
+end
+outl = getLayer([prefix 'Theta']);
+if isa(outl,'tansacnet.salsun.salsunConstantAngleLayer')
+    % constant angles per block (fcn_createconstestimatorlgraph)
+    est.Type = 'constant';
+    est.NumberOfZeroPadAngles = double(outl.NumberOfZeroPadAngles);
+    est.Angles = [zeros(est.NumberOfZeroPadAngles,size(outl.Angles,2),'single'); toSingle(outl.Angles)];
+    return
+end
+std_ = getLayer([prefix 'Std']);
+assert(~isempty(std_) && isa(getLayer([prefix 'Ext']),'tansacnet.salsun.salsunLocalStateExtraction2dLayer'), ...
+    'salsun2d_extract_params:estimator', ...
+    ['The estimator %s is not one of fcn_createparamestimator2dlgraph or ' ...
+    'fcn_createconstestimatorlgraph: give EstimatorExtractor.'],prefix)
 ext = getLayer([prefix 'Ext']);
 est.Channels = double(ext.Channels(:));
 est.Neighbor = double(ext.NumberOfNeighborBlocks);
-std_ = getLayer([prefix 'Std']);
+% neighbor blocks beyond the boundary: 'circular' or 'zero'
+est.Padding = 'circular';
+if isprop(ext,'Padding')
+    est.Padding = char(ext.Padding);
+end
 est.Epsilon = single(std_.Epsilon);
 % Standardization scope: 'image', 'neighborhood' (statistics of every
 % channel over the neighbor blocks of a block), 'layer' (layer
@@ -157,7 +217,6 @@ est.Activation = 'gelu';
 if ~isempty(blk1) && isprop(blk1,'Activation')
     est.Activation = char(blk1.Activation);
 end
-outl = getLayer([prefix 'Theta']);
 est.OutputMapping = 'linear';
 if isprop(outl,'OutputMapping')
     est.OutputMapping = char(outl.OutputMapping);

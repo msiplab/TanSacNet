@@ -53,6 +53,7 @@ arguments
     options.AngleCenters (:,1) double = []
     options.Xclbin {mustBeTextScalar} = ""
 end
+salsun2d_assert_plain(params,'salsun2d_band_df_u250');
 here = fileparts(mfilename('fullpath'));
 addpath(fullfile(here,'proto'));
 buildDir = fullfile(here,'proto','build',target);

@@ -84,6 +84,39 @@ classdef salsunLocalStateExtraction2dLayerTestCase < matlab.unittest.TestCase
             testCase.verifyThat(centerBlock,IsEqualTo(Xc,'Within',tolObj));
         end
 
+        function testPredictZeroPadding(testCase)
+            import tansacnet.salsun.*
+
+            nChs = 4;
+            nRows = 4;
+            nCols = 5;
+            nSamples = 2;
+            channels = 2:nChs;
+            X = randn(nChs,nRows,nCols,nSamples);
+
+            layer = salsunLocalStateExtraction2dLayer(...
+                'Name','Extract','NumberOfNeighborBlocks',[3 5],...
+                'Channels',channels,'Padding','zero');
+            Z = layer.predict(X);
+
+            % Expected values: zeros beyond the boundary
+            Xc = X(channels,:,:,:);
+            Xp = zeros(numel(channels),nRows+2,nCols+4,nSamples);
+            Xp(:,2:end-1,3:end-2,:) = Xc;
+            expctdZ = [];
+            for vshift = 1:-1:-1
+                for hshift = 2:-1:-2
+                    expctdZ = cat(1,expctdZ,...
+                        Xp(:,(2:nRows+1)-vshift,(3:nCols+2)-hshift,:));
+                end
+            end
+            testCase.verifyEqual(layer.Padding,'zero');
+            testCase.verifyEqual(Z,expctdZ);
+            testCase.verifyError(@() salsunLocalStateExtraction2dLayer(...
+                'Channels',channels,'Padding','symmetric'),...
+                'MATLAB:unrecognizedStringChoice');
+        end
+
         function testPredictAndGradientWithDlarray(testCase)
             import matlab.unittest.constraints.IsEqualTo
             import matlab.unittest.constraints.AbsoluteTolerance

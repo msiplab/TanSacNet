@@ -52,6 +52,7 @@ arguments
     options.Halo (1,1) double {mustBeInteger,mustBeNonnegative} = 7
     options.FramesPerCall (1,1) double {mustBeInteger,mustBePositive} = 1
 end
+salsun2d_assert_plain(params,'salsun2d_band_u250');
 here = fileparts(mfilename('fullpath'));
 buildDir = fullfile(here,'build',target);
 frameSize = [size(u,1) size(u,2)];

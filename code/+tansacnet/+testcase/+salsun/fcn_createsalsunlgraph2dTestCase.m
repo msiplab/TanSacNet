@@ -91,6 +91,80 @@ classdef fcn_createsalsunlgraph2dTestCase < matlab.unittest.TestCase
             testCase.verifyEqual(height(net.Learnables),1+nStages);
         end
 
+        function testBoundaryOperationLayers(testCase)
+            % 'Termination' adds the termination of the angles and of the
+            % state for the stages with the target 'Difference'
+            import tansacnet.salsun.*
+            args = {'InputSize',[16 24],'Stride',[4 4],...
+                'OverlappingFactor',[3 5],'Mode','Whole','Device','cpu'};
+            for thetaMode = ["Reuse","Recompute"]
+                names = string({fcn_createsalsunlgraph2d([],args{:},...
+                    'ThetaMode',thetaMode).Layers.Name});
+                testCase.verifyFalse(any(contains(names,"Trm")));
+                lgraph = fcn_createsalsunlgraph2d([],args{:},...
+                    'ThetaMode',thetaMode,'BoundaryOperation','Termination');
+                names = string({lgraph.Layers.Name});
+                trm = sort(names(endsWith(names,"Trm") | endsWith(names,"TrmX")));
+                expctd = ["Lv1_Cmp1_Vh1_Trm" "Lv1_Cmp1_Vh1_TrmX" ...
+                    "Lv1_Cmp1_Vh3_Trm" "Lv1_Cmp1_Vh3_TrmX" ...
+                    "Lv1_Cmp1_Vv1_Trm" "Lv1_Cmp1_Vv1_TrmX"];
+                if thetaMode == "Recompute"
+                    expctd = [expctd "Lv1_Cmp1_Vh1~_Trm" "Lv1_Cmp1_Vh1~_TrmX" ...
+                        "Lv1_Cmp1_Vh3~_Trm" "Lv1_Cmp1_Vh3~_TrmX" ...
+                        "Lv1_Cmp1_Vv1~_Trm" "Lv1_Cmp1_Vv1~_TrmX"]; %#ok<AGROW>
+                end
+                testCase.verifyEqual(trm,sort(expctd));
+                ext = lgraph.Layers(names == "Lv1_Cmp1_V0_Ext");
+                testCase.verifyEqual(ext.Padding,'zero');
+            end
+        end
+
+        function testTerminationPerfectReconstructionAndNoWrap(testCase,ovlpFactor)
+            % With constant angles: perfect reconstruction, and the
+            % coefficients of the first block column (row) do not depend
+            % on the pixels of the last one
+            import tansacnet.salsun.*
+            inputSize = [16 24];
+            stride = [4 4];
+            args = {'InputSize',inputSize,'Stride',stride,...
+                'OverlappingFactor',ovlpFactor,'Device','cpu','DType','double',...
+                'EstimatorFunction',@fcn_createconstestimatorlgraph,...
+                'BoundaryOperation','Termination'};
+            net = dlnetwork(fcn_createsalsunlgraph2d([],args{:},...
+                'Mode','Whole','ThetaMode','Reuse'));
+            rng(2)
+            net = dlupdate(@(w) w + 2*pi*rand(size(w),'like',w),net);
+            netA = dlnetwork(fcn_createsalsunlgraph2d([],args{:},'Mode','Analyzer'));
+            tbl = netA.Learnables;
+            for i = 1:height(tbl)
+                tbl.Value{i} = net.Learnables.Value{strcmp(net.Learnables.Layer,tbl.Layer{i}) ...
+                    & strcmp(net.Learnables.Parameter,tbl.Parameter{i})};
+            end
+            netA.Learnables = tbl;
+            x = rand(inputSize);
+            xc = x;
+            xc(:,end-stride(2)+1:end) = rand(inputSize(1),stride(2));
+            xr = x;
+            xr(end-stride(1)+1:end,:) = rand(stride(1),inputSize(2));
+
+            % Actual values
+            y = extractdata(predict(net,dlarray(x,'SSCB')));
+            [ac0,dc0] = predict(netA,dlarray(x,'SSCB'));
+            [acc,dcc] = predict(netA,dlarray(xc,'SSCB'));
+            [acr,dcr] = predict(netA,dlarray(xr,'SSCB'));
+            c0 = cat(3,extractdata(dc0),extractdata(ac0));   % nRows x nCols x nDecs
+            cc = cat(3,extractdata(dcc),extractdata(acc));
+            cr = cat(3,extractdata(dcr),extractdata(acr));
+
+            % Evaluation
+            testCase.verifyEqual(y,x,'AbsTol',1e-10);
+            testCase.verifyEqual(cc(:,1,:),c0(:,1,:),'AbsTol',1e-12);
+            testCase.verifyEqual(cr(1,:,:),c0(1,:,:),'AbsTol',1e-12);
+            % the last block column (row) itself does change
+            testCase.verifyGreaterThan(max(abs(cc(:,end,:)-c0(:,end,:)),[],'all'),1e-3);
+            testCase.verifyGreaterThan(max(abs(cr(end,:,:)-c0(end,:,:)),[],'all'),1e-3);
+        end
+
         function testConstantEstimatorIsAdaptiveOnlyByLocation(testCase)
             % With constant angles, the analysis is a linear transform
             import tansacnet.salsun.*

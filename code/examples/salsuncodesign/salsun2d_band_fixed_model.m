@@ -93,6 +93,9 @@ end
 end
 
 function est = roundEstimator(est,r)
+if ~isfield(est,'ResBlocks')        % constant or plug-in estimators: as they are
+    return
+end
 for i = 1:numel(est.ResBlocks)
     est.ResBlocks(i).W1 = r(est.ResBlocks(i).W1);
     est.ResBlocks(i).W2 = r(est.ResBlocks(i).W2);

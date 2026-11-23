@@ -1,4 +1,4 @@
-function net = salsun2d_create_test_network(inputSize,coefMask)
+function net = salsun2d_create_test_network(inputSize,coefMask,options)
 %SALSUN2D_CREATE_TEST_NETWORK SA-LSUN dlnetwork with random parameters
 %
 %   net = salsun2d_create_test_network(inputSize,coefMask) builds the
@@ -7,6 +7,11 @@ function net = salsun2d_create_test_network(inputSize,coefMask)
 %   coefMask (16 x 1, DC first) unless it is empty, and perturbs all
 %   learnable parameters randomly. Without the perturbation the angle
 %   estimators output zero angles (Wo = 0) and the rotations go untested.
+%
+%   net = salsun2d_create_test_network(...,BoundaryOperation=b,
+%   EstimatorFunction=f,EstimatorOptions=c) passes these options to
+%   fcn_createsalsunlgraph2d (defaults: 'Circular', the default estimator,
+%   {}).
 %
 %   Used by the test cases; set the random seed before calling.
 %
@@ -26,6 +31,9 @@ function net = salsun2d_create_test_network(inputSize,coefMask)
 arguments
     inputSize (1,2) double
     coefMask = []
+    options.BoundaryOperation = 'Circular'
+    options.EstimatorFunction = @tansacnet.salsun.fcn_createparamestimator2dlgraph
+    options.EstimatorOptions = {}
 end
 import tansacnet.salsun.*
 lg = fcn_createsalsunlgraph2d([], ...
@@ -38,7 +46,10 @@ lg = fcn_createsalsunlgraph2d([], ...
     'Width',2, ...
     'Mode','Whole', ...
     'ThetaMode','Reuse', ...
-    'Device','cpu');
+    'Device','cpu', ...
+    'BoundaryOperation',options.BoundaryOperation, ...
+    'EstimatorFunction',options.EstimatorFunction, ...
+    'EstimatorOptions',options.EstimatorOptions);
 if ~isempty(coefMask)
     lg = lg.disconnectLayers('Lv1_AcOut','Lv1_AcIn');
     lg = lg.addLayers(maskLayer('Name','Lv1_AcMask', ...

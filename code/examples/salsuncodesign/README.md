@@ -47,7 +47,9 @@ train on GPU ──> params (.mat) ───────────────
 | `salsun2d_pack_params.m` | Packs the parameters into one single vector (489,085 values) and checks the configuration |
 | `salsun2d_hls.m` | HLS version: `y = salsun2d_hls(x,w)`, explicit loops only |
 | `Salsun2dHlsTestCase.m` | Compares `salsun2d_hls` with `salsun2d_infer` |
-| `salsun2d_create_test_network.m` | Network with randomly perturbed parameters, used by the tests |
+| `salsun2d_create_test_network.m` | Network with randomly perturbed parameters, used by the tests (optional `BoundaryOperation`, `EstimatorFunction`, `EstimatorOptions`) |
+| `Salsun2dPluggableTestCase.m` | Plug-in estimators and the boundary operation `'Termination'` in `salsun2d_extract_params` and `salsun2d_infer` |
+| `salsun2d_assert_plain.m` | Refuses parameters with `'Termination'` or another estimator in the functions that support only circular boundaries and the default estimator |
 | `salsun2d_hls_tb.m`, `run_salsun2d_hls_codegen.m` | HDL Coder (Vitis HLS 2024.1) code generation into `codegen/salsun2d_hls/hdlsrc` |
 
 ```matlab
@@ -91,6 +93,39 @@ over all blocks of the image -> 3 residual blocks (LayerNorm, FC, GELU with
 tanh, FC, skip) -> FC to the angles. With block 4 x 4, overlap 3 x 3 and
 width 2, this is about 480k multiply-accumulates per block, almost all in the
 estimators.
+
+## Plug-in estimators and the boundary operation 'Termination'
+
+`fcn_createsalsunlgraph2d` takes `EstimatorFunction` (the estimator of every
+rotation, see the interface there) and `BoundaryOperation`. The MATLAB
+reference follows both:
+
+- `salsun2d_extract_params` recognizes the default estimator
+  (`fcn_createparamestimator2dlgraph`) and the estimator of constant angles
+  (`fcn_createconstestimatorlgraph`, `Type` `'constant'`); for another
+  estimator, `EstimatorExtractor=f` gives `est = f(getLayer,prefix)` with a
+  function handle `est.Function(Y,est,q)` that `salsun2d_infer` calls for the
+  angles.
+- `BoundaryOperation='Termination'`, as in the NSOLT of SaivDr: the stages
+  with the target channels `'Difference'` (h1 after `'Right'`, v1 after
+  `'Down'`) rotate the blocks of the first column (row), which hold the
+  coefficients of the opposite boundary after the circular shift, by -I (zero
+  angles, Mus = -1), and the next stage shifts those coefficients back. The
+  estimators of these stages see zeros for those blocks, and the default
+  estimator takes zeros beyond the boundary (`Padding` `'zero'` of
+  `salsunLocalStateExtraction2dLayer`). No basis function wraps around: the
+  coefficients of the first block column (row) do not depend on the pixels
+  of the last one (up to rounding, `Salsun2dPluggableTestCase`).
+- `train_salsun2d_variants` passes `BoundaryOperation`, `EstimatorFunction`,
+  `EstimatorOptions` and `EstimatorExtractor` on; with `'Termination'` the
+  distillation compares the angles after the termination.
+
+With the default estimator and `'Circular'` the outputs of `salsun2d_infer`
+are those of the earlier code bit by bit (four trained networks), and the
+extracted parameters only gain the fields `BoundaryOperation`, `Padding` and
+`Termination`. The fast MEX inference, the HLS versions, the band designs and
+the U250 kernels support only circular boundaries and the default estimator,
+and refuse other parameters (`salsun2d_assert_plain`).
 
 ## Streaming design for the FPGA (band-wise, overlap-save)
 

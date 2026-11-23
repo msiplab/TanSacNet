@@ -32,6 +32,7 @@ arguments
     params (1,1) struct
     options.RowMajorWeights (1,1) logical = false
 end
+salsun2d_assert_plain(params,'salsun2d_pack_params');
 [r,w] = salsun2d_estimator_size(params);
 L = salsun2d_hls_layout(NumResidualBlocks=r,Width=w,AlignedWeights=options.RowMajorWeights);
 if options.RowMajorWeights

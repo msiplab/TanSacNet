@@ -42,6 +42,9 @@ addParameter(p,'Prefix','')
 addParameter(p,'TargetType','Initial')
 addParameter(p,'NumberOfChannels',[])
 addParameter(p,'NumberOfNeighborBlocks',[3 3])
+% Neighbor blocks beyond the boundary: 'circular' (from the opposite side)
+% or 'zero' (salsunLocalStateExtraction2dLayer)
+addParameter(p,'Padding','circular')
 addParameter(p,'NumberOfResidualBlocks',3)
 addParameter(p,'Width',2)
 addParameter(p,'BottleneckSize',0)
@@ -99,7 +102,8 @@ else
 end
 layers = [
     salsunLocalStateExtraction2dLayer('Name',[prefix 'Ext'],...
-        'NumberOfNeighborBlocks',nNeighbor,'Channels',channels)
+        'NumberOfNeighborBlocks',nNeighbor,'Channels',channels,...
+        'Padding',p.Results.Padding)
     stdLayer
     ];
 % Optional bottleneck: a learned linear projection of the standardized

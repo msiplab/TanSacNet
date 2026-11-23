@@ -63,6 +63,7 @@ arguments
     options.FramesPerCall (1,1) double {mustBeInteger,mustBePositive} = 1
     options.InitPerFrame (1,1) logical = false
 end
+salsun2d_assert_plain(params,'salsun2d_band_sequence');
 L = salsun2d_hls_layout();
 if isempty(options.InitParams)
     options.InitParams = params;

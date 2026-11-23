@@ -26,8 +26,28 @@ function salsunLgraph = ...
 %
 %     'EstimatorOptions' is a cell array of name-value arguments passed
 %     to the estimator. For the default estimator, NumberOfNeighborBlocks,
-%     NumberOfResidualBlocks, Width and BottleneckSize are passed before
-%     them; other estimators receive EstimatorOptions only.
+%     NumberOfResidualBlocks, Width and BottleneckSize (and Padding 'zero'
+%     with BoundaryOperation 'Termination') are passed before them; other
+%     estimators receive EstimatorOptions only.
+%
+%   Boundary operation:
+%     'BoundaryOperation' 'Circular' (default) extends the image
+%     periodically: the atom extensions shift the coefficients circularly,
+%     so that the basis functions at a boundary wrap around to the
+%     opposite one. 'Termination', as in the NSOLT of SaivDr, keeps the
+%     circular shifts but makes the rotation of every stage with the
+%     target channels 'Difference' -I at the blocks that receive the
+%     coefficients of the opposite boundary (the first column after
+%     'Right', the first row after 'Down'): the angles of the estimator
+%     pass through a salsunBoundaryTermination2dLayer named
+%     [prefix 'V' stage '_Trm'] (synthesis [... '~_Trm']), which sets them
+%     to zero there (the rotations have Mus = -1), and the next stage
+%     brings the coefficients back. No basis function then wraps around.
+%     The estimators of these stages watch the state through another
+%     such layer [prefix 'V' stage '_TrmX'] (synthesis [... '~_TrmX']),
+%     which sets the state of those blocks to zero, and the default
+%     estimator takes zeros for the neighbor blocks beyond the boundary,
+%     so that the angles do not depend on the opposite boundary either.
 %
 % Requirements: MATLAB R2022a
 %
@@ -73,6 +93,7 @@ addParameter(p,'BottleneckSize',0)
 addParameter(p,'EstimatorFunction',@tansacnet.salsun.fcn_createparamestimator2dlgraph,...
     @(x) isa(x,'function_handle'))
 addParameter(p,'EstimatorOptions',{},@iscell)
+addParameter(p,'BoundaryOperation','Circular')
 parse(p,varargin{:})
 
 nComponents = p.Results.NumberOfComponents;
@@ -85,14 +106,24 @@ dtype = p.Results.DType;
 prefix = p.Results.Prefix;
 isapndinout = p.Results.AppendInOutLayers;
 
+% Boundary operation (see above)
+boundaryOperation = validatestring(p.Results.BoundaryOperation,...
+    {'Circular','Termination'});
+isTermination = strcmp(boundaryOperation,'Termination');
+
 % Angle estimator (see the estimator interface above)
 est.Function = p.Results.EstimatorFunction;
 est.Options = p.Results.EstimatorOptions;
+est.Termination = isTermination;
 if endsWith(func2str(est.Function),'fcn_createparamestimator2dlgraph')
-    est.Options = [{'NumberOfNeighborBlocks',p.Results.NumberOfNeighborBlocks,...
+    defaults = {'NumberOfNeighborBlocks',p.Results.NumberOfNeighborBlocks,...
         'NumberOfResidualBlocks',p.Results.NumberOfResidualBlocks,...
         'Width',p.Results.Width,...
-        'BottleneckSize',p.Results.BottleneckSize} est.Options(:).'];
+        'BottleneckSize',p.Results.BottleneckSize};
+    if isTermination
+        defaults = [defaults {'Padding','zero'}];
+    end
+    est.Options = [defaults est.Options(:).'];
 end
 
 noDcLeakage = p.Results.NumberOfVanishingMoments;
@@ -465,8 +496,9 @@ lgraph = lgraph.addLayers(salsunIntermediateRotation2dLayer('Name',rotName,...
 lgraph = addEstimator(lgraph,est,rotName,'Intermediate',nDecs,...
     noDcLeakage,nBlocks,stride,'Analysis',stage.name);
 lgraph = lgraph.connectLayers(atomName,[rotName '/x']);
-lgraph = lgraph.connectLayers(atomName,[rotName 'Ext']);
-lgraph = lgraph.connectLayers([rotName 'Theta'],[rotName '/theta']);
+lgraph = connectState(lgraph,est,stage,atomName,[rotName 'Ext'],[rotName 'TrmX'],nBlocks);
+lgraph = connectAngles(lgraph,est,stage,[rotName 'Theta'],[rotName '/theta'],...
+    [rotName 'Trm'],nBlocks);
 
 lastName = rotName;
 end
@@ -507,14 +539,20 @@ if strcmp(thetaMode,'Reuse')
     % estimator, so this stage exactly inverts the analysis side's
     % corresponding stage (guaranteeing unitarity/perfect
     % reconstruction when no dimension reduction occurs in between).
-    estPrefix = [prefix 'V' stage.name '_Theta'];
-    lgraph = lgraph.connectLayers(estPrefix,[rotName '/theta']);
+    % (after its boundary termination, if any)
+    estPrefix = [prefix 'V' stage.name '_'];
+    if isTerminated(est,stage)
+        lgraph = lgraph.connectLayers([estPrefix 'Trm'],[rotName '/theta']);
+    else
+        lgraph = lgraph.connectLayers([estPrefix 'Theta'],[rotName '/theta']);
+    end
 else
     estPrefix = [prefix 'V' stage.name '~_'];
     lgraph = addEstimator(lgraph,est,estPrefix,'Intermediate',nDecs,...
         noDcLeakage,nBlocks,stride,'Synthesis',stage.name);
-    lgraph = lgraph.connectLayers(lastName,[estPrefix 'Ext']);
-    lgraph = lgraph.connectLayers([estPrefix 'Theta'],[rotName '/theta']);
+    lgraph = connectState(lgraph,est,stage,lastName,[estPrefix 'Ext'],[estPrefix 'TrmX'],nBlocks);
+    lgraph = connectAngles(lgraph,est,stage,[estPrefix 'Theta'],[rotName '/theta'],...
+        [estPrefix 'Trm'],nBlocks);
 end
 
 atomName = [prefix 'Q' stage.name dirname targetname '~'];
@@ -523,4 +561,42 @@ lgraph = lgraph.addLayers(lsunAtomExtension2dLayer('Name',atomName,...
 lgraph = lgraph.connectLayers(rotName,atomName);
 
 lastName = atomName;
+end
+
+%%%
+
+function tf = isTerminated(est,stage)
+% The stages whose rotation is -I at the blocks of one boundary with the
+% boundary operation 'Termination' (see above)
+tf = est.Termination && stage.atomTarget == "Difference";
+end
+
+%%%
+
+function lgraph = connectAngles(lgraph,est,stage,thetaName,rotInput,trmName,nBlocks)
+% Connects the angles of an estimator to a rotation layer, through a
+% boundary termination layer for the terminated stages
+if isTerminated(est,stage)
+    lgraph = lgraph.addLayers(tansacnet.salsun.salsunBoundaryTermination2dLayer(...
+        'Name',trmName,'NumberOfBlocks',nBlocks,'Direction',stage.atomDir));
+    lgraph = lgraph.connectLayers(thetaName,trmName);
+    lgraph = lgraph.connectLayers(trmName,rotInput);
+else
+    lgraph = lgraph.connectLayers(thetaName,rotInput);
+end
+end
+
+%%%
+
+function lgraph = connectState(lgraph,est,stage,stateName,extName,trmName,nBlocks)
+% Connects the state to an estimator, through a boundary termination
+% layer of the state for the terminated stages
+if isTerminated(est,stage)
+    lgraph = lgraph.addLayers(tansacnet.salsun.salsunBoundaryTermination2dLayer(...
+        'Name',trmName,'NumberOfBlocks',nBlocks,'Direction',stage.atomDir,'Input','state'));
+    lgraph = lgraph.connectLayers(stateName,trmName);
+    lgraph = lgraph.connectLayers(trmName,extName);
+else
+    lgraph = lgraph.connectLayers(stateName,extName);
+end
 end

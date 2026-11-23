@@ -39,6 +39,9 @@ function [y,sum1,sum2,muUsed,sigmaUsed] = salsun2d_infer_fast(x,params,mu,sigma)
 %
 % http://msiplab.eng.niigata-u.ac.jp/
 %
+if isfield(params,'BoundaryOperation') && ~strcmp(params.BoundaryOperation,'Circular')
+    error('salsun2d_infer_fast:boundary','Only circular boundaries are supported (use salsun2d_infer)')
+end
 dec = params.Stride;
 nDec = size(params.Cvh,1);          % a constant size for code generation
 ps = nDec/2;
@@ -166,7 +169,8 @@ function [theta,s1,s2,ch,muCh,sgCh] = estimateAngles(Y,est,mu,sigma,measure,nRow
 % angles (after the zero-padded ones). With measure, the channels are
 % standardized with their own mean and standard deviation over the frame
 % (those of the features, which are circular shifts of the channels).
-if (isfield(est,'StdScope') && ~strcmp(est.StdScope,'image')) || any(arrayfun(@(r) isempty(r.Gamma),est.ResBlocks)) ...
+if ~isfield(est,'ResBlocks') || (isfield(est,'Padding') && ~strcmp(est.Padding,'circular')) ...
+        || (isfield(est,'StdScope') && ~strcmp(est.StdScope,'image')) || any(arrayfun(@(r) isempty(r.Gamma),est.ResBlocks)) ...
         || (isfield(est,'Activation') && ~strcmp(est.Activation,'gelu')) ...
         || (isfield(est,'OutputMapping') && ~strcmp(est.OutputMapping,'linear'))
     error('salsun2d_infer_fast:scope','Only the default estimator (image standardization, layer normalization, GELU, linear output) is supported (use salsun2d_infer)')
